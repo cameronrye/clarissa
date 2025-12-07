@@ -1,0 +1,14 @@
+{
+  "name": "clarissa-docs",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^5.9.5"
+  }
+}
+

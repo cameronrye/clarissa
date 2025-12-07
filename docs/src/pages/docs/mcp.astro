@@ -1,0 +1,91 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="MCP Integration" description="Connect to Model Context Protocol servers to extend Clarissa's capabilities">
+  <h1>MCP Integration</h1>
+  <p>
+    Clarissa supports the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol (MCP)</a>, 
+    allowing you to extend its capabilities by connecting to external MCP servers. This enables 
+    integration with databases, APIs, file systems, and custom tools.
+  </p>
+
+  <h2>What is MCP?</h2>
+  <p>
+    The Model Context Protocol is an open standard that allows AI applications to connect to 
+    external data sources and tools. MCP servers expose resources, prompts, and tools that 
+    Clarissa can use during conversations.
+  </p>
+
+  <h2>Connecting to MCP Servers</h2>
+  <p>Use the <code>/mcp</code> command to connect to an MCP server:</p>
+  <pre><code>/mcp &lt;command&gt; [args...]</code></pre>
+
+  <h3>Example: Filesystem Server</h3>
+  <p>Connect to the official MCP filesystem server to give Clarissa access to a specific directory:</p>
+  <pre><code>/mcp npx -y @modelcontextprotocol/server-filesystem /path/to/directory</code></pre>
+  <p>This grants Clarissa additional file system tools scoped to the specified directory.</p>
+
+  <h3>Example: Custom Server</h3>
+  <p>Connect to any stdio-based MCP server:</p>
+  <pre><code>/mcp node /path/to/my-mcp-server.js</code></pre>
+
+  <h2>How It Works</h2>
+  <ol>
+    <li>When you connect to an MCP server, Clarissa establishes a stdio connection</li>
+    <li>The server advertises its available tools to Clarissa</li>
+    <li>These tools are dynamically registered and become available during your conversation</li>
+    <li>Clarissa can then use these tools just like its built-in tools</li>
+  </ol>
+
+  <h2>Available MCP Servers</h2>
+  <p>Some popular MCP servers you can use with Clarissa:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Server</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>@modelcontextprotocol/server-filesystem</code></td>
+        <td>File system access with read/write operations</td>
+      </tr>
+      <tr>
+        <td><code>@modelcontextprotocol/server-github</code></td>
+        <td>GitHub API integration</td>
+      </tr>
+      <tr>
+        <td><code>@modelcontextprotocol/server-postgres</code></td>
+        <td>PostgreSQL database access</td>
+      </tr>
+      <tr>
+        <td><code>@modelcontextprotocol/server-sqlite</code></td>
+        <td>SQLite database access</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    Browse more servers at the 
+    <a href="https://github.com/modelcontextprotocol/servers" target="_blank" rel="noopener">MCP Servers Repository</a>.
+  </p>
+
+  <h2>Tool Categories</h2>
+  <p>Tools from MCP servers are categorized as <code>mcp</code> tools and will be displayed alongside Clarissa's built-in tools.</p>
+
+  <h2>Limitations</h2>
+  <ul>
+    <li>Currently only stdio-based MCP servers are supported</li>
+    <li>HTTP/SSE transport is planned for a future release</li>
+    <li>MCP connections persist for the duration of your session</li>
+  </ul>
+
+  <h2>Building Your Own Server</h2>
+  <p>
+    You can create custom MCP servers to integrate Clarissa with your own tools and services. 
+    See the <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener">MCP Documentation</a> 
+    for guides on building servers in TypeScript, Python, and other languages.
+  </p>
+</Docs>
+

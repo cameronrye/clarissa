@@ -1,0 +1,136 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Built-in Tools" description="Reference documentation for all of Clarissa's built-in tools">
+  <h1>Built-in Tools</h1>
+  <p>
+    Clarissa comes with a comprehensive set of tools for file operations, Git integration, 
+    system commands, and web access. Tools that could be destructive require confirmation before execution.
+  </p>
+
+  <h2>File Operations</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>read_file</code></td>
+        <td>View files with line numbers and range support</td>
+      </tr>
+      <tr>
+        <td><code>write_file</code></td>
+        <td>Create or overwrite files</td>
+      </tr>
+      <tr>
+        <td><code>patch_file</code></td>
+        <td>String replacement editing (str-replace style)</td>
+      </tr>
+      <tr>
+        <td><code>list_directory</code></td>
+        <td>Tree view with filtering</td>
+      </tr>
+      <tr>
+        <td><code>search_files</code></td>
+        <td>Regex search across files (grep-like)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Git Integration</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>git_status</code></td>
+        <td>Show repository status</td>
+      </tr>
+      <tr>
+        <td><code>git_diff</code></td>
+        <td>Show changes (staged/unstaged)</td>
+      </tr>
+      <tr>
+        <td><code>git_log</code></td>
+        <td>View commit history</td>
+      </tr>
+      <tr>
+        <td><code>git_add</code></td>
+        <td>Stage files for commit</td>
+      </tr>
+      <tr>
+        <td><code>git_commit</code></td>
+        <td>Commit changes with AI-generated messages</td>
+      </tr>
+      <tr>
+        <td><code>git_branch</code></td>
+        <td>List, create, or switch branches</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>System</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>bash</code></td>
+        <td>Execute shell commands</td>
+      </tr>
+      <tr>
+        <td><code>calculator</code></td>
+        <td>Perform mathematical calculations</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Web</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>web_fetch</code></td>
+        <td>Fetch and parse web pages</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Tool Confirmation</h2>
+  <p>
+    Some tools are marked as requiring confirmation before execution. When Clarissa attempts to use 
+    one of these tools, you'll be prompted to approve or reject the action.
+  </p>
+  <p>Tools that require confirmation include:</p>
+  <ul>
+    <li><code>write_file</code> - Writing files</li>
+    <li><code>patch_file</code> - Modifying files</li>
+    <li><code>bash</code> - Executing shell commands</li>
+    <li><code>git_commit</code> - Committing changes</li>
+  </ul>
+
+  <h2>Extending with MCP</h2>
+  <p>
+    You can add additional tools by connecting to
+    <a href="../mcp/">MCP (Model Context Protocol) servers</a>. This allows you to extend
+    Clarissa's capabilities with custom tools and integrations.
+  </p>
+</Docs>
+

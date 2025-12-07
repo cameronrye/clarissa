@@ -1,0 +1,241 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Commands & Usage" description="Learn how to use Clarissa's commands and features">
+  <h1>Commands & Usage</h1>
+  <p>
+    Clarissa provides a conversational interface for interacting with AI. Simply type your
+    questions or requests, and Clarissa will respond, using tools as needed.
+  </p>
+
+  <h2>Interactive Mode</h2>
+  <p>Launch Clarissa in interactive mode:</p>
+  <pre><code>clarissa</code></pre>
+
+  <h2>One-Shot Mode</h2>
+  <p>Run a single command and exit:</p>
+  <pre><code>clarissa "What files are in this directory?"</code></pre>
+  <pre><code>clarissa -m openai/gpt-4o "Explain this code"</code></pre>
+
+  <h2>Piped Input</h2>
+  <p>Pipe content from other commands for AI processing:</p>
+  <pre><code>cat error.log | clarissa "Explain this error"</code></pre>
+  <pre><code>git diff | clarissa "Write a commit message"</code></pre>
+
+  <h2>CLI Options</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Option</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>-m, --model MODEL</code></td>
+        <td>Use a specific model</td>
+      </tr>
+      <tr>
+        <td><code>--list-models</code></td>
+        <td>List available models</td>
+      </tr>
+      <tr>
+        <td><code>--debug</code></td>
+        <td>Enable debug output</td>
+      </tr>
+      <tr>
+        <td><code>-h, --help</code></td>
+        <td>Show help</td>
+      </tr>
+      <tr>
+        <td><code>-v, --version</code></td>
+        <td>Show version</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Slash Commands</h2>
+  <p>Clarissa supports several slash commands for control and configuration:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/help</code></td>
+        <td>Show available commands</td>
+      </tr>
+      <tr>
+        <td><code>/clear</code></td>
+        <td>Clear conversation history</td>
+      </tr>
+      <tr>
+        <td><code>/save [NAME]</code></td>
+        <td>Save current session</td>
+      </tr>
+      <tr>
+        <td><code>/sessions</code></td>
+        <td>List saved sessions</td>
+      </tr>
+      <tr>
+        <td><code>/load ID</code></td>
+        <td>Load a saved session</td>
+      </tr>
+      <tr>
+        <td><code>/delete ID</code></td>
+        <td>Delete a saved session</td>
+      </tr>
+      <tr>
+        <td><code>/remember &lt;fact&gt;</code></td>
+        <td>Save a memory for future sessions</td>
+      </tr>
+      <tr>
+        <td><code>/memories</code></td>
+        <td>List saved memories</td>
+      </tr>
+      <tr>
+        <td><code>/forget &lt;#|ID&gt;</code></td>
+        <td>Forget a memory by number or ID</td>
+      </tr>
+      <tr>
+        <td><code>/model [NAME]</code></td>
+        <td>Show or switch the current model</td>
+      </tr>
+      <tr>
+        <td><code>/mcp CMD ARGS</code></td>
+        <td>Connect to an MCP server</td>
+      </tr>
+      <tr>
+        <td><code>/tools</code></td>
+        <td>List available tools</td>
+      </tr>
+      <tr>
+        <td><code>/context</code></td>
+        <td>Show context window usage</td>
+      </tr>
+      <tr>
+        <td><code>/yolo</code></td>
+        <td>Toggle auto-approve mode (skip tool confirmations)</td>
+      </tr>
+      <tr>
+        <td><code>/exit</code></td>
+        <td>Exit Clarissa</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Usage Examples</h2>
+  
+  <h3>File Operations</h3>
+  <pre><code>Read the contents of package.json</code></pre>
+  <pre><code>Create a new file called hello.txt with "Hello, World!"</code></pre>
+  <pre><code>Find all TypeScript files containing "async function"</code></pre>
+
+  <h3>Git Operations</h3>
+  <pre><code>What's the current git status?</code></pre>
+  <pre><code>Show me the recent commit history</code></pre>
+  <pre><code>Stage all changes and commit with a descriptive message</code></pre>
+
+  <h3>Shell Commands</h3>
+  <pre><code>Run npm test and show me the results</code></pre>
+  <pre><code>What's my current disk usage?</code></pre>
+
+  <h3>Web Fetching</h3>
+  <pre><code>Fetch the Bun documentation homepage</code></pre>
+  <pre><code>What does the OpenRouter API documentation say about rate limits?</code></pre>
+
+  <h2>Tool Confirmation</h2>
+  <p>
+    When Clarissa attempts to use a potentially dangerous tool (like writing files or 
+    running shell commands), you'll be prompted to confirm:
+  </p>
+  <pre><code>⚠️ Tool: bash
+Arguments: &#123;"command": "rm -rf node_modules"&#125;
+Approve? (y/n)</code></pre>
+  <p>Press <code>y</code> to approve or <code>n</code> to reject the action.</p>
+
+  <h2>Session Management</h2>
+  <p>Save your current conversation to continue later:</p>
+  <pre><code>/save my-project-session</code></pre>
+
+  <p>List saved sessions:</p>
+  <pre><code>/sessions</code></pre>
+
+  <p>Load a previous session:</p>
+  <pre><code>/load session_id</code></pre>
+
+  <p>Delete a session:</p>
+  <pre><code>/delete session_id</code></pre>
+
+  <h2>Memory System</h2>
+  <p>
+    Clarissa can remember facts across sessions. Use the memory system to store
+    information that should persist between conversations.
+  </p>
+  <p>Save a memory:</p>
+  <pre><code>/remember Always use TypeScript for new projects</code></pre>
+
+  <p>List all memories:</p>
+  <pre><code>/memories</code></pre>
+
+  <p>Forget a memory by number or ID:</p>
+  <pre><code>/forget 1</code></pre>
+  <p>
+    Memories are included in the system prompt, so Clarissa will consider them
+    when responding to your requests.
+  </p>
+
+  <h2>Switching Models</h2>
+  <p>View the current model:</p>
+  <pre><code>/model</code></pre>
+  <p>Change the AI model during your conversation:</p>
+  <pre><code>/model openai/gpt-4o</code></pre>
+  <p>
+    This is useful for switching between models with different capabilities or costs.
+  </p>
+
+  <h2>Auto-Approve Mode</h2>
+  <p>
+    Toggle auto-approve mode to skip tool confirmation prompts:
+  </p>
+  <pre><code>/yolo</code></pre>
+  <p>
+    When enabled, Clarissa will automatically execute tools without asking for
+    confirmation. Use with caution.
+  </p>
+
+  <h2>Context Window</h2>
+  <p>
+    Clarissa automatically tracks token usage and will truncate older messages when
+    approaching the context limit. Use <code>/context</code> to see current usage.
+  </p>
+
+  <h2>Keyboard Shortcuts</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Shortcut</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>Ctrl+C</code></td>
+        <td>Cancel current operation / Exit</td>
+      </tr>
+      <tr>
+        <td><code>Ctrl+P</code></td>
+        <td>Enhance prompt with AI</td>
+      </tr>
+      <tr>
+        <td><code>↑</code> / <code>↓</code></td>
+        <td>Navigate input history</td>
+      </tr>
+    </tbody>
+  </table>
+</Docs>
+

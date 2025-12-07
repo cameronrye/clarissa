@@ -1,0 +1,30 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Clarissa Logo: Bold C lettermark with neon glow -->
+  <defs>
+    <linearGradient id="cGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EC4899"/>
+      <stop offset="50%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+
+    <filter id="neonGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <feGaussianBlur stdDeviation="3" result="blur1"/>
+      <feGaussianBlur stdDeviation="6" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <path
+    d="M38,22 A12,12 0 1,0 38,42"
+    fill="none"
+    stroke="url(#cGrad)"
+    stroke-width="6"
+    stroke-linecap="round"
+    filter="url(#neonGlow)"
+  />
+</svg>
+

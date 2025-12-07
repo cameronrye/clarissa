@@ -1,0 +1,370 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Architecture" description="Technical architecture and design of the Clarissa AI agent">
+  <h1>Architecture</h1>
+  <p>
+    Clarissa is built on the <strong>ReAct (Reasoning + Acting)</strong> agent pattern, enabling
+    an LLM to reason about tasks and take actions through tool execution. This document provides
+    a technical overview of how the system is designed and how components interact.
+  </p>
+
+  <h2>System Overview</h2>
+  <p>
+    At its core, Clarissa connects user input to large language models via OpenRouter, with the ability
+    to execute tools and maintain conversation state. The architecture supports both interactive terminal
+    sessions and one-shot command execution.
+  </p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TB
+    subgraph Entry["Entry Points"]
+        CLI["CLI Parser<br/><small>src/index.tsx</small>"]
+        OneShot["One-Shot Mode"]
+        Interactive["Interactive Mode"]
+    end
+
+    subgraph Core["Core Engine"]
+        Agent["ReAct Agent<br/><small>src/agent.ts</small>"]
+        LLM["LLM Client<br/><small>src/llm/client.ts</small>"]
+        Context["Context Manager<br/><small>src/llm/context.ts</small>"]
+    end
+
+    subgraph Tools["Tool System"]
+        Registry["Tool Registry<br/><small>src/tools/index.ts</small>"]
+        BuiltIn["Built-in Tools<br/><small>file, git, bash, web</small>"]
+        MCP["MCP Client<br/><small>src/mcp/client.ts</small>"]
+    end
+
+    subgraph Persistence["Persistence Layer"]
+        Session["Session Manager<br/><small>src/session/</small>"]
+        Memory["Memory Manager<br/><small>src/memory/</small>"]
+    end
+
+    subgraph UI["User Interface"]
+        App["Ink App<br/><small>src/ui/App.tsx</small>"]
+        MD["Markdown Renderer"]
+    end
+
+    CLI --> OneShot
+    CLI --> Interactive
+    OneShot --> Agent
+    Interactive --> App
+    App --> Agent
+    Agent --> LLM
+    Agent --> Context
+    Agent --> Registry
+    Registry --> BuiltIn
+    Registry --> MCP
+    LLM -.->|OpenRouter API| External["External LLMs"]
+    MCP -.->|stdio| ExtMCP["MCP Servers"]
+    Agent --> Session
+    Agent --> Memory
+    </pre>
+  </div>
+
+  <h2>Core Components</h2>
+
+  <h3>Entry Point (src/index.tsx)</h3>
+  <p>
+    The CLI entry point handles argument parsing and determines the execution mode:
+  </p>
+  <ul>
+    <li><strong>Interactive Mode</strong> - Launches the Ink-based terminal UI for ongoing conversations</li>
+    <li><strong>One-Shot Mode</strong> - Processes a single message and exits (supports piped input)</li>
+  </ul>
+
+  <h3>ReAct Agent (src/agent.ts)</h3>
+  <p>
+    The Agent class implements the ReAct loop pattern. It maintains conversation history,
+    coordinates with the LLM, and orchestrates tool execution. The loop continues until
+    the LLM provides a final response without tool calls, or the maximum iteration limit is reached.
+  </p>
+
+  <h3>LLM Client (src/llm/client.ts)</h3>
+  <p>
+    Wraps the OpenRouter SDK to provide streaming chat completions with tool support.
+    Includes retry logic with exponential backoff for transient failures.
+  </p>
+
+  <h3>Context Manager (src/llm/context.ts)</h3>
+  <p>
+    Tracks token usage and manages the context window. When conversations exceed the model's
+    context limit, it intelligently truncates older messages while preserving atomic groups
+    (tool calls must stay with their results).
+  </p>
+
+  <h3>Tool Registry (src/tools/index.ts)</h3>
+  <p>
+    Centralized registry for all available tools. Each tool is defined with:
+  </p>
+  <ul>
+    <li>Zod schema for parameter validation</li>
+    <li>Automatic JSON Schema generation for the LLM API</li>
+    <li>Confirmation flag for potentially dangerous operations</li>
+    <li>Category for organization (file, git, system, mcp, utility)</li>
+  </ul>
+
+  <h3>MCP Client (src/mcp/client.ts)</h3>
+  <p>
+    Connects to external Model Context Protocol servers via stdio transport. Discovered tools
+    are automatically converted to Clarissa's tool format and registered with the Tool Registry.
+  </p>
+
+  <h3>Session Manager (src/session/index.ts)</h3>
+  <p>
+    Persists conversation history to <code>~/.clarissa/sessions/</code> as JSON files.
+    Sessions can be saved, listed, loaded, and deleted via slash commands.
+  </p>
+
+  <h3>Memory Manager (src/memory/index.ts)</h3>
+  <p>
+    Long-term memory persistence stored in <code>~/.clarissa/memories.json</code>.
+    Memories are injected into the system prompt, allowing the agent to recall facts across sessions.
+  </p>
+
+  <h2>The ReAct Loop</h2>
+  <p>
+    The ReAct pattern enables the agent to reason about tasks and take actions iteratively:
+  </p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart LR
+    A["User Message"] --> B["Add to History"]
+    B --> C["Truncate Context"]
+    C --> D["LLM Request"]
+    D --> E{{"Response Type?"}}
+    E -->|"Tool Calls"| F["Execute Tools"]
+    F --> G["Add Results"]
+    G --> D
+    E -->|"Final Answer"| H["Return Response"]
+    </pre>
+  </div>
+
+  <p>Key aspects of the loop:</p>
+  <ol>
+    <li>User message is added to conversation history</li>
+    <li>Context is truncated if approaching the model's token limit</li>
+    <li>Request sent to LLM with available tool definitions</li>
+    <li>If response contains tool calls, each tool is executed (with optional user confirmation)</li>
+    <li>Tool results are appended to history and the loop continues</li>
+    <li>When the LLM responds without tool calls, the final answer is returned</li>
+  </ol>
+
+  <h2>Request Lifecycle</h2>
+  <p>
+    This sequence diagram shows the complete flow of a user request that involves tool execution:
+  </p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+sequenceDiagram
+    participant User
+    participant UI as Ink UI
+    participant Agent
+    participant LLM as LLM Client
+    participant Tools as Tool Registry
+    participant API as OpenRouter
+
+    User->>UI: Enter message
+    UI->>Agent: run(message)
+    Agent->>Agent: Update system prompt with memories
+    Agent->>Agent: Truncate context if needed
+    Agent->>LLM: chatStreamComplete()
+    LLM->>API: POST /chat/completions
+    API-->>LLM: Stream response chunks
+    LLM-->>UI: onStreamChunk()
+    LLM->>Agent: Response with tool_calls
+    Agent->>UI: onToolCall(name, args)
+    UI->>User: Confirm execution?
+    User->>UI: Approve
+    Agent->>Tools: execute(name, args)
+    Tools->>Tools: Validate with Zod
+    Tools->>Agent: Tool result
+    Agent->>Agent: Add result to history
+    Agent->>LLM: Continue conversation
+    LLM->>API: POST /chat/completions
+    API-->>LLM: Final response
+    LLM->>Agent: Response (no tool calls)
+    Agent->>UI: onResponse()
+    UI->>User: Display answer
+    </pre>
+  </div>
+
+  <h2>Tool Execution Flow</h2>
+  <p>
+    Tools that could be destructive (file writes, shell commands, git commits) require user confirmation.
+    This flow can be bypassed with "yolo mode" (<code>/yolo</code>) for trusted automation scenarios.
+  </p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TD
+    A["Tool Call Received"] --> B{{"Requires Confirmation?"}}
+    B -->|No| E["Execute Tool"]
+    B -->|Yes| C{{"Auto-Approve Enabled?"}}
+    C -->|Yes| E
+    C -->|No| D["Prompt User"]
+    D --> F{{"User Response"}}
+    F -->|Approve| E
+    F -->|Reject| G["Return Rejection"]
+    E --> H["Parse & Validate Args"]
+    H --> I["Run Tool Function"]
+    I --> J["Return Result"]
+    G --> J
+    </pre>
+  </div>
+
+  <h2>Context Window Management</h2>
+  <p>
+    Different models have different context window sizes (e.g., 200K for Claude, 128K for GPT-4).
+    The Context Manager tracks token usage and automatically truncates when approaching limits.
+  </p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TD
+    A["Estimate Conversation Tokens"] --> B{{"Exceeds Limit?"}}
+    B -->|No| C["Return Messages As-Is"]
+    B -->|Yes| D["Group Messages Atomically"]
+    D --> E["Keep System Prompt"]
+    E --> F["Add Recent Groups Until Limit"]
+    F --> G["Return Truncated Messages"]
+
+    subgraph Atomic["Atomic Groups"]
+        H["User Message"]
+        I["Assistant + Tool Results"]
+    end
+    </pre>
+  </div>
+
+  <p>
+    The truncation algorithm ensures tool calls always stay with their corresponding results,
+    preventing the LLM from seeing orphaned tool calls or results without context.
+  </p>
+
+  <h2>Technical Design Decisions</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Decision</th>
+        <th>Rationale</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Bun Runtime</strong></td>
+        <td>Native TypeScript support, fast startup, built-in file APIs, single binary compilation</td>
+      </tr>
+      <tr>
+        <td><strong>Ink (React for CLI)</strong></td>
+        <td>Declarative UI with component model, familiar React patterns, rich ecosystem</td>
+      </tr>
+      <tr>
+        <td><strong>OpenRouter</strong></td>
+        <td>Single API for multiple LLM providers, easy model switching, unified billing</td>
+      </tr>
+      <tr>
+        <td><strong>Zod Validation</strong></td>
+        <td>Type-safe schemas, automatic JSON Schema generation, runtime validation</td>
+      </tr>
+      <tr>
+        <td><strong>ReAct Pattern</strong></td>
+        <td>Proven agentic architecture, iterative reasoning, clear action boundaries</td>
+      </tr>
+      <tr>
+        <td><strong>MCP Protocol</strong></td>
+        <td>Standardized tool interface, ecosystem compatibility, external extensibility</td>
+      </tr>
+      <tr>
+        <td><strong>Streaming Responses</strong></td>
+        <td>Immediate feedback, better UX for long responses, progressive display</td>
+      </tr>
+      <tr>
+        <td><strong>Local Persistence</strong></td>
+        <td>Privacy-first approach, no external dependencies, simple JSON format</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>File Structure</h2>
+  <pre><code>src/
+  index.tsx        # CLI entry point, argument parsing
+  agent.ts         # ReAct agent loop implementation
+  config/          # Environment validation (Zod), model config
+  llm/
+    client.ts      # OpenRouter SDK wrapper with streaming
+    context.ts     # Token tracking, context truncation
+    types.ts       # Message and tool type definitions
+  mcp/
+    client.ts      # MCP server connections, tool bridging
+  memory/
+    index.ts       # Long-term memory persistence
+  session/
+    index.ts       # Conversation session management
+  tools/
+    index.ts       # Tool registry, execution orchestration
+    base.ts        # Tool interface, Zod-to-JSON conversion
+    *.ts           # Individual tool implementations
+  ui/
+    App.tsx        # Main Ink application component
+    markdown.ts    # Terminal markdown rendering
+    components/    # Reusable UI components</code></pre>
+</Docs>
+
+<script>
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#a855f7',
+      primaryTextColor: '#f5f5f5',
+      primaryBorderColor: '#7c3aed',
+      lineColor: '#22d3ee',
+      secondaryColor: '#1e1e2e',
+      tertiaryColor: '#2a2a3e',
+      background: '#0d0d12',
+      mainBkg: '#1e1e2e',
+      nodeBorder: '#7c3aed',
+      clusterBkg: '#1e1e2e',
+      clusterBorder: '#3f3f5a',
+      titleColor: '#f5f5f5',
+      edgeLabelBackground: '#1e1e2e'
+    }
+  });
+</script>
+
+<style>
+  .diagram {
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+
+  .diagram .mermaid {
+    background: var(--color-bg-secondary, #1e1e2e);
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: flex;
+    justify-content: center;
+  }
+
+  .prose pre:not(.mermaid) {
+    background: var(--color-bg-tertiary, #2a2a3e);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .prose pre code {
+    background: transparent;
+    padding: 0;
+  }
+</style>
+

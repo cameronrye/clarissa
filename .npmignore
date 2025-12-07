@@ -1,0 +1,24 @@
+# Source files not needed in package
+*.test.ts
+*.spec.ts
+__tests__/
+test-fixtures*/
+
+# Development files
+.github/
+.vscode/
+.env*
+.DS_Store
+*.log
+
+# Build artifacts not needed
+dist/
+
+# Development config
+tsconfig.json
+bun.lock
+CLAUDE.md
+
+# Logo and docs
+logo.svg
+

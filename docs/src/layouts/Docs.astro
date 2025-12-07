@@ -1,0 +1,182 @@
+---
+import Base from './Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const sidebar = [
+  {
+    title: 'Getting Started',
+    items: [
+      { href: `${base}docs/installation/`, label: 'Installation' },
+      { href: `${base}docs/configuration/`, label: 'Configuration' },
+    ]
+  },
+  {
+    title: 'Features',
+    items: [
+      { href: `${base}docs/tools/`, label: 'Built-in Tools' },
+      { href: `${base}docs/mcp/`, label: 'MCP Integration' },
+      { href: `${base}docs/usage/`, label: 'Commands & Usage' },
+    ]
+  },
+  {
+    title: 'Reference',
+    items: [
+      { href: `${base}docs/architecture/`, label: 'Architecture' },
+    ]
+  }
+];
+---
+
+<Base title={title} description={description}>
+  <Header />
+  <div class="docs-layout container">
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+        {sidebar.map(section => (
+          <div class="sidebar-section">
+            <h3>{section.title}</h3>
+            {section.items.map(item => (
+              <a href={item.href} class:list={['sidebar-link', { active: Astro.url.pathname.includes(item.href.replace(base, '')) }]}>
+                {item.label}
+              </a>
+            ))}
+          </div>
+        ))}
+      </nav>
+    </aside>
+    <main class="docs-content">
+      <article class="prose">
+        <slot />
+      </article>
+    </main>
+  </div>
+  <Footer />
+</Base>
+
+<style>
+  .docs-layout {
+    display: grid;
+    gap: 2rem;
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+    min-height: calc(100vh - 64px - 300px);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .sidebar-nav {
+    position: sticky;
+    top: 80px;
+  }
+
+  .sidebar-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .sidebar-section h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .sidebar-link {
+    display: block;
+    padding: 0.5rem 0;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    border-left: 2px solid transparent;
+    padding-left: 1rem;
+    transition: all 0.2s;
+  }
+
+  .sidebar-link:hover {
+    color: var(--color-text);
+    border-color: var(--color-purple);
+  }
+
+  .sidebar-link.active {
+    color: var(--color-cyan);
+    border-color: var(--color-cyan);
+  }
+
+  .docs-content {
+    max-width: 800px;
+  }
+
+  .prose h1 {
+    font-size: 2.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .prose h2 {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .prose ul, .prose ol {
+    padding-left: 1.25rem;
+    margin-bottom: 1rem;
+    margin-left: 0;
+    list-style-position: inside;
+  }
+
+  .prose ul {
+    list-style-type: disc;
+  }
+
+  .prose ul li::marker {
+    color: var(--color-purple);
+  }
+
+  .prose ol li::marker {
+    color: var(--color-cyan);
+  }
+
+  .prose li {
+    margin-bottom: 0.5rem;
+    padding-left: 0;
+  }
+
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+  }
+
+  .prose th, .prose td {
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid var(--color-border);
+  }
+
+  .prose th {
+    background: var(--color-bg-tertiary);
+    font-weight: 600;
+  }
+
+  @media (min-width: 1024px) {
+    .docs-layout {
+      grid-template-columns: 220px 1fr;
+    }
+
+    .sidebar {
+      display: block;
+    }
+  }
+</style>
+

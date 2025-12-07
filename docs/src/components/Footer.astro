@@ -1,0 +1,132 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <a href={base} class="logo">
+        <img src={`${base}logo.svg`} alt="Clarissa" width="24" height="24" />
+        <span class="gradient-text">Clarissa</span>
+      </a>
+      <p class="tagline">An AI-powered terminal assistant</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-section">
+        <h4>Documentation</h4>
+        <a href={`${base}docs/installation/`}>Installation</a>
+        <a href={`${base}docs/configuration/`}>Configuration</a>
+        <a href={`${base}docs/tools/`}>Tools</a>
+        <a href={`${base}docs/mcp/`}>MCP Integration</a>
+      </div>
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <a href="https://github.com/cameronrye/clarissa" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/cameronrye/clarissa/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/cameronrye/clarissa/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://openrouter.ai" target="_blank" rel="noopener">OpenRouter</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Made with <span class="heart"><svg viewBox="0 0 24 24" fill="url(#heart-gradient)" width="16" height="16"><defs><linearGradient id="heart-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--color-pink)" /><stop offset="50%" stop-color="var(--color-purple)" /><stop offset="100%" stop-color="var(--color-cyan)" /></linearGradient></defs><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg></span> by <a href="https://rye.dev" target="_blank" rel="noopener">Cameron Rye</a></p>
+      <p class="license">MIT License</p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
+    padding: 3rem 0 2rem;
+    margin-top: 4rem;
+  }
+
+  .footer-inner {
+    display: grid;
+    gap: 2rem;
+  }
+
+  .footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .tagline {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  .footer-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 2rem;
+  }
+
+  .footer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .footer-section h4 {
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .footer-section a {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  .footer-section a:hover {
+    color: var(--color-cyan);
+  }
+
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .footer-bottom p {
+    margin: 0;
+  }
+
+  .footer-bottom a {
+    color: var(--color-pink);
+  }
+
+  .license {
+    color: var(--color-text-muted);
+  }
+
+  @media (min-width: 768px) {
+    .footer-inner {
+      grid-template-columns: 1fr 2fr;
+    }
+
+    .footer-bottom {
+      grid-column: 1 / -1;
+    }
+  }
+</style>
+

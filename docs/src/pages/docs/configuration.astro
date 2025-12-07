@@ -1,0 +1,145 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Configuration" description="Configure Clarissa with environment variables and settings">
+  <h1>Configuration</h1>
+  <p>
+    Clarissa is configured primarily through environment variables. The only required setting 
+    is your OpenRouter API key.
+  </p>
+
+  <h2>API Key Setup</h2>
+  <p>
+    Set your <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter API key</a> 
+    as an environment variable:
+  </p>
+  <pre><code>export OPENROUTER_API_KEY=your_api_key_here</code></pre>
+  
+  <p>To make this permanent, add it to your shell configuration file:</p>
+  
+  <h3>Bash (~/.bashrc or ~/.bash_profile)</h3>
+  <pre><code>echo 'export OPENROUTER_API_KEY=your_api_key_here' >> ~/.bashrc
+source ~/.bashrc</code></pre>
+
+  <h3>Zsh (~/.zshrc)</h3>
+  <pre><code>echo 'export OPENROUTER_API_KEY=your_api_key_here' >> ~/.zshrc
+source ~/.zshrc</code></pre>
+
+  <h2>Environment Variables</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>OPENROUTER_API_KEY</code></td>
+        <td>(required)</td>
+        <td>Your OpenRouter API key</td>
+      </tr>
+      <tr>
+        <td><code>OPENROUTER_MODEL</code></td>
+        <td><code>anthropic/claude-sonnet-4</code></td>
+        <td>Default model to use</td>
+      </tr>
+      <tr>
+        <td><code>MAX_ITERATIONS</code></td>
+        <td><code>10</code></td>
+        <td>Maximum tool execution iterations per request</td>
+      </tr>
+      <tr>
+        <td><code>DEBUG</code></td>
+        <td><code>false</code></td>
+        <td>Enable debug logging</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Available Models</h2>
+  <p>
+    Clarissa supports any model available through OpenRouter. Some popular options include:
+  </p>
+  <ul>
+    <li><code>anthropic/claude-sonnet-4</code> - Claude Sonnet 4 (default)</li>
+    <li><code>anthropic/claude-opus-4</code> - Claude Opus 4</li>
+    <li><code>openai/gpt-4o</code> - GPT-4o</li>
+    <li><code>google/gemini-2.0-flash-001</code> - Gemini 2.0 Flash</li>
+    <li><code>meta-llama/llama-3.3-70b-instruct</code> - Llama 3.3 70B</li>
+    <li><code>deepseek/deepseek-chat</code> - DeepSeek Chat</li>
+  </ul>
+  <p>
+    You can switch models at runtime using the <code>/model</code> command.
+    See the full list at <a href="https://openrouter.ai/models" target="_blank" rel="noopener">OpenRouter Models</a>.
+  </p>
+
+  <h2>CLI Options</h2>
+  <p>Clarissa accepts command-line arguments for one-shot mode and configuration:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Option</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>-m, --model MODEL</code></td>
+        <td>Use a specific model for this session</td>
+      </tr>
+      <tr>
+        <td><code>--list-models</code></td>
+        <td>List available models and exit</td>
+      </tr>
+      <tr>
+        <td><code>--debug</code></td>
+        <td>Enable debug output</td>
+      </tr>
+      <tr>
+        <td><code>-h, --help</code></td>
+        <td>Show help message</td>
+      </tr>
+      <tr>
+        <td><code>-v, --version</code></td>
+        <td>Show version number</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Data Storage</h2>
+  <p>Clarissa stores data in your home directory at <code>~/.clarissa/</code>:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Path</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>~/.clarissa/sessions/</code></td>
+        <td>Saved conversation sessions (JSON files)</td>
+      </tr>
+      <tr>
+        <td><code>~/.clarissa/memories.json</code></td>
+        <td>Persistent memories across sessions</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Debug Mode</h2>
+  <p>Enable debug mode to see detailed logging of API calls and tool executions:</p>
+  <pre><code>DEBUG=true clarissa</code></pre>
+  <p>Or use the CLI flag:</p>
+  <pre><code>clarissa --debug</code></pre>
+
+  <h2>Next Steps</h2>
+  <p>
+    Now that you're configured, learn about the <a href="../tools/">built-in tools</a>
+    or jump straight to <a href="../usage/">using Clarissa</a>.
+  </p>
+</Docs>
+

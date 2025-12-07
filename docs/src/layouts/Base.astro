@@ -1,0 +1,35 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'An AI-powered terminal assistant with tool execution capabilities' } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} | Clarissa</title>
+    <link rel="icon" type="image/svg+xml" href={`${base}logo.svg`} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  @import '../styles/global.css';
+
+  body {
+    font-family: 'JetBrains Mono', var(--font-mono);
+  }
+</style>
+

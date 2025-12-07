@@ -8,6 +8,13 @@
   An AI-powered terminal assistant with tool execution capabilities
 </p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/clarissa"><img src="https://img.shields.io/npm/v/clarissa" alt="npm version"></a>
+  <a href="https://github.com/cameronrye/clarissa/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/clarissa" alt="license"></a>
+  <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun" alt="Bun"></a>
+  <a href="https://github.com/cameronrye/clarissa"><img src="https://img.shields.io/github/stars/cameronrye/clarissa" alt="GitHub stars"></a>
+</p>
+
 ---
 
 Clarissa is a command-line AI agent built with [Bun](https://bun.sh) and [Ink](https://github.com/vadimdemedes/ink). It provides a conversational interface powered by [OpenRouter](https://openrouter.ai), enabling access to various LLMs like Claude, GPT-4, Gemini, and more. The agent can execute tools, manage files, run shell commands, and integrate with external services via the Model Context Protocol (MCP).
@@ -19,8 +26,79 @@ Clarissa is a command-line AI agent built with [Bun](https://bun.sh) and [Ink](h
 - **Built-in tools** - File operations, Git integration, shell commands, web fetching, and more
 - **MCP integration** - Connect to external MCP servers to extend functionality
 - **Session management** - Save and restore conversation history
+- **Memory persistence** - Remember facts across sessions with `/remember` and `/memories`
 - **Context management** - Automatic token tracking and context truncation
 - **Tool confirmation** - Approve or reject potentially dangerous operations
+- **One-shot mode** - Run single commands directly from your shell
+- **Piped input** - Pipe content from other commands for processing
+
+## How It Works
+
+Clarissa implements the **ReAct (Reasoning + Acting) agent pattern**, where an LLM reasons about tasks and takes actions through tool execution in an iterative loop.
+
+### Architecture Overview
+
+```mermaid
+flowchart LR
+    subgraph Input
+        A[User Message]
+        B[Piped Content]
+    end
+
+    subgraph Clarissa
+        C[Agent Loop]
+        D[LLM Client]
+        E[Tool Registry]
+        F[Context Manager]
+    end
+
+    subgraph External
+        G[OpenRouter API]
+        H[MCP Servers]
+    end
+
+    A --> C
+    B --> C
+    C <--> D
+    C <--> E
+    C <--> F
+    D <--> G
+    E <-.-> H
+```
+
+The system connects your terminal to various LLMs through OpenRouter. When you ask Clarissa to perform a task, it:
+
+1. Sends your message to the LLM along with available tool definitions
+2. Receives a response that may include tool calls (e.g., read a file, run a command)
+3. Executes the requested tools and feeds results back to the LLM
+4. Repeats until the LLM provides a final answer
+
+### The ReAct Loop
+
+```mermaid
+flowchart TD
+    A[User Input] --> B[Add to Conversation]
+    B --> C[Send to LLM]
+    C --> D{Response Type?}
+    D -->|Tool Calls| E[Execute Tools]
+    E --> F[Add Results to History]
+    F --> C
+    D -->|Final Answer| G[Display Response]
+```
+
+This loop continues until the LLM responds without requesting any tools, indicating it has completed the task. A maximum iteration limit prevents infinite loops.
+
+### Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Tool Confirmation** | Potentially dangerous tools (file writes, shell commands) require approval before execution. Use `/yolo` to auto-approve. |
+| **Context Management** | Clarissa tracks token usage and automatically truncates older messages when approaching the model's context limit. |
+| **Session Persistence** | Conversations can be saved to `~/.clarissa/sessions/` and restored later with `/save` and `/load`. |
+| **Memory System** | Use `/remember` to store facts that persist across sessions and are included in every conversation. |
+| **MCP Extensibility** | Connect to [Model Context Protocol](https://modelcontextprotocol.io/) servers to add custom tools without modifying Clarissa's code. |
+
+For detailed architecture documentation, see the [Architecture Guide](https://cameronrye.github.io/clarissa/docs/architecture/).
 
 ## Requirements
 
@@ -76,17 +154,40 @@ Optional environment variables:
 
 ## Usage
 
-Start Clarissa:
+### Interactive Mode
+
+Start Clarissa in interactive mode:
 
 ```bash
-bun run start
+clarissa
 ```
 
-Or run directly:
+### One-Shot Mode
+
+Run a single command and exit:
 
 ```bash
-bun src/index.tsx
+clarissa "What files are in this directory?"
 ```
+
+### Piped Input
+
+Pipe content from other commands:
+
+```bash
+cat error.log | clarissa "Explain this error"
+git diff | clarissa "Write a commit message for these changes"
+```
+
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-m, --model MODEL` | Use a specific model |
+| `--list-models` | List available models |
+| `--debug` | Enable debug output |
+| `-h, --help` | Show help |
+| `-v, --version` | Show version |
 
 ### Commands
 
@@ -94,13 +195,27 @@ bun src/index.tsx
 |---------|-------------|
 | `/help` | Show available commands |
 | `/clear` | Clear conversation history |
-| `/save` | Save current session |
+| `/save [NAME]` | Save current session |
 | `/sessions` | List saved sessions |
 | `/load ID` | Load a saved session |
+| `/delete ID` | Delete a saved session |
+| `/remember <fact>` | Save a memory |
+| `/memories` | List saved memories |
+| `/forget <#\|ID>` | Forget a memory |
 | `/model [NAME]` | Show or switch the current model |
 | `/mcp CMD ARGS` | Connect to an MCP server |
 | `/tools` | List available tools |
+| `/context` | Show context window usage and breakdown |
+| `/yolo` | Toggle auto-approve mode (skip tool confirmations) |
 | `/exit` | Exit Clarissa |
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+C` | Cancel current operation / Exit |
+| `Ctrl+P` | Enhance prompt with AI |
+| `Up/Down` | Navigate input history |
 
 ### Built-in Tools
 
