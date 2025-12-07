@@ -131,7 +131,7 @@ flowchart TB
   </p>
 
   <div class="diagram">
-    <pre class="mermaid">
+    <pre class="mermaid" set:html={`
 flowchart LR
     A["User Message"] --> B["Add to History"]
     B --> C["Truncate Context"]
@@ -141,7 +141,7 @@ flowchart LR
     F --> G["Add Results"]
     G --> D
     E -->|"Final Answer"| H["Return Response"]
-    </pre>
+    `}></pre>
   </div>
 
   <p>Key aspects of the loop:</p>
@@ -201,7 +201,7 @@ sequenceDiagram
   </p>
 
   <div class="diagram">
-    <pre class="mermaid">
+    <pre class="mermaid" set:html={`
 flowchart TD
     A["Tool Call Received"] --> B{{"Requires Confirmation?"}}
     B -->|No| E["Execute Tool"]
@@ -215,7 +215,7 @@ flowchart TD
     H --> I["Run Tool Function"]
     I --> J["Return Result"]
     G --> J
-    </pre>
+    `}></pre>
   </div>
 
   <h2>Context Window Management</h2>
@@ -225,7 +225,7 @@ flowchart TD
   </p>
 
   <div class="diagram">
-    <pre class="mermaid">
+    <pre class="mermaid" set:html={`
 flowchart TD
     A["Estimate Conversation Tokens"] --> B{{"Exceeds Limit?"}}
     B -->|No| C["Return Messages As-Is"]
@@ -238,7 +238,7 @@ flowchart TD
         H["User Message"]
         I["Assistant + Tool Results"]
     end
-    </pre>
+    `}></pre>
   </div>
 
   <p>

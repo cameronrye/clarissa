@@ -21,9 +21,26 @@ const envSchema = z.object({
 export type EnvConfig = z.infer<typeof envSchema>;
 
 /**
+ * Check if we're running in a test environment
+ */
+const isTestEnv = process.env.NODE_ENV === "test" || typeof Bun !== "undefined" && Bun.env.BUN_ENV === "test" || process.argv.some(arg => arg.includes("bun") && arg.includes("test"));
+
+/**
  * Validate and parse environment variables
  */
 function loadConfig(): EnvConfig {
+  // In test environment, use defaults if API key not provided
+  if (isTestEnv && !process.env.OPENROUTER_API_KEY) {
+    return {
+      OPENROUTER_API_KEY: "test-api-key",
+      OPENROUTER_MODEL: "anthropic/claude-sonnet-4",
+      APP_NAME: "Clarissa",
+      APP_URL: undefined,
+      MAX_ITERATIONS: 10,
+      DEBUG: false,
+    };
+  }
+
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
