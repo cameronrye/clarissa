@@ -1,15 +1,19 @@
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <!-- Clarissa Logo: Bold C lettermark with neon glow -->
+  <!-- Clarissa Logo: C lettermark inside prism triangle -->
   <defs>
     <linearGradient id="cGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#EC4899"/>
       <stop offset="50%" stop-color="#8B5CF6"/>
       <stop offset="100%" stop-color="#06B6D4"/>
     </linearGradient>
-
-    <filter id="neonGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
-      <feGaussianBlur stdDeviation="3" result="blur1"/>
-      <feGaussianBlur stdDeviation="6" result="blur2"/>
+    <linearGradient id="prismGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06B6D4"/>
+      <stop offset="50%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+    <filter id="neonGlow" filterUnits="objectBoundingBox" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.5" result="blur1"/>
+      <feGaussianBlur stdDeviation="3" result="blur2"/>
       <feMerge>
         <feMergeNode in="blur2"/>
         <feMergeNode in="blur1"/>
@@ -18,11 +22,22 @@
     </filter>
   </defs>
 
+  <!-- Prism triangle outline -->
+  <polygon
+    points="32,6 58,54 6,54"
+    fill="none"
+    stroke="url(#prismGrad)"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    filter="url(#neonGlow)"
+  />
+
+  <!-- C lettermark centered in triangle -->
   <path
-    d="M38,22 A12,12 0 1,0 38,42"
+    d="M38,30 A9,9 0 1,0 38,44"
     fill="none"
     stroke="url(#cGrad)"
-    stroke-width="6"
+    stroke-width="4.5"
     stroke-linecap="round"
     filter="url(#neonGlow)"
   />
