@@ -91,3 +91,16 @@ jobs:
 
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Homebrew formula
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: clarissa
+          homebrew-tap: cameronrye/homebrew-tap
+          download-url: https://github.com/cameronrye/clarissa/releases/download/${{ github.ref_name }}/clarissa-macos-arm64
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

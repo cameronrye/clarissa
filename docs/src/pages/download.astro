@@ -1,0 +1,196 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="Download" description="Download Clarissa for your platform - macOS, Linux, or Windows">
+  <Header />
+  <main class="download-page">
+    <div class="container">
+      <h1 class="gradient-text">Download Clarissa</h1>
+      <p class="subtitle">Get the standalone binary for your platform</p>
+
+      <div id="download-section" class="download-section">
+        <div class="loading">Loading latest release...</div>
+      </div>
+
+      <div class="alternative-install">
+        <h2>Alternative Installation Methods</h2>
+        <div class="install-options">
+          <div class="install-option">
+            <h3>npm / Bun</h3>
+            <p>Install globally with your preferred package manager:</p>
+            <div class="install-command">
+              <code>bun install -g clarissa</code>
+              <button class="copy-btn" data-copy="bun install -g clarissa" aria-label="Copy">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="install-command">
+              <code>npm install -g clarissa</code>
+              <button class="copy-btn" data-copy="npm install -g clarissa" aria-label="Copy">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="install-option">
+            <h3>Homebrew (macOS)</h3>
+            <p>Install via Homebrew tap:</p>
+            <div class="install-command">
+              <code>brew install cameronrye/tap/clarissa</code>
+              <button class="copy-btn" data-copy="brew install cameronrye/tap/clarissa" aria-label="Copy">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="install-option">
+            <h3>From Source</h3>
+            <p>Clone and build from the repository:</p>
+            <div class="install-command">
+              <code>git clone https://github.com/cameronrye/clarissa.git && cd clarissa && bun install && bun link</code>
+              <button class="copy-btn" data-copy="git clone https://github.com/cameronrye/clarissa.git && cd clarissa && bun install && bun link" aria-label="Copy">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</Base>
+
+<script>
+  import { initDownloadPage } from '../scripts/download.ts';
+  initDownloadPage();
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-copy');
+      if (text) {
+        await navigator.clipboard.writeText(text);
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 2000);
+      }
+    });
+  });
+</script>
+
+<style>
+  .download-page {
+    padding: 4rem 0;
+    min-height: 70vh;
+  }
+
+  .download-page h1 {
+    text-align: center;
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--color-text-muted);
+    margin-bottom: 3rem;
+  }
+
+  .download-section {
+    max-width: 800px;
+    margin: 0 auto 4rem;
+  }
+
+  .loading {
+    text-align: center;
+    color: var(--color-text-muted);
+    padding: 2rem;
+  }
+
+  .alternative-install {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .alternative-install h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .install-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .install-option {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .install-option h3 {
+    color: var(--color-cyan);
+    margin-bottom: 0.5rem;
+  }
+
+  .install-option p {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+
+  .install-command {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .install-command:last-child {
+    margin-bottom: 0;
+  }
+
+  .install-command code {
+    flex: 1;
+    background: none;
+    color: var(--color-cyan);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .copy-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+
+  .copy-btn:hover { color: var(--color-text); }
+  .copy-btn.copied { color: var(--color-cyan); }
+</style>
+

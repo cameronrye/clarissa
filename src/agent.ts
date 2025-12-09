@@ -28,7 +28,8 @@ When you need to perform calculations, run commands, or interact with the system
 Always explain what you're doing and provide clear, helpful responses.
 If a tool fails, explain the error and suggest alternatives if possible.
 
-Be concise but thorough. Format your responses nicely for terminal display.`;
+Be concise but thorough. Format your responses for terminal display using plain text.
+Do not use LaTeX notation like \\( \\) or \\[ \\]. Write math expressions in plain text (e.g., "9 * 8 - 72 = 0").`;
 }
 
 /**
