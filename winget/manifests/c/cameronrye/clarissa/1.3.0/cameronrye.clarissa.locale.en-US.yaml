@@ -1,0 +1,34 @@
+# Created using winget manifest generator
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: cameronrye.clarissa
+PackageVersion: 1.3.0
+PackageLocale: en-US
+Publisher: Cameron Rye
+PublisherUrl: https://rye.dev
+PublisherSupportUrl: https://github.com/cameronrye/clarissa/issues
+Author: Cameron Rye
+PackageName: Clarissa
+PackageUrl: https://clarissa.run
+License: MIT
+LicenseUrl: https://github.com/cameronrye/clarissa/blob/main/LICENSE
+ShortDescription: An AI-powered terminal assistant with tool execution capabilities
+Description: |-
+  Clarissa is a powerful AI terminal assistant that brings intelligent automation to your command line.
+  Features include multi-provider AI support (OpenRouter, Apple Intelligence, LM Studio, Ollama),
+  MCP server integration, built-in tools for file operations, git, web search, and shell commands.
+Tags:
+  - ai
+  - agent
+  - cli
+  - terminal
+  - assistant
+  - llm
+  - openrouter
+  - mcp
+  - claude
+  - gpt
+ReleaseNotesUrl: https://github.com/cameronrye/clarissa/releases/tag/v1.3.0
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
+

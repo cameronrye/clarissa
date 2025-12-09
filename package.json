@@ -1,6 +1,6 @@
 {
   "name": "clarissa",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "An AI-powered terminal assistant with tool execution capabilities",
   "author": "Cameron Rye <cameron@rye.dev> (https://rye.dev)",
   "license": "MIT",

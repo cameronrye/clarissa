@@ -24,6 +24,8 @@ const PLATFORMS: Platform[] = [
   { os: 'macos', arch: 'x64', label: 'macOS (Intel)', assetPattern: /macos-x64$/, icon: '' },
   { os: 'linux', arch: 'x64', label: 'Linux (x64)', assetPattern: /linux-x64$/, icon: '' },
   { os: 'linux', arch: 'arm64', label: 'Linux (ARM64)', assetPattern: /linux-arm64$/, icon: '' },
+  { os: 'linux', arch: 'x64', label: 'Linux AppImage (x64)', assetPattern: /linux-x86_64\.AppImage$/, icon: '' },
+  { os: 'linux', arch: 'arm64', label: 'Linux AppImage (ARM64)', assetPattern: /linux-aarch64\.AppImage$/, icon: '' },
   { os: 'windows', arch: 'x64', label: 'Windows (x64)', assetPattern: /windows-x64\.exe$/, icon: '' },
 ];
 
