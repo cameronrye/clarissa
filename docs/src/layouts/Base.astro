@@ -22,6 +22,27 @@ const ogImage = new URL(`${base}logo.svg`, siteUrl);
     <title>{pageTitle}</title>
     <link rel="icon" type="image/svg+xml" href={`${base}logo.svg`} />
 
+    <!-- PWA -->
+    <link rel="manifest" href={`${base}manifest.json`} />
+    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Clarissa" />
+    <link rel="apple-touch-icon" href={`${base}icons/icon-192.png`} />
+
+    <!-- Theme: apply before paint to prevent flash -->
+    <script is:inline>
+      (function() {
+        const stored = localStorage.getItem('theme') || 'system';
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = stored === 'system' ? (systemDark ? 'dark' : 'light') : stored;
+        if (theme === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonicalUrl} />
@@ -69,6 +90,13 @@ const ogImage = new URL(`${base}logo.svg`, siteUrl);
   </head>
   <body>
     <slot />
+    <script is:inline>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>
 

@@ -44,16 +44,10 @@ function detectPlatform(): Platform {
   // Detect architecture (best effort - browsers obscure this)
   let arch: 'arm64' | 'x64' = 'x64';
   if (os === 'macos') {
-    // Check for Apple Silicon indicators
-    // Note: Chrome on M1 reports as Intel, so we default to ARM64 for modern Macs
-    const isAppleSilicon = 
-      ua.includes('arm') || 
-      platform.includes('arm') ||
-      // @ts-ignore - experimental API
-      (navigator.userAgentData?.platform === 'macOS' && navigator.userAgentData?.architecture === 'arm');
-    
-    // Default to ARM64 for macOS as most new Macs are Apple Silicon
-    arch = isAppleSilicon || !ua.includes('intel') ? 'arm64' : 'x64';
+    // Default to ARM64 for macOS - Apple Silicon is standard since 2020
+    // Browsers on Apple Silicon often still report "Intel" in UA for compatibility
+    // so we can't rely on checking for "intel" in the user agent
+    arch = 'arm64';
   } else if (os === 'linux') {
     if (ua.includes('aarch64') || ua.includes('arm64')) {
       arch = 'arm64';
@@ -105,6 +99,29 @@ function renderDownloadSection(release: Release, detectedPlatform: Platform): st
     .filter(Boolean)
     .join('');
 
+  const binaryName = detectedAsset?.name || 'clarissa-' + detectedPlatform.os + '-' + detectedPlatform.arch;
+  const isWindows = detectedPlatform.os === 'windows';
+
+  const installInstructions = isWindows
+    ? `<div class="install-instructions">
+        <h3>After downloading</h3>
+        <p>Move the executable to a folder in your PATH, or run it directly:</p>
+        <div class="install-command">
+          <code>.\\${binaryName}</code>
+        </div>
+      </div>`
+    : `<div class="install-instructions">
+        <h3>After downloading</h3>
+        <p>Make executable and move to your PATH:</p>
+        <div class="install-command">
+          <code>chmod +x ~/Downloads/${binaryName}</code>
+        </div>
+        <div class="install-command">
+          <code>sudo mv ~/Downloads/${binaryName} /usr/local/bin/clarissa</code>
+        </div>
+        <p class="instruction-note">Then run <code>clarissa</code> from anywhere.</p>
+      </div>`;
+
   return `
     <div class="primary-download">
       <div class="detected-platform">
@@ -123,9 +140,10 @@ function renderDownloadSection(release: Release, detectedPlatform: Platform): st
         </a>
       ` : '<p class="error">Binary not available for this platform</p>'}
       <p class="version-info">
-        Version ${version} &middot; Released ${date} &middot; 
+        Version ${version} &middot; Released ${date} &middot;
         <a href="${release.html_url}" target="_blank" rel="noopener">Release notes</a>
       </p>
+      ${detectedAsset ? installInstructions : ''}
     </div>
     <details class="other-platforms">
       <summary>Download for other platforms</summary>
@@ -170,6 +188,13 @@ export async function initDownloadPage(): Promise<void> {
       .platform-link .size { color: var(--color-text-muted); font-size: 0.8rem; }
       .error-state { text-align: center; padding: 2rem; color: var(--color-text-muted); }
       .error { color: #f87171; }
+      .install-instructions { margin-top: 2rem; padding: 1.5rem; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; text-align: left; }
+      .install-instructions h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--color-text); }
+      .install-instructions p { margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--color-text-muted); }
+      .install-instructions .install-command { display: flex; align-items: center; background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; }
+      .install-instructions .install-command code { background: none; color: var(--color-cyan); font-size: 0.8rem; }
+      .install-instructions .instruction-note { margin-top: 0.75rem; margin-bottom: 0; font-size: 0.8rem; }
+      .install-instructions .instruction-note code { background: var(--color-bg-tertiary); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
     `;
     document.head.appendChild(style);
   } catch (error) {

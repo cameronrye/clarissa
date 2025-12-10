@@ -347,24 +347,57 @@ flowchart TD
 
 <script>
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({
-    startOnLoad: true,
-    theme: 'dark',
-    themeVariables: {
-      primaryColor: '#a855f7',
-      primaryTextColor: '#f5f5f5',
-      primaryBorderColor: '#7c3aed',
-      lineColor: '#22d3ee',
-      secondaryColor: '#1e1e2e',
-      tertiaryColor: '#2a2a3e',
-      background: '#0d0d12',
-      mainBkg: '#1e1e2e',
-      nodeBorder: '#7c3aed',
-      clusterBkg: '#1e1e2e',
-      clusterBorder: '#3f3f5a',
-      titleColor: '#f5f5f5',
-      edgeLabelBackground: '#1e1e2e'
-    }
+
+  const darkTheme = {
+    primaryColor: '#a855f7',
+    primaryTextColor: '#f5f5f5',
+    primaryBorderColor: '#7c3aed',
+    lineColor: '#22d3ee',
+    secondaryColor: '#1e1e2e',
+    tertiaryColor: '#2a2a3e',
+    background: '#0d0d12',
+    mainBkg: '#1e1e2e',
+    nodeBorder: '#7c3aed',
+    clusterBkg: '#1e1e2e',
+    clusterBorder: '#3f3f5a',
+    titleColor: '#f5f5f5',
+    edgeLabelBackground: '#1e1e2e'
+  };
+
+  const lightTheme = {
+    primaryColor: '#a855f7',
+    primaryTextColor: '#18181b',
+    primaryBorderColor: '#7c3aed',
+    lineColor: '#0891b2',
+    secondaryColor: '#f4f4f5',
+    tertiaryColor: '#e4e4e7',
+    background: '#ffffff',
+    mainBkg: '#f4f4f5',
+    nodeBorder: '#7c3aed',
+    clusterBkg: '#f4f4f5',
+    clusterBorder: '#d4d4d8',
+    titleColor: '#18181b',
+    edgeLabelBackground: '#f4f4f5'
+  };
+
+  function initMermaid() {
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: isDark ? darkTheme : lightTheme
+    });
+    mermaid.run({ querySelector: '.mermaid' });
+  }
+
+  initMermaid();
+
+  // Re-render on theme change
+  window.addEventListener('theme-change', () => {
+    document.querySelectorAll('.mermaid').forEach(el => {
+      el.removeAttribute('data-processed');
+    });
+    initMermaid();
   });
 </script>
 
