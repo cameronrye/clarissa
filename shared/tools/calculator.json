@@ -1,0 +1,19 @@
+{
+  "name": "calculator",
+  "description": "Evaluate mathematical expressions. Supports basic arithmetic (+, -, *, /), exponents (** or ^), parentheses, and common math functions (sqrt, sin, cos, tan, log, abs, floor, ceil, round, min, max, pow, exp) and constants (PI, E).",
+  "category": "utility",
+  "priority": 1,
+  "requiresConfirmation": false,
+  "platforms": ["cli", "ios", "macos"],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "expression": {
+        "type": "string",
+        "description": "The mathematical expression to evaluate, e.g., '2 + 2' or 'sqrt(16) * 2'"
+      }
+    },
+    "required": ["expression"]
+  }
+}
+

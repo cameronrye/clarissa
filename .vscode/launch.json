@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:clarissa}/ios/Clarissa",
+            "name": "Debug ClarissaApp (ios/Clarissa)",
+            "target": "ClarissaApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug ClarissaApp (ios/Clarissa)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:clarissa}/ios/Clarissa",
+            "name": "Release ClarissaApp (ios/Clarissa)",
+            "target": "ClarissaApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release ClarissaApp (ios/Clarissa)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:clarissa}/ios/Clarissa",
+            "name": "Debug Clarissa (ios/Clarissa)",
+            "target": "Clarissa",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Clarissa (ios/Clarissa)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:clarissa}/ios/Clarissa",
+            "name": "Release Clarissa (ios/Clarissa)",
+            "target": "Clarissa",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Clarissa (ios/Clarissa)"
+        }
+    ]
+}

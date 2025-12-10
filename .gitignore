@@ -36,3 +36,13 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Code signing certificates
 *.p12
 *.certSigningRequest
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/xcuserdata/
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcscmblueprint
