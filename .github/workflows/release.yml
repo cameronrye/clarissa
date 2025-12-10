@@ -44,6 +44,48 @@ jobs:
       - name: Build binary
         run: bun build --compile --minify --target=${{ matrix.target }} --external node-llama-cpp src/index.tsx --outfile dist/${{ matrix.artifact }}
 
+      - name: Sign and notarize binary (macOS only)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+
+          # Sign the binary with hardened runtime (required for notarization)
+          codesign --force --options runtime --sign "Developer ID Application: Cameron Rye ($APPLE_TEAM_ID)" --timestamp dist/${{ matrix.artifact }}
+
+          # Verify signature
+          codesign --verify --verbose dist/${{ matrix.artifact }}
+
+          # Create zip for notarization (notarytool requires zip, pkg, or dmg)
+          ditto -c -k --keepParent dist/${{ matrix.artifact }} $RUNNER_TEMP/${{ matrix.artifact }}.zip
+
+          # Submit for notarization and wait
+          xcrun notarytool submit $RUNNER_TEMP/${{ matrix.artifact }}.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+          # Clean up keychain
+          security delete-keychain "$KEYCHAIN_PATH"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
