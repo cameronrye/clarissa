@@ -7,6 +7,14 @@ public struct ContentView: View {
     @State private var showSessionHistory = false
     @State private var showContextDetails = false
 
+    // Namespace for glass morphing transitions
+    @Namespace private var toolbarNamespace
+    // Namespace for zoom navigation transitions
+    @Namespace private var zoomNamespace
+
+    // Accessibility
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init() {}
 
     public var body: some View {
@@ -18,10 +26,7 @@ public struct ContentView: View {
                 .toolbar {
                     #if os(iOS)
                     ToolbarItem(placement: .topBarLeading) {
-                        HStack(spacing: 12) {
-                            newSessionButton
-                            historyButton
-                        }
+                        leadingToolbarContent
                     }
 
                     ToolbarItem(placement: .principal) {
@@ -29,18 +34,12 @@ public struct ContentView: View {
                     }
 
                     ToolbarItem(placement: .topBarTrailing) {
-                        HStack(spacing: 12) {
-                            voiceModeButton
-                            settingsButton
-                        }
+                        trailingToolbarContent
                     }
                     #else
                     // macOS: Use navigation placement for leading items
                     ToolbarItem(placement: .navigation) {
-                        HStack(spacing: 8) {
-                            newSessionButton
-                            historyButton
-                        }
+                        leadingToolbarContent
                     }
 
                     // macOS: Principal placement for title
@@ -50,10 +49,7 @@ public struct ContentView: View {
 
                     // macOS: Primary action for settings (right side)
                     ToolbarItem(placement: .primaryAction) {
-                        HStack(spacing: 8) {
-                            voiceModeButton
-                            settingsButton
-                        }
+                        trailingToolbarContent
                     }
                     #endif
                 }
@@ -61,15 +57,20 @@ public struct ContentView: View {
                     SettingsView(onProviderChange: {
                         chatViewModel.refreshProvider()
                     })
+                    .presentationDetents([.large])
+                    .scrollContentBackground(.hidden)  // Glass compatibility
                 }
                 .sheet(isPresented: $showSessionHistory) {
                     SessionHistoryView(viewModel: chatViewModel) {
                         showSessionHistory = false
                     }
+                    .presentationDetents([.medium, .large])
+                    .scrollContentBackground(.hidden)  // Glass compatibility
                 }
                 .sheet(isPresented: $showContextDetails) {
                     ContextDetailSheet(stats: chatViewModel.contextStats)
                         .presentationDetents([.medium, .large])
+                        .scrollContentBackground(.hidden)  // Glass compatibility
                 }
         }
         .tint(ClarissaTheme.purple)
@@ -83,9 +84,11 @@ public struct ContentView: View {
         }
         .alert("Start New Conversation?", isPresented: $chatViewModel.showNewSessionConfirmation) {
             Button("Cancel", role: .cancel) {
+                HapticManager.shared.lightTap()
                 chatViewModel.showNewSessionConfirmation = false
             }
             Button("Start New", role: .destructive) {
+                HapticManager.shared.warning()
                 chatViewModel.startNewSession()
             }
         } message: {
@@ -108,52 +111,162 @@ public struct ContentView: View {
         }
     }
 
+    // MARK: - Toolbar Content with GlassEffectContainer
+
+    @ViewBuilder
+    private var leadingToolbarContent: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            GlassEffectContainer(spacing: 20) {
+                HStack(spacing: 12) {
+                    newSessionButton
+                    historyButton
+                }
+            }
+        } else {
+            HStack(spacing: 12) {
+                newSessionButton
+                historyButton
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var trailingToolbarContent: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            GlassEffectContainer(spacing: 20) {
+                HStack(spacing: 12) {
+                    voiceModeButton
+                    settingsButton
+                }
+            }
+        } else {
+            HStack(spacing: 12) {
+                voiceModeButton
+                settingsButton
+            }
+        }
+    }
+
+    @ViewBuilder
     private var newSessionButton: some View {
-        Button {
-            chatViewModel.requestNewSession()
-        } label: {
-            Image(systemName: "plus.circle")
-                .foregroundStyle(ClarissaTheme.gradient)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button {
+                HapticManager.shared.lightTap()
+                chatViewModel.requestNewSession()
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.title3)
+            }
+            .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
+            .glassEffectID("newSession", in: toolbarNamespace)
+            .accessibilityLabel("New conversation")
+            .accessibilityHint("Double-tap to start a new conversation. Current conversation will be saved.")
+            #if os(macOS)
+            .keyboardShortcut("n", modifiers: .command)
+            #endif
+        } else {
+            Button {
+                HapticManager.shared.lightTap()
+                chatViewModel.requestNewSession()
+            } label: {
+                Image(systemName: "plus.circle")
+                    .foregroundStyle(ClarissaTheme.gradient)
+            }
+            .accessibilityLabel("New conversation")
+            .accessibilityHint("Double-tap to start a new conversation. Current conversation will be saved.")
+            #if os(macOS)
+            .keyboardShortcut("n", modifiers: .command)
+            #endif
         }
-        .accessibilityLabel("New conversation")
-        .accessibilityHint("Start a new conversation")
-        #if os(macOS)
-        .keyboardShortcut("n", modifiers: .command) // Cmd+N for new session
-        #endif
     }
 
+    @ViewBuilder
     private var historyButton: some View {
-        Button {
-            showSessionHistory = true
-        } label: {
-            Image(systemName: "clock.arrow.circlepath")
-                .foregroundStyle(ClarissaTheme.gradient)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button {
+                HapticManager.shared.lightTap()
+                showSessionHistory = true
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.title3)
+            }
+            .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
+            .glassEffectID("history", in: toolbarNamespace)
+            .accessibilityLabel("Conversation history")
+            .accessibilityHint("Double-tap to browse and switch between past conversations")
+        } else {
+            Button {
+                HapticManager.shared.lightTap()
+                showSessionHistory = true
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(ClarissaTheme.gradient)
+            }
+            .accessibilityLabel("Conversation history")
+            .accessibilityHint("Double-tap to browse and switch between past conversations")
         }
-        .accessibilityLabel("Conversation history")
-        .accessibilityHint("View past conversations")
     }
 
+    @ViewBuilder
     private var voiceModeButton: some View {
-        Button {
-            Task { await chatViewModel.toggleVoiceMode() }
-        } label: {
-            Image(systemName: chatViewModel.isVoiceModeActive ? "waveform.circle.fill" : "waveform.circle")
-                .foregroundStyle(chatViewModel.isVoiceModeActive ? AnyShapeStyle(ClarissaTheme.pink) : AnyShapeStyle(ClarissaTheme.gradient))
-                .symbolEffect(.bounce, value: chatViewModel.isVoiceModeActive)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button {
+                HapticManager.shared.mediumTap()
+                Task { await chatViewModel.toggleVoiceMode() }
+            } label: {
+                Image(systemName: chatViewModel.isVoiceModeActive ? "waveform.circle.fill" : "waveform.circle")
+                    .font(.title3)
+                    .symbolEffect(.bounce, value: chatViewModel.isVoiceModeActive)
+            }
+            .glassEffect(
+                reduceMotion
+                    ? .regular.tint(chatViewModel.isVoiceModeActive ? ClarissaTheme.pink : nil)
+                    : .regular.tint(chatViewModel.isVoiceModeActive ? ClarissaTheme.pink : nil).interactive(),
+                in: .circle
+            )
+            .glassEffectID("voiceMode", in: toolbarNamespace)
+            .animation(.bouncy, value: chatViewModel.isVoiceModeActive)
+            .accessibilityLabel(chatViewModel.isVoiceModeActive ? "Exit voice mode" : "Enter voice mode")
+            .accessibilityHint(chatViewModel.isVoiceModeActive ? "Double-tap to exit hands-free conversation and return to text input" : "Double-tap to start hands-free voice conversation")
+        } else {
+            Button {
+                HapticManager.shared.mediumTap()
+                Task { await chatViewModel.toggleVoiceMode() }
+            } label: {
+                Image(systemName: chatViewModel.isVoiceModeActive ? "waveform.circle.fill" : "waveform.circle")
+                    .foregroundStyle(chatViewModel.isVoiceModeActive ? AnyShapeStyle(ClarissaTheme.pink) : AnyShapeStyle(ClarissaTheme.gradient))
+                    .symbolEffect(.bounce, value: chatViewModel.isVoiceModeActive)
+            }
+            .accessibilityLabel(chatViewModel.isVoiceModeActive ? "Exit voice mode" : "Enter voice mode")
+            .accessibilityHint(chatViewModel.isVoiceModeActive ? "Double-tap to exit hands-free conversation and return to text input" : "Double-tap to start hands-free voice conversation")
         }
-        .accessibilityLabel(chatViewModel.isVoiceModeActive ? "Exit voice mode" : "Enter voice mode")
-        .accessibilityHint(chatViewModel.isVoiceModeActive ? "Tap to exit hands-free conversation" : "Tap to start hands-free conversation")
     }
 
+    @ViewBuilder
     private var settingsButton: some View {
-        Button {
-            showSettings = true
-        } label: {
-            Image(systemName: "gear")
-                .foregroundStyle(ClarissaTheme.gradient)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button {
+                HapticManager.shared.lightTap()
+                showSettings = true
+            } label: {
+                Image(systemName: "gear")
+                    .font(.title3)
+            }
+            .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
+            .glassEffectID("settings", in: toolbarNamespace)
+            .accessibilityLabel("Settings")
+            .accessibilityHint("Double-tap to configure LLM provider, tools, voice, and memory settings")
+        } else {
+            Button {
+                HapticManager.shared.lightTap()
+                showSettings = true
+            } label: {
+                Image(systemName: "gear")
+                    .foregroundStyle(ClarissaTheme.gradient)
+            }
+            .accessibilityLabel("Settings")
+            .accessibilityHint("Double-tap to configure LLM provider, tools, voice, and memory settings")
         }
-        .accessibilityLabel("Settings")
-        .accessibilityHint("Configure app settings")
     }
 }
 

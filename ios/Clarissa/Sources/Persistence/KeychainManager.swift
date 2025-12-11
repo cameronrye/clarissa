@@ -106,6 +106,7 @@ final class KeychainManager: @unchecked Sendable {
 extension KeychainManager {
     enum Keys {
         static let openRouterApiKey = "openRouterApiKey"
+        static let memories = "clarissa_memories"
     }
 }
 

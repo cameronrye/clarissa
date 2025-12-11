@@ -79,8 +79,20 @@ final class OpenRouterProvider: LLMProvider, @unchecked Sendable {
                         }
 
                         guard let data = jsonString.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                              let choices = json["choices"] as? [[String: Any]],
+                              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                            ClarissaLogger.provider.debug("OpenRouter: Skipping malformed JSON chunk")
+                            continue
+                        }
+
+                        // Check for mid-stream errors
+                        if let error = json["error"] as? [String: Any],
+                           let errorMessage = error["message"] as? String {
+                            ClarissaLogger.provider.error("OpenRouter stream error: \(errorMessage)")
+                            continuation.finish(throwing: OpenRouterError.httpError(statusCode: 500, message: errorMessage))
+                            return
+                        }
+
+                        guard let choices = json["choices"] as? [[String: Any]],
                               let delta = choices.first?["delta"] as? [String: Any] else {
                             continue
                         }

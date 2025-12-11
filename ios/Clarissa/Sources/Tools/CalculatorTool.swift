@@ -1,5 +1,12 @@
 import Foundation
 
+// MARK: - Typed Arguments
+
+/// Typed arguments for CalculatorTool using Codable
+struct CalculatorArguments: Codable {
+    let expression: String
+}
+
 /// Tool for mathematical calculations
 final class CalculatorTool: ClarissaTool, @unchecked Sendable {
     let name = "calculator"
@@ -28,17 +35,28 @@ final class CalculatorTool: ClarissaTool, @unchecked Sendable {
     }
 
     func execute(arguments: String) async throws -> String {
-        guard let data = arguments.data(using: .utf8),
-              let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let expression = args["expression"] as? String else {
+        guard let data = arguments.data(using: .utf8) else {
+            throw ToolError.invalidArguments("Invalid argument encoding")
+        }
+
+        let args: CalculatorArguments
+        do {
+            args = try JSONDecoder().decode(CalculatorArguments.self, from: data)
+        } catch {
             throw ToolError.invalidArguments("Missing expression parameter")
         }
+
+        let expression = args.expression
 
         // Validate expression
         try validateExpression(expression)
 
         do {
             let result = try evaluate(expression)
+
+            // Validate result is a usable number
+            try validateResult(result, expression: expression)
+
             let formatted = formatResult(result)
 
             let response: [String: Any] = [
@@ -53,6 +71,24 @@ final class CalculatorTool: ClarissaTool, @unchecked Sendable {
             throw error
         } catch {
             throw ToolError.executionFailed("Failed to evaluate expression: \(error.localizedDescription)")
+        }
+    }
+
+    /// Validate that the result is a usable number (not NaN or extreme infinity)
+    private func validateResult(_ result: Double, expression: String) throws {
+        if result.isNaN {
+            throw ToolError.executionFailed("Expression '\(expression)' resulted in an undefined value (NaN). This often happens with operations like sqrt of negative numbers or 0/0.")
+        }
+
+        if result.isInfinite {
+            // Allow infinity as a valid result but provide a warning in the response
+            // This is intentional - expressions like 1/0 should return infinity
+            return
+        }
+
+        // Check for potential overflow conditions
+        if abs(result) > 1e308 {
+            throw ToolError.executionFailed("Expression '\(expression)' resulted in a number too large to represent accurately.")
         }
     }
 

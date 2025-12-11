@@ -12,7 +12,9 @@ struct ClarissaApp: App {
         WindowGroup {
             Group {
                 if appState.isOnboardingComplete {
-                    ContentView()
+                    // Use MainTabView for iOS 26+ with tab bar minimization
+                    // Falls back to ContentView for older OS versions
+                    MainTabView()
                         .environmentObject(appState)
                 } else {
                     OnboardingView()

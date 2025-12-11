@@ -3,49 +3,69 @@ import SwiftUI
 /// Clarissa brand colors and theme
 enum ClarissaTheme {
     // MARK: - Brand Colors
-    
+
     /// Pink: #EC4899
     static let pink = Color(red: 0.925, green: 0.286, blue: 0.600)
-    
+
     /// Purple: #8B5CF6
     static let purple = Color(red: 0.545, green: 0.361, blue: 0.965)
-    
+
     /// Cyan: #06B6D4
     static let cyan = Color(red: 0.024, green: 0.714, blue: 0.831)
-    
+
     /// Dark background: #0a0a0f
     static let backgroundDark = Color(red: 0.039, green: 0.039, blue: 0.059)
-    
+
     /// Secondary background: #12121a
     static let backgroundSecondary = Color(red: 0.071, green: 0.071, blue: 0.102)
-    
+
     // MARK: - Gradient
-    
+
     /// The signature Clarissa gradient (pink -> purple -> cyan)
     static let gradient = LinearGradient(
         colors: [pink, purple, cyan],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
-    
+
     /// Reversed gradient (cyan -> purple -> pink)
     static let gradientReversed = LinearGradient(
         colors: [cyan, purple, pink],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
-    
+
     // MARK: - UI Colors
-    
+
     /// Assistant message bubble background
     static let assistantBubble = purple.opacity(0.15)
-    
+
     /// User message bubble uses the gradient
     static let userBubbleGradient = LinearGradient(
         colors: [purple, pink],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
+
+    // MARK: - Glass Tint Colors (for semantic meaning per Liquid Glass guide)
+
+    /// Tint for listening/recording state
+    static let listeningTint = Color.blue
+
+    /// Tint for thinking/processing state
+    static let thinkingTint = purple
+
+    /// Tint for speaking state
+    static let speakingTint = Color.green
+
+    /// Tint for error/warning state
+    static let errorTint = Color.red
+
+    /// Tint for success/completed state
+    static let successTint = cyan
+
+    /// Primary action tint
+    static let primaryActionTint = purple
 }
 
 /// Extension for gradient text effect

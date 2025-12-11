@@ -110,6 +110,10 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         self.appState = appState
         Task {
             isSettingUpProvider = true
+            // Set up provider with fallback if persisted selection is unavailable
+            await appState.setProviderWithFallback(appState.selectedProvider) { providerType in
+                await self.checkProviderAvailability(providerType)
+            }
             await setupProvider(for: appState.selectedProvider)
             isSettingUpProvider = false
         }
@@ -118,8 +122,31 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Switch to a different provider
     func switchProvider(to providerType: LLMProviderType) async {
         isSettingUpProvider = true
-        await setupProvider(for: providerType)
+        // Use fallback if the requested provider is unavailable
+        if let appState = appState {
+            await appState.setProviderWithFallback(providerType) { type in
+                await self.checkProviderAvailability(type)
+            }
+            await setupProvider(for: appState.selectedProvider)
+        } else {
+            await setupProvider(for: providerType)
+        }
         isSettingUpProvider = false
+    }
+
+    /// Check if a provider type is available
+    private func checkProviderAvailability(_ providerType: LLMProviderType) async -> Bool {
+        switch providerType {
+        case .foundationModels:
+            if #available(iOS 26.0, *) {
+                let provider = FoundationModelsProvider()
+                return await provider.isAvailable
+            }
+            return false
+        case .openRouter:
+            let apiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
+            return !apiKey.isEmpty
+        }
     }
 
     private func setupProvider(for providerType: LLMProviderType? = nil) async {
@@ -179,6 +206,10 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+
+        // Cancel any existing task before starting a new one
+        currentTask?.cancel()
+        currentTask = nil
 
         inputText = ""
 

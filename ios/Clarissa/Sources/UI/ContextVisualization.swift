@@ -4,7 +4,9 @@ import SwiftUI
 struct ContextIndicatorView: View {
     let stats: ContextStats
     let onTap: () -> Void
-    
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     private var gaugeColor: Color {
         if stats.isCritical {
             return .red
@@ -14,36 +16,67 @@ struct ContextIndicatorView: View {
             return ClarissaTheme.purple
         }
     }
-    
+
+    /// Glass tint based on context state
+    private var glassTint: Color? {
+        if stats.isCritical { return ClarissaTheme.errorTint }
+        if stats.isNearLimit { return .orange }
+        return nil
+    }
+
     var body: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            glassIndicator
+        } else {
+            legacyIndicator
+        }
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var glassIndicator: some View {
         Button(action: onTap) {
-            ZStack {
-                // Background ring
-                Circle()
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 3)
-                    .frame(width: 24, height: 24)
-                
-                // Progress ring
-                Circle()
-                    .trim(from: 0, to: stats.usagePercent)
-                    .stroke(
-                        gaugeColor,
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                    )
-                    .frame(width: 24, height: 24)
-                    .rotationEffect(.degrees(-90))
-                
-                // Percentage text (only show when significant)
-                if stats.usagePercent > 0.1 {
-                    Text("\(Int(stats.usagePercent * 100))")
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(gaugeColor)
-                }
-            }
+            gaugeContent
+                .padding(4)
+        }
+        .glassEffect(.regular.tint(glassTint), in: .circle)
+        .accessibilityLabel("Context usage: \(Int(stats.usagePercent * 100)) percent")
+        .accessibilityHint("Tap for context details")
+    }
+
+    private var legacyIndicator: some View {
+        Button(action: onTap) {
+            gaugeContent
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Context usage: \(Int(stats.usagePercent * 100)) percent")
         .accessibilityHint("Tap for context details")
+    }
+
+    private var gaugeContent: some View {
+        ZStack {
+            // Background ring
+            Circle()
+                .stroke(Color.gray.opacity(0.2), lineWidth: 3)
+                .frame(width: 24, height: 24)
+
+            // Progress ring
+            Circle()
+                .trim(from: 0, to: stats.usagePercent)
+                .stroke(
+                    gaugeColor,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                )
+                .frame(width: 24, height: 24)
+                .rotationEffect(.degrees(-90))
+
+            // Percentage text (only show when significant)
+            if stats.usagePercent > 0.1 {
+                Text("\(Int(stats.usagePercent * 100))")
+                    .font(.caption2.weight(.bold))
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(gaugeColor)
+            }
+        }
     }
 }
 
@@ -51,17 +84,17 @@ struct ContextIndicatorView: View {
 struct ContextDetailSheet: View {
     let stats: ContextStats
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Main gauge
                     mainGauge
-                    
+
                     // Token breakdown
                     tokenBreakdown
-                    
+
                     // Info section
                     infoSection
                 }
@@ -72,20 +105,30 @@ struct ContextDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(ClarissaTheme.purple)
+                    doneButton
                 }
             }
             #else
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(ClarissaTheme.purple)
+                    doneButton
                 }
             }
             #endif
         }
         .tint(ClarissaTheme.purple)
+    }
+
+    @ViewBuilder
+    private var doneButton: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button("Done") { dismiss() }
+                .buttonStyle(.glassProminent)
+                .tint(ClarissaTheme.purple)
+        } else {
+            Button("Done") { dismiss() }
+                .foregroundStyle(ClarissaTheme.purple)
+        }
     }
     
     private var mainGauge: some View {
@@ -115,7 +158,8 @@ struct ContextDetailSheet: View {
                 // Center content
                 VStack(spacing: 2) {
                     Text("\(Int(stats.usagePercent * 100))%")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .font(.largeTitle.weight(.bold))
+                        .minimumScaleFactor(0.5)
                         .gradientForeground()
                     Text("used")
                         .font(.caption)

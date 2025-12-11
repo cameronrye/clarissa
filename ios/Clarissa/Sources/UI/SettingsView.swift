@@ -3,6 +3,7 @@ import AVFoundation
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var appState: AppState
     @AppStorage("selectedModel") private var selectedModel: String = "anthropic/claude-sonnet-4"
     @AppStorage("autoApproveTools") private var autoApproveTools: Bool = false
@@ -16,6 +17,9 @@ struct SettingsView: View {
     @State private var showMemories = false
     @State private var showingSaveConfirmation = false
     @State private var availableVoices: [AVSpeechSynthesisVoice] = []
+
+    // Namespace for glass morphing in settings
+    @Namespace private var settingsNamespace
 
     var onProviderChange: (() -> Void)?
 
@@ -225,21 +229,13 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        onProviderChange?()
-                        dismiss()
-                    }
-                    .foregroundStyle(ClarissaTheme.purple)
+                    doneButton
                 }
             }
             #else
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        onProviderChange?()
-                        dismiss()
-                    }
-                    .foregroundStyle(ClarissaTheme.purple)
+                    doneButton
                 }
             }
             #endif
@@ -305,8 +301,59 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var providerPicker: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            glassProviderPicker
+        } else {
+            legacyProviderPicker
+        }
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var glassProviderPicker: some View {
+        GlassEffectContainer(spacing: 12) {
+            ForEach(LLMProviderType.allCases) { provider in
+                Button {
+                    HapticManager.shared.selection()
+                    appState.selectedProvider = provider
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(provider.rawValue)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text(provider == .foundationModels ? "On-device, private" : "Cloud-based, requires API key")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if appState.selectedProvider == provider {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(ClarissaTheme.cyan)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .glassEffect(
+                    appState.selectedProvider == provider
+                        ? (reduceMotion ? .regular.tint(ClarissaTheme.purple.opacity(0.3)) : .regular.tint(ClarissaTheme.purple.opacity(0.3)).interactive())
+                        : (reduceMotion ? .regular : .regular.interactive()),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+                .glassEffectID(provider.id, in: settingsNamespace)
+                .animation(.bouncy, value: appState.selectedProvider)
+                .accessibilityLabel(provider.rawValue)
+                .accessibilityHint(appState.selectedProvider == provider ? "Currently selected" : "Double-tap to select this provider")
+                .accessibilityAddTraits(appState.selectedProvider == provider ? .isSelected : [])
+            }
+        }
+    }
+
+    private var legacyProviderPicker: some View {
         ForEach(LLMProviderType.allCases) { provider in
             Button {
+                HapticManager.shared.selection()
                 appState.selectedProvider = provider
             } label: {
                 HStack {
@@ -326,6 +373,9 @@ struct SettingsView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(provider.rawValue)
+            .accessibilityHint(appState.selectedProvider == provider ? "Currently selected" : "Double-tap to select this provider")
+            .accessibilityAddTraits(appState.selectedProvider == provider ? .isSelected : [])
         }
     }
 
@@ -335,6 +385,32 @@ struct SettingsView: View {
             return String(parts[1]).replacingOccurrences(of: "-", with: " ").capitalized
         }
         return model
+    }
+
+    // MARK: - Glass Button Components
+
+    @ViewBuilder
+    private var doneButton: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button("Done") {
+                HapticManager.shared.lightTap()
+                onProviderChange?()
+                dismiss()
+            }
+            .buttonStyle(.glassProminent)
+            .tint(ClarissaTheme.purple)
+            .accessibilityLabel("Done")
+            .accessibilityHint("Double-tap to save settings and close")
+        } else {
+            Button("Done") {
+                HapticManager.shared.lightTap()
+                onProviderChange?()
+                dismiss()
+            }
+            .foregroundStyle(ClarissaTheme.purple)
+            .accessibilityLabel("Done")
+            .accessibilityHint("Double-tap to save settings and close")
+        }
     }
 }
 

@@ -47,5 +47,5 @@ xcuserdata/
 DerivedData/
 *.xcscmblueprint
 
-# Local Guides
-APPLE_FOUNDATION_MODELS_*
+# Apple Guides
+APPLE_*

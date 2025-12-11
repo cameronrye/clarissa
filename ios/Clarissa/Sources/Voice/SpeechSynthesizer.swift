@@ -68,7 +68,7 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
             try audioSession.setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
             try audioSession.setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            ClarissaLogger.ui.error("Failed to configure audio session: \(error.localizedDescription)")
         }
 
         // Create utterance

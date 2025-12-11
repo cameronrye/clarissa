@@ -33,6 +33,15 @@ final class VoiceManager: ObservableObject {
         setupObservers()
     }
 
+    // Note: deinit cannot access actor-isolated properties.
+    // Use cleanup() before discarding VoiceManager to properly clean up resources.
+
+    /// Clean up all voice resources - call before discarding VoiceManager
+    func cleanup() {
+        exitVoiceMode()
+        cancellables.removeAll()
+    }
+
     private func setupObservers() {
         // Observe speech recognizer state using Combine
         speechRecognizer.$isRecording

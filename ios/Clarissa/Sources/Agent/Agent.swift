@@ -101,6 +101,7 @@ final class Agent: ObservableObject {
     private let config: AgentConfig
     private let toolRegistry: ToolRegistry
     private var provider: (any LLMProvider)?
+    private var trimmedCount: Int = 0
 
     weak var callbacks: AgentCallbacks?
 
@@ -160,16 +161,35 @@ final class Agent: ObservableObject {
         let historyMessages = messages.filter { $0.role != .system }
         var tokenCount = TokenBudget.estimate(historyMessages)
 
+        // Safety guard: limit iterations to prevent infinite loop
+        // Max iterations = initial message count (can't remove more than we have)
+        let maxIterations = messages.count
+        var iterations = 0
+        var removedThisPass = 0
+
         // Trim from the beginning (oldest first) until within budget
         // Keep at least the last 2 messages (user + response pair)
-        while tokenCount > TokenBudget.maxHistoryTokens && messages.count > 3 {
+        while tokenCount > TokenBudget.maxHistoryTokens && messages.count > 3 && iterations < maxIterations {
+            iterations += 1
+
             // Find first non-system message to remove
             if let firstNonSystemIndex = messages.firstIndex(where: { $0.role != .system }) {
                 let removed = messages.remove(at: firstNonSystemIndex)
                 tokenCount -= TokenBudget.estimate(removed.content)
+                removedThisPass += 1
             } else {
                 break
             }
+        }
+
+        // Track cumulative trimmed count
+        trimmedCount += removedThisPass
+        if removedThisPass > 0 {
+            ClarissaLogger.agent.info("Trimmed \(removedThisPass) messages, total trimmed: \(self.trimmedCount)")
+        }
+
+        if iterations >= maxIterations {
+            ClarissaLogger.agent.warning("Token trimming reached max iterations, stopping to prevent infinite loop")
         }
     }
 
@@ -196,8 +216,8 @@ final class Agent: ObservableObject {
         // Trim history to fit within Foundation Models context window
         trimHistoryIfNeeded()
 
-        // Get available tools
-        let tools = toolRegistry.getDefinitions()
+        // Get available tools (limited by provider capability)
+        let tools = toolRegistry.getDefinitionsLimited(provider.maxTools)
         
         // ReAct loop
         for _ in 0..<config.maxIterations {
@@ -208,6 +228,9 @@ final class Agent: ObservableObject {
             var toolCalls: [ToolCall] = []
             
             for try await chunk in provider.streamComplete(messages: messages, tools: tools) {
+                // Check for task cancellation during streaming
+                try Task.checkCancellation()
+
                 if let content = chunk.content {
                     fullContent += content
                     callbacks?.onStreamChunk(chunk: content)
@@ -259,7 +282,7 @@ final class Agent: ObservableObject {
                         ClarissaLogger.tools.info("Tool \(toolCall.name, privacy: .public) completed successfully")
                     } catch {
                         ClarissaLogger.tools.error("Tool \(toolCall.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-                        let errorResult = "{\"error\": \"\(error.localizedDescription)\"}"
+                        let errorResult = Self.encodeErrorJSON(error.localizedDescription)
                         let toolMessage = Message.tool(callId: toolCall.id, name: toolCall.name, content: errorResult)
                         messages.append(toolMessage)
                         callbacks?.onToolResult(name: toolCall.name, result: errorResult)
@@ -282,6 +305,7 @@ final class Agent: ObservableObject {
     func reset() {
         let systemMessage = messages.first { $0.role == .system }
         messages = systemMessage.map { [$0] } ?? []
+        trimmedCount = 0
     }
     
     /// Get conversation history
@@ -334,8 +358,22 @@ final class Agent: ObservableObject {
             assistantTokens: assistantTokens,
             toolTokens: toolTokens,
             messageCount: messages.count,
-            trimmedCount: 0 // TODO: Track trimmed messages if needed
+            trimmedCount: trimmedCount
         )
+    }
+
+    // MARK: - JSON Helpers
+
+    /// Encode an error message as JSON using proper serialization
+    /// This avoids issues with special characters that would break string interpolation
+    private static func encodeErrorJSON(_ message: String) -> String {
+        let errorDict: [String: Any] = ["error": message]
+        if let data = try? JSONSerialization.data(withJSONObject: errorDict),
+           let jsonString = String(data: data, encoding: .utf8) {
+            return jsonString
+        }
+        // Fallback with escaped message if serialization fails
+        return "{\"error\": \"Tool execution failed\"}"
     }
 }
 

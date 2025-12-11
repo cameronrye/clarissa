@@ -58,6 +58,21 @@
     <string>Clarissa uses the microphone for voice input so you can speak your messages.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Clarissa uses speech recognition to convert your voice into text for the conversation.</string>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+    <string>Clarissa needs to create calendar events on your behalf.</string>
+
+    <!-- URL Schemes for Deep Linking -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>dev.rye.clarissa</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>clarissa</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 

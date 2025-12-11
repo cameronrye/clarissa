@@ -7,10 +7,14 @@ struct ChatView: View {
     @ObservedObject var viewModel: ChatViewModel
     @FocusState private var isInputFocused: Bool
 
-    #if os(iOS)
-    private let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-    private let notificationFeedback = UINotificationFeedbackGenerator()
-    #endif
+    // Namespace for glass morphing transitions
+    @Namespace private var inputNamespace
+    @Namespace private var messageNamespace
+
+    // Accessibility environment variables
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,29 +61,10 @@ struct ChatView: View {
                                 .id("streaming")
                         }
                         
-                        // Loading indicator with cancel button
+                        // Loading indicator with cancel button - uses glass on iOS 26+
                         if viewModel.isLoading && viewModel.streamingContent.isEmpty {
-                            HStack {
-                                ProgressView()
-                                    .tint(ClarissaTheme.purple)
-                                    .padding(.horizontal)
-                                Text("Thinking...")
-                                    .foregroundStyle(ClarissaTheme.purple)
-
-                                Spacer()
-
-                                if viewModel.canCancel {
-                                    Button {
-                                        triggerHaptic()
-                                        viewModel.cancelGeneration()
-                                    } label: {
-                                        Image(systemName: "stop.circle.fill")
-                                            .foregroundStyle(ClarissaTheme.pink)
-                                    }
-                                }
-                            }
-                            .padding()
-                            .id("loading")
+                            thinkingIndicator
+                                .id("loading")
                         }
                     }
                     .padding()
@@ -106,81 +91,14 @@ struct ChatView: View {
                     isListening: viewModel.isRecording,
                     isSpeaking: viewModel.isSpeaking,
                     onExit: {
-                        triggerHaptic()
+                        HapticManager.shared.lightTap()
                         Task { await viewModel.toggleVoiceMode() }
                     }
                 )
             }
 
-            // Input area
-            HStack(spacing: 12) {
-                // Voice input button
-                Button {
-                    triggerHaptic()
-                    Task { await viewModel.toggleVoiceInput() }
-                } label: {
-                    ZStack {
-                        if viewModel.isRecording {
-                            // Animated recording indicator
-                            Circle()
-                                .fill(Color.red.opacity(0.2))
-                                .frame(width: 36, height: 36)
-
-                            Image(systemName: "waveform")
-                                .font(.title3)
-                                .foregroundStyle(.red)
-                                .symbolEffect(.variableColor.iterative, options: .repeating)
-                        } else {
-                            Image(systemName: "mic.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(ClarissaTheme.gradient)
-                        }
-                    }
-                }
-                .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
-                .accessibilityHint(viewModel.isRecording ? "Tap to stop recording and use transcribed text" : "Tap to speak your message")
-
-                TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($isInputFocused)
-                    .onSubmit {
-                        triggerHaptic()
-                        viewModel.sendMessage()
-                    }
-                    .accessibilityLabel("Message input")
-                    .accessibilityHint("Type your message to Clarissa")
-
-                let isDisabled = viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isLoading
-
-                // Stop speaking button (when assistant is speaking)
-                if viewModel.isSpeaking {
-                    Button {
-                        triggerHaptic()
-                        viewModel.stopSpeaking()
-                    } label: {
-                        Image(systemName: "speaker.slash.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(ClarissaTheme.pink)
-                    }
-                    .accessibilityLabel("Stop speaking")
-                    .accessibilityHint("Stop Clarissa from speaking")
-                }
-
-                Button {
-                    triggerHaptic()
-                    viewModel.sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(isDisabled ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(ClarissaTheme.gradient))
-                }
-                .disabled(isDisabled)
-                .accessibilityLabel("Send message")
-                .accessibilityHint(isDisabled ? "Enter a message first" : "Send your message")
-            }
-            .padding()
-            .background(.bar)
+            // Input area with glass effects
+            inputAreaView
             } // end else (provider ready)
         }
         .alert("Error", isPresented: .init(
@@ -205,10 +123,216 @@ struct ChatView: View {
         #endif
     }
 
-    private func triggerHaptic() {
-        #if os(iOS)
-        impactFeedback.impactOccurred()
-        #endif
+    // MARK: - Glass Thinking Indicator
+
+    @ViewBuilder
+    private var thinkingIndicator: some View {
+        HStack {
+            if #available(iOS 26.0, macOS 26.0, *) {
+                GlassThinkingIndicator(
+                    message: "Thinking...",
+                    tint: ClarissaTheme.purple,
+                    showCancel: viewModel.canCancel,
+                    onCancel: {
+                        viewModel.cancelGeneration()
+                    }
+                )
+            } else {
+                LegacyThinkingIndicator(
+                    message: "Thinking...",
+                    tint: ClarissaTheme.purple,
+                    showCancel: viewModel.canCancel,
+                    onCancel: {
+                        viewModel.cancelGeneration()
+                    }
+                )
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Input Area with Glass Effects
+
+    @ViewBuilder
+    private var inputAreaView: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            glassInputArea
+        } else {
+            legacyInputArea
+        }
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var glassInputArea: some View {
+        GlassEffectContainer(spacing: 20) {
+            HStack(spacing: 12) {
+                // Voice input button with glass
+                voiceInputButton
+
+                // Text input field
+                TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...5)
+                    .focused($isInputFocused)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .onSubmit {
+                        HapticManager.shared.mediumTap()
+                        viewModel.sendMessage()
+                    }
+                    .accessibilityLabel("Message input")
+                    .accessibilityHint("Type your message to Clarissa. Press return to send.")
+
+                // Stop speaking button (when assistant is speaking)
+                if viewModel.isSpeaking {
+                    stopSpeakingButton
+                }
+
+                // Send button
+                sendButton
+            }
+            .padding()
+        }
+    }
+
+    private var legacyInputArea: some View {
+        HStack(spacing: 12) {
+            // Voice input button
+            Button {
+                HapticManager.shared.mediumTap()
+                Task { await viewModel.toggleVoiceInput() }
+            } label: {
+                ZStack {
+                    if viewModel.isRecording {
+                        Circle()
+                            .fill(Color.red.opacity(0.2))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "waveform")
+                            .font(.title3)
+                            .foregroundStyle(.red)
+                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                    } else {
+                        Image(systemName: "mic.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(ClarissaTheme.gradient)
+                    }
+                }
+            }
+            .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
+            .accessibilityHint(viewModel.isRecording ? "Double-tap to stop recording and send transcribed text" : "Double-tap to speak your message instead of typing")
+
+            TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...5)
+                .focused($isInputFocused)
+                .onSubmit {
+                    HapticManager.shared.mediumTap()
+                    viewModel.sendMessage()
+                }
+                .accessibilityLabel("Message input")
+                .accessibilityHint("Type your message to Clarissa. Press return to send.")
+
+            let isDisabled = viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isLoading
+
+            if viewModel.isSpeaking {
+                Button {
+                    HapticManager.shared.lightTap()
+                    viewModel.stopSpeaking()
+                } label: {
+                    Image(systemName: "speaker.slash.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(ClarissaTheme.pink)
+                }
+                .accessibilityLabel("Stop speaking")
+                .accessibilityHint("Double-tap to stop Clarissa from speaking the current response")
+            }
+
+            Button {
+                HapticManager.shared.mediumTap()
+                viewModel.sendMessage()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(isDisabled ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(ClarissaTheme.gradient))
+            }
+            .disabled(isDisabled)
+            .accessibilityLabel("Send message")
+            .accessibilityHint(isDisabled ? "Type a message first, then double-tap to send" : "Double-tap to send your message to Clarissa")
+        }
+        .padding()
+        .background(.bar)
+    }
+
+    // MARK: - Glass Input Components
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var voiceInputButton: some View {
+        Button {
+            HapticManager.shared.mediumTap()
+            Task { await viewModel.toggleVoiceInput() }
+        } label: {
+            Image(systemName: viewModel.isRecording ? "waveform" : "mic")
+                .font(.title2)
+                .frame(width: 44, height: 44)
+                .symbolEffect(.variableColor.iterative, options: .repeating, value: viewModel.isRecording)
+        }
+        .glassEffect(
+            reduceMotion
+                ? Glass.regular.tint(viewModel.isRecording ? ClarissaTheme.errorTint : nil)
+                : Glass.regular.interactive().tint(viewModel.isRecording ? ClarissaTheme.errorTint : nil),
+            in: .circle
+        )
+        .glassEffectID("voiceInput", in: inputNamespace)
+        .animation(.bouncy, value: viewModel.isRecording)
+        .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
+        .accessibilityHint(viewModel.isRecording ? "Double-tap to stop recording and send transcribed text" : "Double-tap to speak your message instead of typing")
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var stopSpeakingButton: some View {
+        Button {
+            HapticManager.shared.lightTap()
+            viewModel.stopSpeaking()
+        } label: {
+            Image(systemName: "speaker.slash")
+                .font(.title2)
+                .frame(width: 44, height: 44)
+        }
+        .glassEffect(
+            reduceMotion
+                ? Glass.regular.tint(ClarissaTheme.pink)
+                : Glass.regular.interactive().tint(ClarissaTheme.pink),
+            in: .circle
+        )
+        .glassEffectID("stopSpeaking", in: inputNamespace)
+        .accessibilityLabel("Stop speaking")
+        .accessibilityHint("Double-tap to stop Clarissa from speaking the current response")
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var sendButton: some View {
+        let isDisabled = viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isLoading
+
+        return Button {
+            HapticManager.shared.mediumTap()
+            viewModel.sendMessage()
+        } label: {
+            Image(systemName: "arrow.up")
+                .font(.title2)
+                .frame(width: 44, height: 44)
+        }
+        .glassEffect(
+            isDisabled
+                ? Glass.regular
+                : (reduceMotion ? Glass.regular.tint(ClarissaTheme.primaryActionTint) : Glass.regular.interactive().tint(ClarissaTheme.primaryActionTint)),
+            in: .circle
+        )
+        .glassEffectID("send", in: inputNamespace)
+        .disabled(isDisabled)
+        .accessibilityLabel("Send message")
+        .accessibilityHint(isDisabled ? "Type a message first, then double-tap to send" : "Double-tap to send your message to Clarissa")
     }
 }
 
@@ -385,6 +509,9 @@ struct StreamingMessageBubble: View {
 struct EmptyStateView: View {
     let onSuggestionTap: (String) -> Void
 
+    @Namespace private var suggestionsNamespace
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     private let suggestions = [
         "What's the weather like today?",
         "Set a reminder for tomorrow at 9am",
@@ -420,30 +547,62 @@ struct EmptyStateView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
 
-                ForEach(suggestions, id: \.self) { suggestion in
-                    Button {
-                        onSuggestionTap(suggestion)
-                    } label: {
-                        HStack {
-                            Text(suggestion)
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "arrow.up.circle.fill")
-                                .foregroundStyle(ClarissaTheme.gradient)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(ClarissaTheme.assistantBubble)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
+                if #available(iOS 26.0, macOS 26.0, *) {
+                    glassSuggestionsList
+                } else {
+                    legacySuggestionsList
                 }
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
         .frame(maxWidth: 500)
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var glassSuggestionsList: some View {
+        GlassEffectContainer(spacing: 16) {
+            ForEach(suggestions, id: \.self) { suggestion in
+                Button {
+                    onSuggestionTap(suggestion)
+                } label: {
+                    HStack {
+                        Text(suggestion)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "arrow.up")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
+                .glassEffectID(suggestion, in: suggestionsNamespace)
+            }
+        }
+    }
+
+    private var legacySuggestionsList: some View {
+        ForEach(suggestions, id: \.self) { suggestion in
+            Button {
+                onSuggestionTap(suggestion)
+            } label: {
+                HStack {
+                    Text(suggestion)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "arrow.up.circle.fill")
+                        .foregroundStyle(ClarissaTheme.gradient)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(reduceTransparency ? Color(uiColor: .secondarySystemBackground) : ClarissaTheme.assistantBubble)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 
@@ -509,11 +668,6 @@ struct ToolConfirmationSheet: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    #if os(iOS)
-    private let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-    private let notificationFeedback = UINotificationFeedbackGenerator()
-    #endif
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -527,6 +681,7 @@ struct ToolConfirmationSheet: View {
 
                 Text("Clarissa wants to use the **\(confirmation.name)** tool")
                     .multilineTextAlignment(.center)
+                    .accessibilityLabel("Clarissa wants to use the \(confirmation.name) tool")
 
                 GroupBox {
                     ScrollView {
@@ -536,51 +691,57 @@ struct ToolConfirmationSheet: View {
                     }
                     .frame(maxHeight: 150)
                 }
+                .accessibilityLabel("Tool arguments")
 
                 Spacer()
 
-                HStack(spacing: 16) {
-                    Button("Deny", role: .cancel) {
-                        triggerDenyHaptic()
-                        onCancel()
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(ClarissaTheme.pink)
+                // Action buttons with glass styles on iOS 26+
+                if #available(iOS 26.0, macOS 26.0, *) {
+                    HStack(spacing: 16) {
+                        Button("Deny", role: .cancel) {
+                            HapticManager.shared.lightTap()
+                            onCancel()
+                        }
+                        .buttonStyle(.glass)
+                        .tint(ClarissaTheme.pink)
+                        .accessibilityHint("Double-tap to deny this tool request")
 
-                    Button("Allow") {
-                        triggerAllowHaptic()
-                        onConfirm()
+                        Button("Allow") {
+                            HapticManager.shared.success()
+                            onConfirm()
+                        }
+                        .buttonStyle(.glassProminent)
+                        .tint(ClarissaTheme.purple)
+                        .accessibilityHint("Double-tap to allow Clarissa to use this tool")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(ClarissaTheme.purple)
+                } else {
+                    HStack(spacing: 16) {
+                        Button("Deny", role: .cancel) {
+                            HapticManager.shared.lightTap()
+                            onCancel()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(ClarissaTheme.pink)
+                        .accessibilityHint("Double-tap to deny this tool request")
+
+                        Button("Allow") {
+                            HapticManager.shared.success()
+                            onConfirm()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(ClarissaTheme.purple)
+                        .accessibilityHint("Double-tap to allow Clarissa to use this tool")
+                    }
                 }
             }
             .padding()
             .onAppear {
-                triggerAppearHaptic()
+                HapticManager.shared.warning()
             }
         }
         .tint(ClarissaTheme.purple)
     }
 
-    private func triggerAppearHaptic() {
-        #if os(iOS)
-        notificationFeedback.notificationOccurred(.warning)
-        #endif
-    }
-
-    private func triggerAllowHaptic() {
-        #if os(iOS)
-        notificationFeedback.notificationOccurred(.success)
-        #endif
-    }
-
-    private func triggerDenyHaptic() {
-        #if os(iOS)
-        impactFeedback.impactOccurred()
-        #endif
-    }
-    
     private func formatArguments(_ json: String) -> String {
         guard let data = json.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data),
@@ -632,19 +793,13 @@ struct SessionHistoryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        onDismiss()
-                    }
-                    .foregroundStyle(ClarissaTheme.purple)
+                    historyDoneButton
                 }
             }
             #else
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        onDismiss()
-                    }
-                    .foregroundStyle(ClarissaTheme.purple)
+                    historyDoneButton
                 }
             }
             #endif
@@ -652,6 +807,22 @@ struct SessionHistoryView: View {
         .tint(ClarissaTheme.purple)
         .task {
             await loadData()
+        }
+    }
+
+    @ViewBuilder
+    private var historyDoneButton: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button("Done") {
+                onDismiss()
+            }
+            .buttonStyle(.glassProminent)
+            .tint(ClarissaTheme.purple)
+        } else {
+            Button("Done") {
+                onDismiss()
+            }
+            .foregroundStyle(ClarissaTheme.purple)
         }
     }
 
@@ -700,14 +871,7 @@ struct SessionRowView: View {
                             .lineLimit(1)
 
                         if isCurrentSession {
-                            Text("Current")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(ClarissaTheme.purple)
-                                .clipShape(Capsule())
+                            currentBadge
                         }
                     }
 
@@ -739,6 +903,19 @@ struct SessionRowView: View {
             .padding(.vertical, 4)
         }
     }
+
+    /// Badge indicating current session - uses solid background per Liquid Glass guide
+    /// (glass should not be applied to content layer elements like List rows)
+    private var currentBadge: some View {
+        Text("Current")
+            .font(.caption2)
+            .fontWeight(.medium)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(ClarissaTheme.purple)
+            .clipShape(Capsule())
+    }
 }
 
 /// Indicator shown when voice mode is active
@@ -747,49 +924,123 @@ struct VoiceModeIndicator: View {
     let isSpeaking: Bool
     let onExit: () -> Void
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var voiceModeNamespace
+
+    /// Tint color based on current state
+    private var stateTint: Color? {
+        if isListening { return ClarissaTheme.listeningTint }
+        if isSpeaking { return ClarissaTheme.speakingTint }
+        return nil
+    }
+
+    /// Accessibility label for current state
+    private var stateAccessibilityLabel: String {
+        if isListening { return "Voice mode active, listening for your voice" }
+        if isSpeaking { return "Voice mode active, Clarissa is speaking" }
+        return "Voice mode active, ready to listen"
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Status indicator
-            HStack(spacing: 8) {
-                if isListening {
-                    Image(systemName: "waveform")
-                        .foregroundStyle(.red)
-                        .symbolEffect(.variableColor.iterative, options: .repeating)
-                    Text("Listening...")
-                        .foregroundStyle(.red)
-                } else if isSpeaking {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .foregroundStyle(ClarissaTheme.cyan)
-                        .symbolEffect(.variableColor.iterative, options: .repeating)
-                    Text("Speaking...")
-                        .foregroundStyle(ClarissaTheme.cyan)
-                } else {
-                    Image(systemName: "mic.fill")
-                        .foregroundStyle(ClarissaTheme.purple)
-                    Text("Voice Mode")
-                        .foregroundStyle(ClarissaTheme.purple)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            glassVoiceModeContent
+        } else {
+            legacyVoiceModeContent
+        }
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var glassVoiceModeContent: some View {
+        GlassEffectContainer(spacing: 20) {
+            HStack(spacing: 12) {
+                // Status indicator with glass
+                statusContent
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular.tint(stateTint), in: RoundedRectangle(cornerRadius: 10))
+                    .glassEffectID("status", in: voiceModeNamespace)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(stateAccessibilityLabel)
+                    .accessibilityAddTraits(.updatesFrequently)
+
+                Spacer()
+
+                // Exit button with glass
+                Button {
+                    HapticManager.shared.lightTap()
+                    onExit()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.title3)
+                        .frame(width: 36, height: 36)
                 }
+                .glassEffect(reduceMotion ? .regular : .regular.interactive())
+                .glassEffectID("exit", in: voiceModeNamespace)
+                .accessibilityLabel("Exit voice mode")
+                .accessibilityHint("Double-tap to return to text input mode")
             }
-            .font(.subheadline.bold())
+            .padding(.horizontal)
+        }
+    }
+
+    private var legacyVoiceModeContent: some View {
+        HStack(spacing: 12) {
+            statusContent
+                .font(.subheadline.bold())
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(stateAccessibilityLabel)
 
             Spacer()
 
-            // Exit button
             Button {
+                HapticManager.shared.lightTap()
                 onExit()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityLabel("Exit voice mode")
+            .accessibilityHint("Double-tap to return to text input mode")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-        )
+        .background {
+            if reduceTransparency {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+            }
+        }
         .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private var statusContent: some View {
+        HStack(spacing: 8) {
+            if isListening {
+                Image(systemName: "waveform")
+                    .foregroundStyle(.red)
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                Text("Listening...")
+                    .foregroundStyle(.red)
+            } else if isSpeaking {
+                Image(systemName: "speaker.wave.2.fill")
+                    .foregroundStyle(ClarissaTheme.cyan)
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                Text("Speaking...")
+                    .foregroundStyle(ClarissaTheme.cyan)
+            } else {
+                Image(systemName: "mic.fill")
+                    .foregroundStyle(ClarissaTheme.purple)
+                Text("Voice Mode")
+                    .foregroundStyle(ClarissaTheme.purple)
+            }
+        }
+        .font(.subheadline.bold())
     }
 }
 

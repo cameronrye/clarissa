@@ -1,6 +1,14 @@
 import Foundation
 import CoreLocation
 
+// MARK: - Typed Arguments
+
+/// Typed arguments for LocationTool using Codable
+struct LocationArguments: Codable {
+    let includeAddress: Bool?
+    let accuracy: String?
+}
+
 /// Helper class for CLLocationManager delegate - must be used from MainActor
 @MainActor
 private final class LocationHelper: NSObject, CLLocationManagerDelegate {
@@ -127,13 +135,14 @@ final class LocationTool: ClarissaTool, @unchecked Sendable {
     }
 
     func execute(arguments: String) async throws -> String {
-        guard let data = arguments.data(using: .utf8),
-              let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ToolError.invalidArguments("Invalid arguments")
+        guard let data = arguments.data(using: .utf8) else {
+            throw ToolError.invalidArguments("Invalid argument encoding")
         }
 
-        let includeAddress = args["includeAddress"] as? Bool ?? true
-        let accuracy = args["accuracy"] as? String ?? "medium"
+        // Decode using typed arguments with defaults for optional fields
+        let args = (try? JSONDecoder().decode(LocationArguments.self, from: data)) ?? LocationArguments(includeAddress: nil, accuracy: nil)
+        let includeAddress = args.includeAddress ?? true
+        let accuracy = args.accuracy ?? "medium"
 
         // Set accuracy
         await helperHolder.setAccuracy(accuracy)

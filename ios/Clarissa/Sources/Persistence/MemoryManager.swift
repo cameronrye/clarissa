@@ -4,19 +4,25 @@ import os.log
 private let logger = Logger(subsystem: "dev.rye.Clarissa", category: "MemoryManager")
 
 /// Manages long-term memories for the agent
+/// Memories are stored securely in the Keychain to protect user data
 actor MemoryManager {
     static let shared = MemoryManager()
 
     private var memories: [Memory] = []
-    private let fileURL: URL
     private var isLoaded = false
+
+    /// Keychain key for storing memories
+    private static let memoriesKeychainKey = "clarissa_memories"
+
+    /// Legacy file URL for migration (can be removed after a few versions)
+    private let legacyFileURL: URL
 
     /// Maximum number of memories to store
     static let maxMemories = 100
 
     private init() {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        self.fileURL = documentsPath.appendingPathComponent("clarissa_memories.json")
+        self.legacyFileURL = documentsPath.appendingPathComponent("clarissa_memories.json")
     }
 
     /// Ensure data is loaded before accessing
@@ -120,30 +126,60 @@ actor MemoryManager {
     }
 
     private func load() async {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            isLoaded = true
+        // First, try to load from Keychain (secure storage)
+        if let memoriesJson = KeychainManager.shared.get(key: Self.memoriesKeychainKey),
+           let data = memoriesJson.data(using: .utf8) {
+            do {
+                memories = try JSONDecoder().decode([Memory].self, from: data)
+                isLoaded = true
+                logger.info("Loaded \(self.memories.count) memories from Keychain")
+                return
+            } catch {
+                logger.error("Failed to decode memories from Keychain: \(error.localizedDescription)")
+            }
+        }
+
+        // Fall back to legacy file storage and migrate if found
+        await migrateFromLegacyStorage()
+        isLoaded = true
+    }
+
+    /// Migrate memories from legacy file storage to Keychain
+    private func migrateFromLegacyStorage() async {
+        guard FileManager.default.fileExists(atPath: legacyFileURL.path) else {
             return
         }
 
         do {
-            let data = try Data(contentsOf: fileURL)
+            let data = try Data(contentsOf: legacyFileURL)
             memories = try JSONDecoder().decode([Memory].self, from: data)
-            isLoaded = true
-            logger.info("Loaded \(self.memories.count) memories")
+            logger.info("Migrating \(self.memories.count) memories from file to Keychain")
+
+            // Save to Keychain
+            await save()
+
+            // Remove legacy file after successful migration
+            try FileManager.default.removeItem(at: legacyFileURL)
+            logger.info("Removed legacy memories file after migration")
         } catch {
-            logger.error("Failed to load memories: \(error.localizedDescription)")
-            isLoaded = true
+            logger.error("Failed to migrate memories from legacy storage: \(error.localizedDescription)")
         }
     }
 
     private func save() async {
         do {
             let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(memories)
-            try data.write(to: fileURL, options: .atomic)
+
+            guard let jsonString = String(data: data, encoding: .utf8) else {
+                logger.error("Failed to encode memories to string")
+                return
+            }
+
+            try KeychainManager.shared.set(jsonString, forKey: Self.memoriesKeychainKey)
+            logger.debug("Saved \(self.memories.count) memories to Keychain")
         } catch {
-            logger.error("Failed to save memories: \(error.localizedDescription)")
+            logger.error("Failed to save memories to Keychain: \(error.localizedDescription)")
         }
     }
 }

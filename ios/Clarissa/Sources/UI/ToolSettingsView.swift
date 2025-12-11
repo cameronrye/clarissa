@@ -45,11 +45,13 @@ private struct ToolRow: View {
     let tool: ToolInfo
     let isAtLimit: Bool
     let onToggle: () -> Void
-    
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var canEnable: Bool {
         tool.isEnabled || !isAtLimit
     }
-    
+
     var body: some View {
         Button {
             if canEnable {
@@ -57,11 +59,8 @@ private struct ToolRow: View {
             }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: tool.icon)
-                    .font(.title3)
-                    .foregroundStyle(tool.isEnabled ? ClarissaTheme.cyan : .secondary)
-                    .frame(width: 28)
-                
+                toolIcon
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tool.name)
                         .foregroundStyle(.primary)
@@ -69,17 +68,36 @@ private struct ToolRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
-                Image(systemName: tool.isEnabled ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(tool.isEnabled ? ClarissaTheme.cyan : Color.gray.opacity(0.3))
-                    .font(.title2)
+
+                toggleIndicator
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .opacity(canEnable ? 1.0 : 0.5)
+        .animation(reduceMotion ? nil : .bouncy, value: tool.isEnabled)
+    }
+
+    /// Tool icon with solid background per Liquid Glass guide
+    /// (glass should not be applied to content layer elements like List rows)
+    private var toolIcon: some View {
+        Image(systemName: tool.icon)
+            .font(.title3)
+            .foregroundStyle(tool.isEnabled ? ClarissaTheme.cyan : .secondary)
+            .frame(width: 32, height: 32)
+            .background(
+                Circle()
+                    .fill(tool.isEnabled ? ClarissaTheme.cyan.opacity(0.15) : Color.gray.opacity(0.1))
+            )
+    }
+
+    @ViewBuilder
+    private var toggleIndicator: some View {
+        Image(systemName: tool.isEnabled ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(tool.isEnabled ? ClarissaTheme.cyan : Color.gray.opacity(0.3))
+            .font(.title2)
     }
 }
 
