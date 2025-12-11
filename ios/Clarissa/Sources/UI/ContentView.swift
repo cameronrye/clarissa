@@ -29,7 +29,10 @@ public struct ContentView: View {
                     }
 
                     ToolbarItem(placement: .topBarTrailing) {
-                        settingsButton
+                        HStack(spacing: 12) {
+                            voiceModeButton
+                            settingsButton
+                        }
                     }
                     #else
                     // macOS: Use navigation placement for leading items
@@ -47,7 +50,10 @@ public struct ContentView: View {
 
                     // macOS: Primary action for settings (right side)
                     ToolbarItem(placement: .primaryAction) {
-                        settingsButton
+                        HStack(spacing: 8) {
+                            voiceModeButton
+                            settingsButton
+                        }
                     }
                     #endif
                 }
@@ -137,6 +143,18 @@ public struct ContentView: View {
     private func refreshSessionCount() async {
         let sessions = await chatViewModel.getAllSessions()
         sessionCount = sessions.count
+    }
+
+    private var voiceModeButton: some View {
+        Button {
+            Task { await chatViewModel.toggleVoiceMode() }
+        } label: {
+            Image(systemName: chatViewModel.isVoiceModeActive ? "waveform.circle.fill" : "waveform.circle")
+                .foregroundStyle(chatViewModel.isVoiceModeActive ? AnyShapeStyle(ClarissaTheme.pink) : AnyShapeStyle(ClarissaTheme.gradient))
+                .symbolEffect(.bounce, value: chatViewModel.isVoiceModeActive)
+        }
+        .accessibilityLabel(chatViewModel.isVoiceModeActive ? "Exit voice mode" : "Enter voice mode")
+        .accessibilityHint(chatViewModel.isVoiceModeActive ? "Tap to exit hands-free conversation" : "Tap to start hands-free conversation")
     }
 
     private var settingsButton: some View {

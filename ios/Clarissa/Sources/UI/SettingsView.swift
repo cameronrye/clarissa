@@ -1,16 +1,21 @@
 import SwiftUI
+import AVFoundation
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appState: AppState
     @AppStorage("selectedModel") private var selectedModel: String = "anthropic/claude-sonnet-4"
     @AppStorage("autoApproveTools") private var autoApproveTools: Bool = false
+    @AppStorage("voiceOutputEnabled") private var voiceOutputEnabled: Bool = true
+    @AppStorage("selectedVoiceIdentifier") private var selectedVoiceIdentifier: String = ""
+    @AppStorage("speechRate") private var speechRate: Double = 0.5
 
     @State private var openRouterApiKey: String = ""
     @State private var showingApiKey = false
     @State private var memories: [Memory] = []
     @State private var showMemories = false
     @State private var showingSaveConfirmation = false
+    @State private var availableVoices: [AVSpeechSynthesisVoice] = []
 
     var onProviderChange: (() -> Void)?
 
@@ -135,6 +140,51 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle(isOn: $voiceOutputEnabled) {
+                        HStack {
+                            Image(systemName: "speaker.wave.2")
+                                .foregroundStyle(ClarissaTheme.cyan)
+                            Text("Voice Output")
+                        }
+                    }
+
+                    if voiceOutputEnabled {
+                        Picker("Voice", selection: $selectedVoiceIdentifier) {
+                            Text("System Default").tag("")
+                            ForEach(availableVoices, id: \.identifier) { voice in
+                                Text(voiceDisplayName(for: voice))
+                                    .tag(voice.identifier)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Speech Rate")
+                                Spacer()
+                                Text(speechRateLabel)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(value: $speechRate, in: 0.0...1.0, step: 0.1)
+                                .tint(ClarissaTheme.purple)
+                        }
+
+                        Button {
+                            testVoice()
+                        } label: {
+                            HStack {
+                                Image(systemName: "play.circle")
+                                    .foregroundStyle(ClarissaTheme.purple)
+                                Text("Test Voice")
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("When enabled, Clarissa will speak responses aloud in voice mode.")
+                }
+
+                Section {
                     Button {
                         appState.resetOnboarding()
                         dismiss()
@@ -199,7 +249,48 @@ struct SettingsView: View {
             memories = await MemoryManager.shared.getAll()
             // Load API key from Keychain
             openRouterApiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
+            // Load available voices
+            loadAvailableVoices()
         }
+    }
+
+    // MARK: - Voice Helpers
+
+    private func loadAvailableVoices() {
+        // Get high-quality voices for the current locale
+        let locale = Locale.current
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+            .filter { voice in
+                // Prefer enhanced/premium voices
+                voice.quality == .enhanced || voice.language.hasPrefix(locale.language.languageCode?.identifier ?? "en")
+            }
+            .sorted { $0.name < $1.name }
+        availableVoices = voices
+    }
+
+    private func voiceDisplayName(for voice: AVSpeechSynthesisVoice) -> String {
+        let quality = voice.quality == .enhanced ? " (Enhanced)" : ""
+        return "\(voice.name)\(quality)"
+    }
+
+    private var speechRateLabel: String {
+        switch speechRate {
+        case 0.0..<0.3: return "Slow"
+        case 0.3..<0.6: return "Normal"
+        case 0.6..<0.8: return "Fast"
+        default: return "Very Fast"
+        }
+    }
+
+    private func testVoice() {
+        let synthesizer = AVSpeechSynthesizer()
+        let utterance = AVSpeechUtterance(string: "Hello, I'm Clarissa, your AI assistant.")
+        utterance.rate = Float(speechRate) * AVSpeechUtteranceMaximumSpeechRate
+        if !selectedVoiceIdentifier.isEmpty,
+           let voice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+            utterance.voice = voice
+        }
+        synthesizer.speak(utterance)
     }
 
     /// Save API key to Keychain (debounced)

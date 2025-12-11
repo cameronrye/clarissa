@@ -54,6 +54,10 @@
     <string>Clarissa needs access to your reminders to create and manage tasks on your behalf.</string>
     <key>NSRemindersFullAccessUsageDescription</key>
     <string>Clarissa needs full access to your reminders to create and manage tasks on your behalf.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Clarissa uses the microphone for voice input so you can speak your messages.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Clarissa uses speech recognition to convert your voice into text for the conversation.</string>
 </dict>
 </plist>
 

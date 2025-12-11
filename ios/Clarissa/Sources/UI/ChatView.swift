@@ -100,8 +100,46 @@ struct ChatView: View {
             
             Divider()
             
+            // Voice mode indicator
+            if viewModel.isVoiceModeActive {
+                VoiceModeIndicator(
+                    isListening: viewModel.isRecording,
+                    isSpeaking: viewModel.isSpeaking,
+                    onExit: {
+                        triggerHaptic()
+                        Task { await viewModel.toggleVoiceMode() }
+                    }
+                )
+            }
+
             // Input area
             HStack(spacing: 12) {
+                // Voice input button
+                Button {
+                    triggerHaptic()
+                    Task { await viewModel.toggleVoiceInput() }
+                } label: {
+                    ZStack {
+                        if viewModel.isRecording {
+                            // Animated recording indicator
+                            Circle()
+                                .fill(Color.red.opacity(0.2))
+                                .frame(width: 36, height: 36)
+
+                            Image(systemName: "waveform")
+                                .font(.title3)
+                                .foregroundStyle(.red)
+                                .symbolEffect(.variableColor.iterative, options: .repeating)
+                        } else {
+                            Image(systemName: "mic.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(ClarissaTheme.gradient)
+                        }
+                    }
+                }
+                .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
+                .accessibilityHint(viewModel.isRecording ? "Tap to stop recording and use transcribed text" : "Tap to speak your message")
+
                 TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...5)
@@ -114,6 +152,20 @@ struct ChatView: View {
                     .accessibilityHint("Type your message to Clarissa")
 
                 let isDisabled = viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isLoading
+
+                // Stop speaking button (when assistant is speaking)
+                if viewModel.isSpeaking {
+                    Button {
+                        triggerHaptic()
+                        viewModel.stopSpeaking()
+                    } label: {
+                        Image(systemName: "speaker.slash.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(ClarissaTheme.pink)
+                    }
+                    .accessibilityLabel("Stop speaking")
+                    .accessibilityHint("Stop Clarissa from speaking")
+                }
 
                 Button {
                     triggerHaptic()
@@ -686,6 +738,58 @@ struct SessionRowView: View {
             }
             .padding(.vertical, 4)
         }
+    }
+}
+
+/// Indicator shown when voice mode is active
+struct VoiceModeIndicator: View {
+    let isListening: Bool
+    let isSpeaking: Bool
+    let onExit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Status indicator
+            HStack(spacing: 8) {
+                if isListening {
+                    Image(systemName: "waveform")
+                        .foregroundStyle(.red)
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                    Text("Listening...")
+                        .foregroundStyle(.red)
+                } else if isSpeaking {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundStyle(ClarissaTheme.cyan)
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                    Text("Speaking...")
+                        .foregroundStyle(ClarissaTheme.cyan)
+                } else {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(ClarissaTheme.purple)
+                    Text("Voice Mode")
+                        .foregroundStyle(ClarissaTheme.purple)
+                }
+            }
+            .font(.subheadline.bold())
+
+            Spacer()
+
+            // Exit button
+            Button {
+                onExit()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+        )
+        .padding(.horizontal)
     }
 }
 

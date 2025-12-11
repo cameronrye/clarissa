@@ -15,10 +15,17 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     @Published var isSettingUpProvider: Bool = true
     @Published var showNewSessionConfirmation: Bool = false
 
+    // MARK: - Voice Properties
+    @Published var isRecording: Bool = false
+    @Published var isVoiceModeActive: Bool = false
+    @Published var isSpeaking: Bool = false
+    @Published var voiceTranscript: String = ""
+
     private var agent: Agent
     private var toolConfirmationContinuations: [UUID: CheckedContinuation<Bool, Never>] = [:]
     private var appState: AppState?
     private var currentTask: Task<Void, Never>?
+    private(set) var voiceManager: VoiceManager?
 
     init() {
         // Read autoApproveTools setting
@@ -32,6 +39,59 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             await setupProvider()
             await loadCurrentSession()
             isSettingUpProvider = false
+        }
+
+        // Initialize voice manager
+        setupVoiceManager()
+    }
+
+    // MARK: - Voice Setup
+
+    private func setupVoiceManager() {
+        let manager = VoiceManager()
+        self.voiceManager = manager
+
+        // Handle transcript ready
+        manager.onTranscriptReady = { [weak self] transcript in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.inputText = transcript
+                self.voiceTranscript = ""
+
+                // Auto-send in voice mode
+                if self.isVoiceModeActive {
+                    self.sendMessage()
+                }
+            }
+        }
+
+        // Observe voice manager state
+        Task { @MainActor in
+            for await isListening in manager.speechRecognizer.$isRecording.values {
+                self.isRecording = isListening
+            }
+        }
+
+        Task { @MainActor in
+            for await transcript in manager.speechRecognizer.$transcript.values {
+                self.voiceTranscript = transcript
+                // Update input text while recording
+                if self.isRecording {
+                    self.inputText = transcript
+                }
+            }
+        }
+
+        Task { @MainActor in
+            for await isSpeaking in manager.speechSynthesizer.$isSpeaking.values {
+                self.isSpeaking = isSpeaking
+            }
+        }
+
+        Task { @MainActor in
+            for await isActive in manager.$isVoiceModeActive.values {
+                self.isVoiceModeActive = isActive
+            }
         }
     }
 
@@ -333,10 +393,56 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     func onResponse(content: String) {
         let assistantMessage = ChatMessage(role: .assistant, content: content)
         messages.append(assistantMessage)
+
+        // Speak response in voice mode
+        if isVoiceModeActive, let voiceManager = voiceManager {
+            // Read voice output setting
+            let voiceOutputEnabled = UserDefaults.standard.bool(forKey: "voiceOutputEnabled")
+            if voiceOutputEnabled {
+                voiceManager.speak(content)
+            }
+        }
     }
 
     func onError(error: Error) {
         errorMessage = error.localizedDescription
+    }
+
+    // MARK: - Voice Control Methods
+
+    /// Toggle voice input recording
+    func toggleVoiceInput() async {
+        guard let voiceManager = voiceManager else { return }
+        await voiceManager.toggleListening()
+    }
+
+    /// Start voice input recording
+    func startVoiceInput() async {
+        guard let voiceManager = voiceManager else { return }
+        await voiceManager.startListening()
+    }
+
+    /// Stop voice input and send message
+    func stopVoiceInputAndSend() {
+        guard let voiceManager = voiceManager else { return }
+        voiceManager.stopListening()
+    }
+
+    /// Toggle voice mode (hands-free conversation)
+    func toggleVoiceMode() async {
+        guard let voiceManager = voiceManager else { return }
+        await voiceManager.toggleVoiceMode()
+    }
+
+    /// Stop any ongoing speech
+    func stopSpeaking() {
+        voiceManager?.stopSpeaking()
+    }
+
+    /// Check if voice features are authorized
+    func requestVoiceAuthorization() async -> Bool {
+        guard let voiceManager = voiceManager else { return false }
+        return await voiceManager.requestAuthorization()
     }
 }
 
