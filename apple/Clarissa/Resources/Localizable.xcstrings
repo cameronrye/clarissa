@@ -1,0 +1,199 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Welcome to Clarissa" : {
+      "comment" : "Onboarding page 1 title"
+    },
+    "Your intelligent AI assistant that helps you manage your day, answer questions, and get things done." : {
+      "comment" : "Onboarding page 1 description"
+    },
+    "On-Device AI" : {
+      "comment" : "Onboarding page 2 title"
+    },
+    "Clarissa uses Apple Intelligence for private, on-device processing. Your conversations stay on your device." : {
+      "comment" : "Onboarding page 2 description"
+    },
+    "Powerful Tools" : {
+      "comment" : "Onboarding page 3 title"
+    },
+    "Access your calendar, contacts, and more. Clarissa can help you schedule events, find contacts, and perform calculations." : {
+      "comment" : "Onboarding page 3 description"
+    },
+    "Long-term Memory" : {
+      "comment" : "Onboarding page 4 title"
+    },
+    "Clarissa remembers important information across conversations to provide personalized assistance." : {
+      "comment" : "Onboarding page 4 description"
+    },
+    "Get Started" : {
+      "comment" : "Onboarding button to complete onboarding"
+    },
+    "Continue" : {
+      "comment" : "Onboarding button to go to next page"
+    },
+    "Setting up..." : {
+      "comment" : "Loading indicator when setting up LLM provider"
+    },
+    "Message Clarissa..." : {
+      "comment" : "Placeholder text for chat input field"
+    },
+    "Error" : {
+      "comment" : "Error alert title"
+    },
+    "OK" : {
+      "comment" : "Alert dismiss button"
+    },
+    "Copied!" : {
+      "comment" : "Confirmation when text is copied to clipboard"
+    },
+    "Retry" : {
+      "comment" : "Button to retry a failed operation"
+    },
+    "Stop Speaking" : {
+      "comment" : "Button to stop text-to-speech"
+    },
+    "Speak" : {
+      "comment" : "Button to speak text aloud"
+    },
+    "Copy" : {
+      "comment" : "Button to copy text"
+    },
+    "Clarissa" : {
+      "comment" : "App name / Assistant name"
+    },
+    "Your AI assistant" : {
+      "comment" : "Subtitle in empty state"
+    },
+    "Try asking:" : {
+      "comment" : "Header for suggested prompts"
+    },
+    "What's the weather like today?" : {
+      "comment" : "Suggested prompt 1"
+    },
+    "Set a reminder for tomorrow at 9am" : {
+      "comment" : "Suggested prompt 2"
+    },
+    "What can you help me with?" : {
+      "comment" : "Suggested prompt 3"
+    },
+    "Tell me a fun fact" : {
+      "comment" : "Suggested prompt 4"
+    },
+    "No History" : {
+      "comment" : "Empty state title for session history"
+    },
+    "Your conversations will appear here." : {
+      "comment" : "Empty state description for session history"
+    },
+    "History" : {
+      "comment" : "Navigation title for session history"
+    },
+    "Done" : {
+      "comment" : "Button to dismiss a sheet"
+    },
+    "Current" : {
+      "comment" : "Badge indicating the current session"
+    },
+    "Listening..." : {
+      "comment" : "Voice mode status when listening for input"
+    },
+    "Speaking..." : {
+      "comment" : "Voice mode status when speaking response"
+    },
+    "Voice Mode" : {
+      "comment" : "Voice mode indicator label"
+    },
+    "Cancel" : {
+      "comment" : "Cancel button"
+    },
+    "Settings" : {
+      "comment" : "Settings navigation title"
+    },
+    "LLM Provider" : {
+      "comment" : "Settings section header for LLM provider"
+    },
+    "Choose between on-device AI or cloud-based models." : {
+      "comment" : "Settings section footer for LLM provider"
+    },
+    "OpenRouter (Cloud)" : {
+      "comment" : "Settings section header for OpenRouter"
+    },
+    "API Key" : {
+      "comment" : "Label for API key input"
+    },
+    "Model" : {
+      "comment" : "Label for model picker"
+    },
+    "Get API Key" : {
+      "comment" : "Link to get OpenRouter API key"
+    },
+    "API key is stored securely in the Keychain." : {
+      "comment" : "Settings section footer for API key"
+    },
+    "Tools" : {
+      "comment" : "Settings section header for tools"
+    },
+    "Configure Tools" : {
+      "comment" : "Link to tool settings"
+    },
+    "%lld enabled" : {
+      "comment" : "Number of tools enabled"
+    },
+    "Configure which tools are available to the assistant." : {
+      "comment" : "Tools section footer"
+    },
+    "Memories" : {
+      "comment" : "Label for memories navigation link"
+    },
+    "Clear All Memories" : {
+      "comment" : "Button to clear all memories"
+    },
+    "Voice" : {
+      "comment" : "Settings section header for voice"
+    },
+    "Voice Output" : {
+      "comment" : "Toggle label for voice output"
+    },
+    "System Default" : {
+      "comment" : "Default voice option"
+    },
+    "Speech Rate" : {
+      "comment" : "Label for speech rate slider"
+    },
+    "Test Voice" : {
+      "comment" : "Button to test voice settings"
+    },
+    "Slow" : {
+      "comment" : "Speech rate label"
+    },
+    "Normal" : {
+      "comment" : "Speech rate label"
+    },
+    "Fast" : {
+      "comment" : "Speech rate label"
+    },
+    "Very Fast" : {
+      "comment" : "Speech rate label"
+    },
+    "Hello, I'm Clarissa, your AI assistant." : {
+      "comment" : "Test voice sample text"
+    },
+    "View Tutorial" : {
+      "comment" : "Button to view onboarding again"
+    },
+    "Help" : {
+      "comment" : "Settings section header"
+    },
+    "Version" : {
+      "comment" : "Version label"
+    },
+    "About" : {
+      "comment" : "Settings section header"
+    },
+    "No memories stored yet." : {
+      "comment" : "Empty state for memories list"
+    }
+  },
+  "version" : "1.0"
+}
+

@@ -1,0 +1,199 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base title="Support" description="Get help with Clarissa - FAQ, troubleshooting, and contact information">
+  <Header />
+  <main class="container support-page">
+    <h1 class="gradient-text">Support</h1>
+    <p class="subtitle">Get help with Clarissa</p>
+
+    <section class="faq">
+      <h2>Frequently Asked Questions</h2>
+
+      <div class="faq-item">
+        <h3>Does Clarissa require an internet connection?</h3>
+        <p>
+          On iOS 26+ with Apple Intelligence, Clarissa works completely offline using on-device AI. 
+          For the CLI version or if you configure a cloud provider, an internet connection is required 
+          for AI responses.
+        </p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What permissions does the iOS app need?</h3>
+        <p>
+          Clarissa requests permissions only when you use specific features:
+        </p>
+        <ul>
+          <li><strong>Calendar</strong> — Required to create or view calendar events</li>
+          <li><strong>Contacts</strong> — Required to search or view contacts</li>
+        </ul>
+        <p>You can use Clarissa without granting these permissions.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I get an OpenRouter API key?</h3>
+        <p>
+          Visit <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> 
+          to create a free account and generate an API key. OpenRouter provides access to Claude, GPT-4, 
+          Gemini, and many other models.
+        </p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Why isn't on-device AI working?</h3>
+        <p>
+          On-device AI using Apple Foundation Models requires:
+        </p>
+        <ul>
+          <li>iOS 26+ or macOS 26+</li>
+          <li>Apple Intelligence enabled in Settings</li>
+          <li>A device with Apple Silicon (iPhone 15 Pro or later, M-series Macs)</li>
+        </ul>
+        <p>If unavailable, configure an OpenRouter API key in Settings as a fallback.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I clear my conversation history?</h3>
+        <p>
+          <strong>iOS:</strong> Tap the menu icon and select "New Conversation" or use "Clear Conversation" 
+          in the menu.<br />
+          <strong>CLI:</strong> Use the <code>/clear</code> command or start a new session.
+        </p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Is Clarissa free?</h3>
+        <p>
+          Yes, Clarissa is free and open source. On iOS 26+, you can use it entirely for free with 
+          on-device AI. Cloud providers like OpenRouter may have usage costs based on their pricing.
+        </p>
+      </div>
+    </section>
+
+    <section class="contact">
+      <h2>Get Help</h2>
+      
+      <div class="contact-options">
+        <a href="https://github.com/cameronrye/clarissa/issues" target="_blank" rel="noopener" class="contact-card">
+          <h3>Report a Bug</h3>
+          <p>Found a problem? Open an issue on GitHub.</p>
+        </a>
+
+        <a href="https://github.com/cameronrye/clarissa/discussions" target="_blank" rel="noopener" class="contact-card">
+          <h3>Ask a Question</h3>
+          <p>Have a question? Start a discussion on GitHub.</p>
+        </a>
+
+        <a href="mailto:cameron@rye.dev" class="contact-card">
+          <h3>Contact Developer</h3>
+          <p>Reach out directly to Cameron Rye.</p>
+        </a>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .support-page {
+    max-width: 800px;
+    padding: 3rem 1.5rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    color: var(--color-text-muted);
+    font-size: 1.125rem;
+    margin-bottom: 3rem;
+  }
+
+  section {
+    margin-bottom: 3rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--color-text);
+  }
+
+  .faq-item {
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .faq-item:last-child {
+    border-bottom: none;
+  }
+
+  .faq-item h3 {
+    font-size: 1.125rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+  }
+
+  .faq-item p, .faq-item li {
+    color: var(--color-text-muted);
+    line-height: 1.7;
+    margin-bottom: 0.75rem;
+  }
+
+  .faq-item ul {
+    padding-left: 1.5rem;
+    margin: 0.75rem 0;
+  }
+
+  .faq-item code {
+    background: var(--color-bg-secondary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+  }
+
+  a {
+    color: var(--color-cyan);
+  }
+
+  .contact-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .contact-card {
+    display: block;
+    padding: 1.5rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    transition: border-color 0.2s, transform 0.2s;
+    text-decoration: none;
+  }
+
+  .contact-card:hover {
+    border-color: var(--color-cyan);
+    transform: translateY(-2px);
+  }
+
+  .contact-card h3 {
+    font-size: 1rem;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+  }
+
+  .contact-card p {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+</style>
+

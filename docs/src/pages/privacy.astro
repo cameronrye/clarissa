@@ -1,0 +1,159 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base title="Privacy Policy" description="Privacy Policy for Clarissa - your data stays private by design">
+  <Header />
+  <main class="container legal-page">
+    <h1 class="gradient-text">Privacy Policy</h1>
+    <p class="last-updated">Last updated: December 12, 2024</p>
+
+    <section>
+      <h2>Overview</h2>
+      <p>
+        Clarissa is designed with privacy as a core principle. The iOS app processes conversations 
+        entirely on-device using Apple's Foundation Models when available. The CLI version connects 
+        to your configured LLM provider.
+      </p>
+    </section>
+
+    <section>
+      <h2>Data We Don't Collect</h2>
+      <p>We do not collect, store, or transmit:</p>
+      <ul>
+        <li>Your conversations or chat history</li>
+        <li>Personal information or identifiers</li>
+        <li>Usage analytics or telemetry</li>
+        <li>Device information or diagnostics</li>
+        <li>Calendar or contacts data</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>On-Device Processing (iOS)</h2>
+      <p>
+        On iOS 26+ devices with Apple Intelligence enabled, Clarissa uses Apple's Foundation Models 
+        for AI processing. All conversations are processed locally on your device and never leave it.
+      </p>
+      <p>
+        Your calendar events and contacts are accessed only when you explicitly use those features, 
+        and this data is processed entirely on-device.
+      </p>
+    </section>
+
+    <section>
+      <h2>Optional Cloud Providers</h2>
+      <p>
+        If you choose to configure an external LLM provider (such as OpenRouter), your conversations 
+        will be sent to that provider's servers. In this case:
+      </p>
+      <ul>
+        <li>You provide your own API key directly to the provider</li>
+        <li>We do not have access to your API key or conversations</li>
+        <li>The provider's privacy policy applies to data sent to their servers</li>
+      </ul>
+      <p>
+        We recommend reviewing your chosen provider's privacy policy:
+      </p>
+      <ul>
+        <li><a href="https://openrouter.ai/privacy" target="_blank" rel="noopener">OpenRouter Privacy Policy</a></li>
+        <li><a href="https://openai.com/privacy" target="_blank" rel="noopener">OpenAI Privacy Policy</a></li>
+        <li><a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic Privacy Policy</a></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Local Storage</h2>
+      <p>
+        Clarissa stores the following data locally on your device:
+      </p>
+      <ul>
+        <li><strong>Session history</strong> — Your conversation history for session continuity</li>
+        <li><strong>Long-term memories</strong> — Facts you explicitly ask Clarissa to remember</li>
+        <li><strong>Settings</strong> — Your app preferences and configuration</li>
+        <li><strong>API keys</strong> — Stored securely in the system keychain (iOS) or config file (CLI)</li>
+      </ul>
+      <p>
+        This data remains on your device and is not transmitted to us or any third party.
+      </p>
+    </section>
+
+    <section>
+      <h2>Open Source</h2>
+      <p>
+        Clarissa is open source. You can review the complete source code to verify our privacy practices:
+      </p>
+      <p>
+        <a href="https://github.com/cameronrye/clarissa" target="_blank" rel="noopener">
+          github.com/cameronrye/clarissa
+        </a>
+      </p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <p>
+        If you have questions about this privacy policy, please contact:
+      </p>
+      <p>
+        <strong>Cameron Rye</strong><br />
+        <a href="mailto:cameron@rye.dev">cameron@rye.dev</a>
+      </p>
+    </section>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .legal-page {
+    max-width: 800px;
+    padding: 3rem 1.5rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .last-updated {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 3rem;
+  }
+
+  section {
+    margin-bottom: 2.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+  }
+
+  p, li {
+    color: var(--color-text-muted);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  ul {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  li {
+    margin-bottom: 0.5rem;
+  }
+
+  a {
+    color: var(--color-cyan);
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+</style>
+
