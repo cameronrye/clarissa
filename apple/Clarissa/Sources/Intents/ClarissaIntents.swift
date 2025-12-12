@@ -11,10 +11,10 @@ struct ClarissaShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: AskClarissaIntent(),
             phrases: [
-                "Ask \(.applicationName) \(\.$question)",
                 "Ask \(.applicationName)",
-                "Hey \(.applicationName) \(\.$question)",
-                "Tell \(.applicationName) \(\.$question)"
+                "Ask \(.applicationName) something",
+                "Hey \(.applicationName)",
+                "Talk to \(.applicationName)"
             ],
             shortTitle: "Ask Clarissa",
             systemImageName: "sparkles"
