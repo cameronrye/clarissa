@@ -1,0 +1,137 @@
+---
+import Docs from '../../../layouts/Docs.astro';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Docs title="Apple Apps - Features" description="Explore the features of Clarissa for iOS and macOS">
+  <h1>Features</h1>
+  <p>
+    Clarissa for Apple is designed to take full advantage of the platform, integrating deeply 
+    with iOS and macOS capabilities while maintaining the powerful AI assistant features 
+    you expect.
+  </p>
+
+  <h2>On-Device AI with Apple Foundation Models</h2>
+  <p>
+    Clarissa uses Apple's Foundation Models framework for completely private, on-device AI:
+  </p>
+  <ul>
+    <li><strong>Privacy-first</strong> — All processing happens on your device</li>
+    <li><strong>No internet required</strong> — Works offline after initial setup</li>
+    <li><strong>Native tool calling</strong> — Tools execute through Apple's native API</li>
+    <li><strong>Fast responses</strong> — Optimized for Apple Silicon performance</li>
+  </ul>
+  <p>
+    The app automatically prewarms the AI model at launch for faster first responses.
+  </p>
+
+  <h2>Voice Input</h2>
+  <p>
+    Speak naturally to Clarissa using built-in speech recognition:
+  </p>
+  <ul>
+    <li>Tap the <strong>microphone button</strong> to start dictation</li>
+    <li>Speak your prompt naturally</li>
+    <li>Tap again to stop and send</li>
+  </ul>
+  <p>
+    Voice input uses Apple's on-device speech recognition for privacy. Grant microphone 
+    permission when prompted for the best experience.
+  </p>
+
+  <h2>Siri Shortcuts Integration</h2>
+  <p>
+    Clarissa exposes App Intents for use with Siri and the Shortcuts app:
+  </p>
+  
+  <h3>"Ask Clarissa"</h3>
+  <p>Invoke Clarissa with your voice:</p>
+  <ul>
+    <li>"Hey Siri, ask Clarissa how to center a div"</li>
+    <li>"Hey Siri, talk to Clarissa"</li>
+  </ul>
+
+  <h3>"New Conversation"</h3>
+  <p>Start fresh:</p>
+  <ul>
+    <li>"Hey Siri, start new conversation with Clarissa"</li>
+    <li>"Hey Siri, reset Clarissa"</li>
+  </ul>
+
+  <h3>Custom Shortcuts</h3>
+  <p>
+    Build your own automations in the Shortcuts app. Chain Clarissa with other actions 
+    to create powerful workflows.
+  </p>
+
+  <h2>Native Tools</h2>
+  <p>
+    The Apple version includes tools optimized for the platform:
+  </p>
+  <ul>
+    <li><strong>Web Fetch</strong> — Retrieve and summarize web content</li>
+    <li><strong>Date/Time</strong> — Get current date and time information</li>
+    <li><strong>Calculator</strong> — Perform mathematical calculations</li>
+  </ul>
+  <p>
+    <em>Note:</em> Apple Foundation Models support a maximum of 5 tools per session. 
+    The most commonly used tools are automatically prioritized.
+  </p>
+
+  <h2>Session Management</h2>
+  <p>
+    Conversations are automatically saved and organized:
+  </p>
+  <ul>
+    <li><strong>Auto-save</strong> — Never lose a conversation</li>
+    <li><strong>Title generation</strong> — AI-generated titles for easy browsing</li>
+    <li><strong>History sidebar</strong> — Quick access to past conversations</li>
+    <li><strong>Resume anytime</strong> — Pick up where you left off</li>
+  </ul>
+
+  <h2>Long-Term Memory</h2>
+  <p>
+    Clarissa remembers important information across conversations:
+  </p>
+  <ul>
+    <li>Facts you share are stored persistently</li>
+    <li>Context carries forward to future sessions</li>
+    <li>Manage memories in Settings</li>
+  </ul>
+
+  <h2>Streaming Responses</h2>
+  <p>
+    Watch responses appear in real-time as the AI generates them. Tool executions 
+    are displayed inline so you can see exactly what Clarissa is doing.
+  </p>
+
+  <h2>Liquid Glass Design</h2>
+  <p>
+    The app embraces Apple's latest design language:
+  </p>
+  <ul>
+    <li><strong>Translucent materials</strong> — Beautiful glass effects throughout</li>
+    <li><strong>Adaptive layout</strong> — Optimized for iPhone, iPad, and Mac</li>
+    <li><strong>Dark mode</strong> — Full support for system appearance</li>
+    <li><strong>Dynamic Type</strong> — Respects your text size preferences</li>
+  </ul>
+
+  <h2>macOS Features</h2>
+  <p>
+    On macOS, Clarissa includes additional platform-specific features:
+  </p>
+  <ul>
+    <li><strong>Menu bar commands</strong> — File and Edit menus with keyboard shortcuts</li>
+    <li><strong>Settings window</strong> — Standard macOS preferences (⌘,)</li>
+    <li><strong>Keyboard shortcuts</strong> — ⌘N for new conversation, ⇧⌘⌫ to clear</li>
+    <li><strong>Resizable window</strong> — Works at any size</li>
+  </ul>
+
+  <h2>Next Steps</h2>
+  <ul>
+    <li>Check the <a href={`${base}docs/apple/faq/`}>FAQ</a> for troubleshooting</li>
+    <li>Return to <a href={`${base}docs/apple/getting-started/`}>Getting Started</a></li>
+  </ul>
+</Docs>
+

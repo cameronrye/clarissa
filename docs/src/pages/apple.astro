@@ -1,0 +1,303 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const base = import.meta.env.BASE_URL;
+
+const features = [
+  {
+    icon: 'sparkles',
+    title: 'On-Device AI',
+    description: 'Powered by Apple Foundation Models. Your conversations stay private, processed entirely on your device.'
+  },
+  {
+    icon: 'mic',
+    title: 'Voice Input',
+    description: 'Speak naturally with built-in speech recognition. Dictate prompts hands-free.'
+  },
+  {
+    icon: 'siri',
+    title: 'Siri Shortcuts',
+    description: '"Hey Siri, ask Clarissa" — integrate with Shortcuts for automation.'
+  },
+  {
+    icon: 'cloud',
+    title: 'Cloud Fallback',
+    description: 'Access 100+ models via OpenRouter when you need more power.'
+  },
+  {
+    icon: 'tools',
+    title: 'Native Tools',
+    description: 'Execute tools with Apple\'s native tool calling API for seamless integration.'
+  },
+  {
+    icon: 'sync',
+    title: 'Session Sync',
+    description: 'Conversations persist across sessions with automatic title generation.'
+  }
+];
+---
+
+<Base title="Apple Apps" description="Clarissa for iOS and macOS - Native AI assistant powered by Apple Intelligence">
+  <Header />
+  <main class="apple-page">
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <div class="platform-badges">
+            <span class="badge">iOS 26+</span>
+            <span class="badge">macOS 26+</span>
+          </div>
+          <h1><span class="gradient-text">Clarissa</span> for Apple</h1>
+          <p class="tagline">Native AI assistant with Apple Intelligence</p>
+          <p class="description">
+            Experience Clarissa as a native iOS and macOS app. Built with SwiftUI and Apple's 
+            Liquid Glass design, featuring on-device AI with Apple Foundation Models.
+          </p>
+          <div class="cta-buttons">
+            <a href="#testflight" class="btn btn-primary">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15v-4H8l5-6v4h3l-5 6z"/>
+              </svg>
+              Join TestFlight
+            </a>
+            <a href={`${base}docs/apple/getting-started/`} class="btn btn-secondary">
+              Documentation
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="container">
+        <h2 class="section-title"><span class="gradient-text">Features</span></h2>
+        <div class="features-grid">
+          {features.map(feature => (
+            <div class="feature-card gradient-border">
+              <div class="feature-icon">
+                {feature.icon === 'sparkles' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                    <defs><linearGradient id="apple-icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--color-pink)" /><stop offset="50%" stop-color="var(--color-purple)" /><stop offset="100%" stop-color="var(--color-cyan)" /></linearGradient></defs>
+                    <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M5 19l1 3 1-3 3-1-3-1-1-3-1 3-3 1 3 1z"/>
+                  </svg>
+                )}
+                {feature.icon === 'mic' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                )}
+                {feature.icon === 'siri' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                  </svg>
+                )}
+                {feature.icon === 'cloud' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+                  </svg>
+                )}
+                {feature.icon === 'tools' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                  </svg>
+                )}
+                {feature.icon === 'sync' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                )}
+              </div>
+              <h3>{feature.title}</h3>
+              <p>{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section id="testflight" class="download-section">
+      <div class="container">
+        <h2 class="section-title"><span class="gradient-text">Get Early Access</span></h2>
+        <div class="download-cards">
+          <div class="download-card gradient-border">
+            <div class="app-icon">
+              <img src={`${base}logo.svg`} alt="Clarissa" width="64" height="64" />
+            </div>
+            <h3>TestFlight Beta</h3>
+            <p>Join the beta to get early access to Clarissa for iOS and macOS.</p>
+            <p class="requirements">Requires iOS 26+ or macOS 26+ (Tahoe)</p>
+            <a href="https://testflight.apple.com/join/PLACEHOLDER" class="btn btn-primary" target="_blank" rel="noopener">
+              Join TestFlight
+            </a>
+          </div>
+        </div>
+        <p class="app-store-note">App Store release coming soon.</p>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .apple-page .hero {
+    padding: 6rem 0 4rem;
+    text-align: center;
+  }
+
+  .hero-content {
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .platform-badges {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .badge {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    padding: 0.375rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .apple-page h1 {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .tagline {
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .description {
+    color: var(--color-text-muted);
+    margin-bottom: 2rem;
+    line-height: 1.8;
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .features {
+    padding: 4rem 0;
+  }
+
+  .section-title {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .feature-card {
+    background: var(--color-bg-secondary);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: transform 0.2s;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .feature-icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 1rem;
+  }
+
+  .feature-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .feature-card h3 {
+    font-size: 1.125rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .feature-card p {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  .download-section {
+    padding: 4rem 0;
+    text-align: center;
+  }
+
+  .download-cards {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .download-card {
+    background: var(--color-bg-secondary);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 360px;
+    text-align: center;
+  }
+
+  .app-icon {
+    margin-bottom: 1.5rem;
+  }
+
+  .app-icon img {
+    border-radius: 16px;
+  }
+
+  .download-card h3 {
+    margin-bottom: 0.75rem;
+  }
+
+  .download-card p {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+
+  .requirements {
+    font-size: 0.75rem !important;
+    color: var(--color-text-muted);
+  }
+
+  .app-store-note {
+    margin-top: 2rem;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  @media (max-width: 640px) {
+    .apple-page h1 {
+      font-size: 2rem;
+    }
+
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+

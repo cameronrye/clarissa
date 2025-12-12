@@ -1,0 +1,143 @@
+---
+import Docs from '../../../layouts/Docs.astro';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Docs title="Apple Apps - FAQ" description="Frequently asked questions about Clarissa for iOS and macOS">
+  <h1>Frequently Asked Questions</h1>
+
+  <h2>Requirements & Compatibility</h2>
+
+  <h3>What devices are supported?</h3>
+  <p>
+    Clarissa requires iOS 26+ or macOS 26+ (Tahoe). For on-device AI features, you need 
+    an Apple Silicon device with Apple Intelligence enabled:
+  </p>
+  <ul>
+    <li><strong>iPhone</strong> — iPhone 15 Pro or later (A17 Pro chip)</li>
+    <li><strong>iPad</strong> — iPads with M1 chip or later</li>
+    <li><strong>Mac</strong> — Any Mac with Apple Silicon (M1 or later)</li>
+  </ul>
+
+  <h3>Why does the app require iOS/macOS 26?</h3>
+  <p>
+    Clarissa uses Apple Foundation Models for on-device AI, which is only available in 
+    iOS 26 and macOS 26. The app also uses the new Liquid Glass design system introduced 
+    in these versions.
+  </p>
+
+  <h3>Can I use Clarissa without Apple Intelligence?</h3>
+  <p>
+    Yes! You can use OpenRouter for cloud-based AI. Add your OpenRouter API key in Settings 
+    to access 100+ models including Claude and GPT-4.
+  </p>
+
+  <h2>On-Device AI</h2>
+
+  <h3>Is my data private with on-device AI?</h3>
+  <p>
+    Yes. When using Apple Foundation Models, all processing happens entirely on your device. 
+    Your conversations never leave your device and are not sent to any server.
+  </p>
+
+  <h3>Why is the first response slow?</h3>
+  <p>
+    The AI model needs to warm up on first use. Clarissa automatically prewarms the model 
+    at launch to minimize this delay. Subsequent responses are much faster.
+  </p>
+
+  <h3>What's the tool limit for on-device AI?</h3>
+  <p>
+    Apple Foundation Models support a maximum of 3-5 tools per session for optimal performance. 
+    Clarissa automatically prioritizes the most useful tools. For workflows requiring more 
+    tools, use OpenRouter.
+  </p>
+
+  <h2>Cloud Providers</h2>
+
+  <h3>How do I get an OpenRouter API key?</h3>
+  <ol>
+    <li>Visit <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a></li>
+    <li>Create an account or sign in</li>
+    <li>Go to <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">API Keys</a></li>
+    <li>Create a new key and copy it</li>
+    <li>Paste it in Clarissa's Settings</li>
+  </ol>
+
+  <h3>Which cloud model should I use?</h3>
+  <p>
+    The default is <code>anthropic/claude-sonnet-4</code>, which offers an excellent balance 
+    of capability and speed. You can change this in Settings.
+  </p>
+
+  <h3>Is my API key stored securely?</h3>
+  <p>
+    Yes. API keys are stored in the iOS/macOS Keychain, Apple's secure credential storage 
+    system. They are never transmitted except to the API provider.
+  </p>
+
+  <h2>Voice & Siri</h2>
+
+  <h3>Why isn't voice input working?</h3>
+  <p>
+    Ensure you've granted microphone permission. Go to Settings → Clarissa → Microphone 
+    and enable access. If it's already enabled, try restarting the app.
+  </p>
+
+  <h3>Siri doesn't recognize my Clarissa commands</h3>
+  <p>
+    Siri Shortcuts need time to learn. Try these tips:
+  </p>
+  <ul>
+    <li>Use the exact phrases: "Ask Clarissa" or "Talk to Clarissa"</li>
+    <li>Open the Shortcuts app and run the intent manually first</li>
+    <li>Make sure Siri is enabled and listening</li>
+  </ul>
+
+  <h2>Troubleshooting</h2>
+
+  <h3>The app crashes on launch</h3>
+  <p>
+    Try these steps:
+  </p>
+  <ol>
+    <li>Force quit and relaunch the app</li>
+    <li>Restart your device</li>
+    <li>Ensure you're on iOS/macOS 26 or later</li>
+    <li>Reinstall from TestFlight</li>
+  </ol>
+
+  <h3>"Apple Intelligence not available"</h3>
+  <p>
+    Check these requirements:
+  </p>
+  <ul>
+    <li>Device has Apple Silicon (M1+ on Mac, A17 Pro+ on iPhone)</li>
+    <li>Apple Intelligence is enabled in System Settings</li>
+    <li>Device language and region support Apple Intelligence</li>
+  </ul>
+
+  <h3>Responses are getting cut off</h3>
+  <p>
+    Long conversations may hit token limits. The app automatically trims older messages 
+    to stay within limits. Start a new conversation for complex topics.
+  </p>
+
+  <h3>How do I report a bug?</h3>
+  <p>
+    You can report issues through:
+  </p>
+  <ul>
+    <li><strong>TestFlight</strong> — Shake your device or use the TestFlight app to send feedback</li>
+    <li><strong>GitHub</strong> — Open an issue at <a href="https://github.com/cameronrye/clarissa/issues" target="_blank" rel="noopener">github.com/cameronrye/clarissa</a></li>
+  </ul>
+
+  <h2>More Help</h2>
+  <ul>
+    <li><a href={`${base}docs/apple/getting-started/`}>Getting Started</a></li>
+    <li><a href={`${base}docs/apple/features/`}>Features</a></li>
+    <li><a href={`${base}support/`}>Support</a></li>
+  </ul>
+</Docs>
+
