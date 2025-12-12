@@ -17,12 +17,49 @@ export interface AgentCallbacks {
 
 /**
  * Build the base system prompt with the given tool names
+ * Includes explicit tool usage guidelines (iOS pattern from Apple Foundation Models best practices)
  */
 function buildBaseSystemPrompt(toolNames: string[]): string {
+  // Build tool-specific guidance based on available tools
+  const toolGuidance: string[] = [];
+
+  if (toolNames.includes("calculator")) {
+    toolGuidance.push("- For math calculations, use the calculator tool");
+  }
+  if (toolNames.includes("bash")) {
+    toolGuidance.push("- For shell commands and system operations, use the bash tool");
+  }
+  if (toolNames.includes("read_file")) {
+    toolGuidance.push("- To read file contents, use the read_file tool");
+  }
+  if (toolNames.includes("write_file")) {
+    toolGuidance.push("- To create or overwrite files, use the write_file tool");
+  }
+  if (toolNames.includes("patch_file")) {
+    toolGuidance.push("- To edit existing files, prefer the patch_file tool");
+  }
+  if (toolNames.includes("list_directory")) {
+    toolGuidance.push("- To list directory contents, use the list_directory tool");
+  }
+  if (toolNames.includes("search_files")) {
+    toolGuidance.push("- To search for patterns in files, use the search_files tool");
+  }
+  if (toolNames.includes("git_status") || toolNames.includes("git_diff")) {
+    toolGuidance.push("- For git operations, use the appropriate git_* tools");
+  }
+  if (toolNames.includes("web_fetch")) {
+    toolGuidance.push("- To fetch web content, use the web_fetch tool");
+  }
+
+  const toolGuidanceText = toolGuidance.length > 0
+    ? `\n\nTool usage guidelines:\n${toolGuidance.join("\n")}`
+    : "";
+
   return `You are Clarissa, a helpful AI assistant with access to tools.
 
 You can use the following tools:
 ${toolNames.map((name) => `- ${name}`).join("\n")}
+${toolGuidanceText}
 
 When you need to perform calculations, run commands, or interact with the system, use the appropriate tool.
 Always explain what you're doing and provide clear, helpful responses.

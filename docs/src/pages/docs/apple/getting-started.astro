@@ -1,0 +1,106 @@
+---
+import Docs from '../../../layouts/Docs.astro';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Docs title="Apple Apps - Getting Started" description="Get started with Clarissa for iOS and macOS">
+  <h1>Getting Started with Clarissa for Apple</h1>
+  <p>
+    Clarissa is available as a native iOS and macOS application, built with SwiftUI and 
+    featuring Apple's Liquid Glass design language. This guide will help you get up and running.
+  </p>
+
+  <h2>Requirements</h2>
+  <ul>
+    <li><strong>iOS 26+</strong> on iPhone or iPad</li>
+    <li><strong>macOS 26+ (Tahoe)</strong> on Mac</li>
+    <li><strong>Apple Silicon</strong> device with Apple Intelligence enabled (for on-device AI)</li>
+    <li>Xcode 26 beta (for building from source)</li>
+  </ul>
+
+  <h2>Installation Options</h2>
+
+  <h3>TestFlight (Recommended)</h3>
+  <p>
+    Join the TestFlight beta to get early access to Clarissa. This is the easiest way to 
+    install and receive automatic updates.
+  </p>
+  <ol>
+    <li>Install <a href="https://apps.apple.com/app/testflight/id899247664" target="_blank" rel="noopener">TestFlight</a> from the App Store</li>
+    <li>Open the <a href="https://testflight.apple.com/join/PLACEHOLDER" target="_blank" rel="noopener">Clarissa TestFlight invite link</a></li>
+    <li>Tap "Accept" to join the beta</li>
+    <li>Install Clarissa from TestFlight</li>
+  </ol>
+
+  <h3>Build from Source</h3>
+  <p>For developers who want to build and run locally:</p>
+  <pre><code>git clone https://github.com/cameronrye/clarissa.git
+cd clarissa/apple/Clarissa
+open Package.swift</code></pre>
+  <p>
+    This opens the project in Xcode. Select your target device and click Run (⌘R).
+  </p>
+
+  <h2>Initial Setup</h2>
+  <p>
+    When you first launch Clarissa, you'll be guided through a quick onboarding process:
+  </p>
+  <ol>
+    <li><strong>Apple Intelligence</strong> — Enable on-device AI if your device supports it</li>
+    <li><strong>OpenRouter API Key</strong> — Optionally add your API key for cloud model access</li>
+    <li><strong>Permissions</strong> — Grant microphone access for voice input (optional)</li>
+  </ol>
+
+  <h2>Choosing Your AI Provider</h2>
+
+  <h3>Apple Intelligence (On-Device)</h3>
+  <p>
+    The default and recommended option. Your conversations are processed entirely on your device 
+    using Apple Foundation Models. This requires:
+  </p>
+  <ul>
+    <li>Apple Silicon (M1 or later on Mac, A17 Pro or later on iPhone/iPad)</li>
+    <li>Apple Intelligence enabled in System Settings</li>
+    <li>iOS 26+ or macOS 26+</li>
+  </ul>
+  <p>
+    <strong>Note:</strong> On-device AI supports up to 5 tools per session. For more complex 
+    workflows, consider using cloud providers.
+  </p>
+
+  <h3>OpenRouter (Cloud)</h3>
+  <p>
+    For access to 100+ models including Claude, GPT-4, and more. Requires an API key from 
+    <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter</a>.
+  </p>
+  <p>
+    To configure:
+  </p>
+  <ol>
+    <li>Open Settings (gear icon or ⌘,)</li>
+    <li>Enter your OpenRouter API key</li>
+    <li>Select your preferred model</li>
+  </ol>
+
+  <h2>Your First Conversation</h2>
+  <p>
+    Once setup is complete:
+  </p>
+  <ol>
+    <li>Tap the text field at the bottom of the screen</li>
+    <li>Type your message or tap the microphone for voice input</li>
+    <li>Press Send or Return to submit</li>
+  </ol>
+  <p>
+    Clarissa will respond with streaming text. If tools are required (like fetching a URL 
+    or running a calculation), you'll see the tool execution in real-time.
+  </p>
+
+  <h2>Next Steps</h2>
+  <ul>
+    <li>Explore <a href={`${base}docs/apple/features/`}>Features</a> to learn about voice input, Siri Shortcuts, and more</li>
+    <li>Check the <a href={`${base}docs/apple/faq/`}>FAQ</a> for troubleshooting and tips</li>
+  </ul>
+</Docs>
+

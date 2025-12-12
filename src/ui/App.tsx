@@ -724,8 +724,12 @@ Breakdown by type:
           return;
         }
         try {
-          await memoryManager.add(fact);
-          setMessages((prev) => [...prev, { role: "system", content: `Remembered: ${fact}` }]);
+          const memory = await memoryManager.add(fact);
+          if (memory) {
+            setMessages((prev) => [...prev, { role: "system", content: `Remembered: ${fact}` }]);
+          } else {
+            setMessages((prev) => [...prev, { role: "system", content: `Already remembered: ${fact}` }]);
+          }
         } catch (error) {
           const msg = error instanceof Error ? error.message : "Failed to save memory";
           setMessages((prev) => [...prev, { role: "error", content: msg }]);

@@ -46,6 +46,36 @@ function isRetryableError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Convert error to user-friendly message (iOS pattern)
+ */
+function getUserFriendlyError(error: unknown): Error {
+  if (!(error instanceof Error)) {
+    return new Error(String(error));
+  }
+
+  const message = error.message;
+
+  // Check for HTTP status codes in error message
+  if (message.includes("401") || message.toLowerCase().includes("unauthorized")) {
+    return new Error("Invalid API key. Please check your OpenRouter API key.");
+  }
+  if (message.includes("402") || message.toLowerCase().includes("payment required")) {
+    return new Error("Insufficient credits. Please add credits to your OpenRouter account.");
+  }
+  if (message.includes("429") || message.toLowerCase().includes("rate limit")) {
+    return new Error("Rate limit exceeded. Please wait a moment and try again.");
+  }
+  if (message.includes("500") || message.includes("502") || message.includes("503") || message.includes("504")) {
+    return new Error("OpenRouter server error. Please try again later.");
+  }
+  if (message.toLowerCase().includes("network") || message.toLowerCase().includes("connection")) {
+    return new Error("Network error. Please check your internet connection.");
+  }
+
+  return error;
+}
+
 // Type for streaming chunk from OpenRouter SDK
 interface SDKStreamChunk {
   id: string;
@@ -151,10 +181,11 @@ export class OpenRouterProvider implements LLMProvider {
           await sleep(getRetryDelay(attempt));
           continue;
         }
-        throw lastError;
+        // Convert to user-friendly error message (iOS pattern)
+        throw getUserFriendlyError(lastError);
       }
     }
-    throw lastError ?? new Error("Unexpected retry loop exit");
+    throw getUserFriendlyError(lastError ?? new Error("Unexpected retry loop exit"));
   }
 
   private async doStreamingChat(

@@ -17,6 +17,52 @@ import type {
 import { usageTracker } from "../usage.ts";
 import { parseModelOutput, StreamingOutputParser } from "./lmstudio.ts";
 
+/**
+ * Apple AI specific error types (iOS pattern)
+ * These provide user-friendly error messages for common issues
+ */
+export class AppleAIError extends Error {
+  constructor(
+    message: string,
+    public readonly code: AppleAIErrorCode,
+    public readonly userMessage: string
+  ) {
+    super(message);
+    this.name = "AppleAIError";
+  }
+}
+
+export type AppleAIErrorCode =
+  | "not_available"
+  | "device_not_eligible"
+  | "not_enabled"
+  | "model_not_ready"
+  | "guardrail_violation"
+  | "context_exceeded"
+  | "unsupported_language"
+  | "rate_limited"
+  | "concurrent_requests"
+  | "generation_failed";
+
+const ERROR_MESSAGES: Record<AppleAIErrorCode, string> = {
+  not_available: "Apple Intelligence is not available on this device.",
+  device_not_eligible: "This device doesn't support Apple Intelligence. Requires Apple Silicon Mac with macOS 26+.",
+  not_enabled: "Apple Intelligence is not enabled. Please enable it in System Settings > Apple Intelligence & Siri.",
+  model_not_ready: "Apple Intelligence is still downloading. Please wait and try again.",
+  guardrail_violation: "The request was blocked by safety guidelines. Please try rephrasing your question.",
+  context_exceeded: "The conversation is too long. Please start a new conversation.",
+  unsupported_language: "The language is not supported. Please use English.",
+  rate_limited: "Too many requests. Please wait a moment and try again.",
+  concurrent_requests: "Another request is in progress. Please wait for it to complete.",
+  generation_failed: "Generation failed. Please try again.",
+};
+
+function createAppleAIError(code: AppleAIErrorCode, detail?: string): AppleAIError {
+  const userMessage = ERROR_MESSAGES[code];
+  const message = detail ? `${userMessage} (${detail})` : userMessage;
+  return new AppleAIError(message, code, userMessage);
+}
+
 // Apple AI SDK types (dynamically imported)
 type AppleAISDK = {
   chat: (options: AppleAIChatOptions) => Promise<AppleAIChatResponse> | AsyncIterable<string>;
@@ -51,6 +97,7 @@ type AppleAIChatResponse = {
 
 export class AppleAIProvider implements LLMProvider {
   private sdk: AppleAISDK | null = null;
+  private isProcessing = false; // Prevent concurrent requests (iOS pattern)
 
   readonly info: ProviderInfo = {
     id: "apple-ai",
@@ -115,6 +162,34 @@ export class AppleAIProvider implements LLMProvider {
     this.sdk = sdk;
   }
 
+  /**
+   * Prewarm the Apple AI model for faster first response (iOS pattern)
+   * This sends a minimal request to warm up the model before user interaction.
+   * Call this early (e.g., during app startup) for better UX.
+   */
+  async prewarm(): Promise<void> {
+    if (!this.sdk) {
+      try {
+        await this.initialize();
+      } catch {
+        // Silently fail prewarm if initialization fails
+        return;
+      }
+    }
+
+    try {
+      // Send a minimal request to warm up the model
+      // Use a simple prompt that requires minimal processing
+      await this.sdk!.chat({
+        messages: [{ role: "user", content: "Hello" }],
+        stream: false,
+        maxTokens: 1,
+      });
+    } catch {
+      // Silently fail prewarm - it's just an optimization
+    }
+  }
+
   // Apple AI has a limit on the number of tools it can handle effectively
   // Beyond this limit, the model returns "null" as the response
   private static readonly MAX_TOOLS = 10;
@@ -125,6 +200,20 @@ export class AppleAIProvider implements LLMProvider {
   private static readonly MAX_TOOL_RESULT_CHARS = 1500; // ~375 tokens
 
   async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    // Prevent concurrent requests which can cause crashes (iOS pattern)
+    if (this.isProcessing) {
+      throw createAppleAIError("concurrent_requests");
+    }
+
+    this.isProcessing = true;
+    try {
+      return await this.chatInternal(messages, options);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  private async chatInternal(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.sdk) await this.initialize();
 
     const appleMessages = this.convertMessages(messages);
@@ -201,12 +290,38 @@ export class AppleAIProvider implements LLMProvider {
 
       return this.createResponse(response.text, response.toolCalls, messages);
     } catch (error) {
-      // Handle Apple AI SDK specific errors
+      // Handle Apple AI SDK specific errors with granular error types (iOS pattern)
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("deserialize") || message.includes("Generable")) {
-        // Model output parsing failed - return error as content
-        throw new Error(`Apple Intelligence response error: ${message}. This may indicate the model couldn't process the request properly.`);
+      const lowerMessage = message.toLowerCase();
+
+      // Check for specific error conditions
+      if (lowerMessage.includes("guardrail") || lowerMessage.includes("safety") || lowerMessage.includes("blocked")) {
+        throw createAppleAIError("guardrail_violation", message);
       }
+      if (lowerMessage.includes("context") && (lowerMessage.includes("exceeded") || lowerMessage.includes("too long"))) {
+        throw createAppleAIError("context_exceeded", message);
+      }
+      if (lowerMessage.includes("rate") && lowerMessage.includes("limit")) {
+        throw createAppleAIError("rate_limited", message);
+      }
+      if (lowerMessage.includes("language") && (lowerMessage.includes("unsupported") || lowerMessage.includes("not supported"))) {
+        throw createAppleAIError("unsupported_language", message);
+      }
+      if (lowerMessage.includes("not available") || lowerMessage.includes("unavailable")) {
+        throw createAppleAIError("not_available", message);
+      }
+      if (lowerMessage.includes("not enabled") || lowerMessage.includes("enable")) {
+        throw createAppleAIError("not_enabled", message);
+      }
+      if (lowerMessage.includes("downloading") || lowerMessage.includes("not ready")) {
+        throw createAppleAIError("model_not_ready", message);
+      }
+      if (message.includes("deserialize") || message.includes("Generable")) {
+        // Model output parsing failed
+        throw createAppleAIError("generation_failed", message);
+      }
+
+      // Re-throw unknown errors
       throw error;
     }
   }
@@ -270,34 +385,57 @@ export class AppleAIProvider implements LLMProvider {
     // Tool results need to be included so the model can generate a response based on them
     const result: Array<{ role: string; content: string }> = [];
 
+    // Build a set of tool call IDs that have results, so we know which tool calls are "completed"
+    const completedToolCallIds = new Set<string>();
+    for (const msg of messages) {
+      if (msg.role === "tool" && msg.tool_call_id) {
+        completedToolCallIds.add(msg.tool_call_id);
+      }
+    }
+
     for (const msg of messages) {
       if (msg.role === "system") {
         result.push({ role: "system", content: msg.content || "" });
       } else if (msg.role === "user") {
         result.push({ role: "user", content: msg.content || "" });
       } else if (msg.role === "assistant") {
-        // For assistant messages with tool calls, include both the intent and tool info
+        // For assistant messages with tool calls, we need to be careful:
+        // - If all tool calls have been executed (results exist), DON'T include the tool call text
+        //   because Apple AI will see it and try to call the tools again
+        // - Only include tool call info if the tools haven't been executed yet (no results)
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-          const toolInfo = msg.tool_calls
-            .map((tc) => `[Calling tool: ${tc.function.name} with args: ${tc.function.arguments}]`)
-            .join("\n");
-          const content = msg.content ? `${msg.content}\n${toolInfo}` : toolInfo;
-          result.push({ role: "assistant", content });
+          const allCompleted = msg.tool_calls.every(tc => completedToolCallIds.has(tc.id));
+          if (allCompleted) {
+            // Tool calls are complete - just include the content without tool call info
+            // The model will see the tool results in subsequent messages
+            if (msg.content) {
+              result.push({ role: "assistant", content: msg.content });
+            }
+            // If no content, skip this message entirely - the tool results speak for themselves
+          } else {
+            // Tool calls not yet executed - include the intent
+            const toolInfo = msg.tool_calls
+              .map((tc) => `[Calling tool: ${tc.function.name} with args: ${tc.function.arguments}]`)
+              .join("\n");
+            const content = msg.content ? `${msg.content}\n${toolInfo}` : toolInfo;
+            result.push({ role: "assistant", content });
+          }
         } else if (msg.content) {
           result.push({ role: "assistant", content: msg.content });
         }
       } else if (msg.role === "tool") {
-        // Convert tool results to user messages so the model sees them
-        // Truncate long tool results to prevent context overflow
+        // Convert tool results to assistant messages so it looks like the assistant's work
+        // This prevents the model from thinking it needs to re-execute tools
         const toolName = msg.name || "tool";
         let toolContent = msg.content || "";
         if (toolContent.length > AppleAIProvider.MAX_TOOL_RESULT_CHARS) {
           toolContent = toolContent.slice(0, AppleAIProvider.MAX_TOOL_RESULT_CHARS) +
             `\n... [truncated, ${toolContent.length - AppleAIProvider.MAX_TOOL_RESULT_CHARS} chars omitted]`;
         }
+        // Present tool results as assistant messages to indicate the work is done
         result.push({
-          role: "user",
-          content: `[Tool result from ${toolName}]: ${toolContent}`,
+          role: "assistant",
+          content: `[${toolName} completed]: ${toolContent}`,
         });
       }
     }

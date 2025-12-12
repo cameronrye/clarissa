@@ -120,6 +120,13 @@ export interface LLMProvider {
   shutdown?(): Promise<void>;
 
   /**
+   * Prewarm the model for faster first response (iOS pattern)
+   * This is an optional optimization that some providers support.
+   * Call early (e.g., during startup) for better UX on first interaction.
+   */
+  prewarm?(): Promise<void>;
+
+  /**
    * Generate embeddings for the given texts
    * Only available if capabilities.embeddings is true
    * @param texts - Array of texts to embed

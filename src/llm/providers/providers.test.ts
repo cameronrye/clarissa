@@ -324,7 +324,7 @@ describe("Provider Implementations", () => {
         expect(result[1]!.content).toContain("12*12");
       });
 
-      test("converts tool results to user messages", () => {
+      test("converts completed tool calls to assistant messages", () => {
         const messages: Message[] = [
           { role: "user", content: "Calculate 12*12" },
           {
@@ -337,11 +337,13 @@ describe("Provider Implementations", () => {
           { role: "tool", tool_call_id: "call_1", name: "calculator", content: '{"result":144}' },
         ];
         const result = testConvertMessages(messages);
-        expect(result).toHaveLength(3);
-        // Tool result should be converted to a user message
-        expect(result[2]!.role).toBe("user");
-        expect(result[2]!.content).toContain("calculator");
-        expect(result[2]!.content).toContain("144");
+        // When tool calls are completed, the assistant message with tool calls is skipped
+        // (since content is null and all tool calls have results)
+        // Tool result becomes an assistant message
+        expect(result).toHaveLength(2);
+        expect(result[1]!.role).toBe("assistant");
+        expect(result[1]!.content).toContain("calculator completed");
+        expect(result[1]!.content).toContain("144");
       });
 
       test("handles assistant messages with both content and tool calls", () => {

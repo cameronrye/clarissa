@@ -1,0 +1,31 @@
+{
+  "name": "web_fetch",
+  "description": "Fetch content from a URL and return it as text. Useful for reading web pages, APIs, or documentation.",
+  "category": "utility",
+  "priority": 3,
+  "requiresConfirmation": false,
+  "platforms": ["cli", "ios", "macos"],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "format": "uri",
+        "description": "The URL to fetch"
+      },
+      "format": {
+        "type": "string",
+        "enum": ["text", "json", "html"],
+        "default": "text",
+        "description": "Response format: text (default), json, or html"
+      },
+      "maxLength": {
+        "type": "integer",
+        "default": 10000,
+        "description": "Maximum response length in characters"
+      }
+    },
+    "required": ["url"]
+  }
+}
+

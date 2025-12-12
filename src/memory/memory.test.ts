@@ -36,9 +36,23 @@ describe("Memory Manager", () => {
   test("add creates a memory with id and timestamp", async () => {
     const memory = await memoryManager.add("Test memory content");
 
-    expect(memory.id).toMatch(/^mem_\d+_[a-z0-9]+$/);
-    expect(memory.content).toBe("Test memory content");
-    expect(memory.createdAt).toBeDefined();
+    expect(memory).not.toBeNull();
+    expect(memory!.id).toMatch(/^mem_\d+_[a-z0-9]+$/);
+    expect(memory!.content).toBe("Test memory content");
+    expect(memory!.createdAt).toBeDefined();
+  });
+
+  test("add returns null for duplicate memory", async () => {
+    const first = await memoryManager.add("Duplicate content");
+    const second = await memoryManager.add("Duplicate content");
+    const third = await memoryManager.add("  DUPLICATE CONTENT  "); // normalized match
+
+    expect(first).not.toBeNull();
+    expect(second).toBeNull();
+    expect(third).toBeNull();
+
+    const memories = await memoryManager.list();
+    expect(memories).toHaveLength(1);
   });
 
   test("list returns all memories", async () => {
@@ -69,7 +83,7 @@ describe("Memory Manager", () => {
   test("forget removes memory by ID", async () => {
     const memory = await memoryManager.add("To be forgotten");
 
-    const forgotten = await memoryManager.forget(memory.id);
+    const forgotten = await memoryManager.forget(memory!.id);
 
     expect(forgotten).toBe(true);
     const memories = await memoryManager.list();

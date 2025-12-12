@@ -1,0 +1,158 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base title="Terms of Service" description="Terms of Service for Clarissa">
+  <Header />
+  <main class="container legal-page">
+    <h1 class="gradient-text">Terms of Service</h1>
+    <p class="last-updated">Last updated: December 12, 2024</p>
+
+    <section>
+      <h2>Agreement</h2>
+      <p>
+        By using Clarissa ("the Software"), you agree to these Terms of Service. 
+        If you do not agree, please do not use the Software.
+      </p>
+    </section>
+
+    <section>
+      <h2>License</h2>
+      <p>
+        Clarissa is open source software released under the MIT License. You are free to use, 
+        modify, and distribute the software in accordance with the license terms.
+      </p>
+      <p>
+        View the full license: 
+        <a href="https://github.com/cameronrye/clarissa/blob/main/LICENSE" target="_blank" rel="noopener">
+          MIT License
+        </a>
+      </p>
+    </section>
+
+    <section>
+      <h2>Use of the Software</h2>
+      <p>You agree to:</p>
+      <ul>
+        <li>Use the Software in compliance with applicable laws</li>
+        <li>Not use the Software to harm, harass, or infringe on others' rights</li>
+        <li>Be responsible for any content you create or actions you take using the Software</li>
+        <li>Comply with the terms of service of any third-party providers you connect to</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Third-Party Services</h2>
+      <p>
+        Clarissa can connect to third-party AI providers such as OpenRouter, OpenAI, and Anthropic. 
+        When using these services:
+      </p>
+      <ul>
+        <li>You are responsible for obtaining and managing your own API keys</li>
+        <li>You must comply with the third party's terms of service and usage policies</li>
+        <li>Any costs incurred from third-party services are your responsibility</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Disclaimer of Warranties</h2>
+      <p>
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+        INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+        PURPOSE AND NONINFRINGEMENT.
+      </p>
+    </section>
+
+    <section>
+      <h2>Limitation of Liability</h2>
+      <p>
+        IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR 
+        OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+      </p>
+    </section>
+
+    <section>
+      <h2>AI-Generated Content</h2>
+      <p>
+        Clarissa uses artificial intelligence to generate responses. AI-generated content may be 
+        inaccurate, incomplete, or inappropriate. You are responsible for reviewing and verifying 
+        any AI-generated content before relying on it.
+      </p>
+    </section>
+
+    <section>
+      <h2>Changes to Terms</h2>
+      <p>
+        We may update these terms from time to time. Continued use of the Software after changes 
+        constitutes acceptance of the new terms.
+      </p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <p>
+        Questions about these terms? Contact:
+      </p>
+      <p>
+        <strong>Cameron Rye</strong><br />
+        <a href="mailto:cameron@rye.dev">cameron@rye.dev</a>
+      </p>
+    </section>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .legal-page {
+    max-width: 800px;
+    padding: 3rem 1.5rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .last-updated {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 3rem;
+  }
+
+  section {
+    margin-bottom: 2.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+  }
+
+  p, li {
+    color: var(--color-text-muted);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  ul {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  li {
+    margin-bottom: 0.5rem;
+  }
+
+  a {
+    color: var(--color-cyan);
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+</style>
+

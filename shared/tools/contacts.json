@@ -1,0 +1,34 @@
+{
+  "name": "contacts",
+  "description": "Search and access contacts from the user's address book. Can find contacts by name, phone number, or email.",
+  "category": "system",
+  "priority": 2,
+  "requiresConfirmation": false,
+  "platforms": ["ios", "macos"],
+  "permissions": ["contacts"],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["search", "get"],
+        "description": "The action to perform"
+      },
+      "query": {
+        "type": "string",
+        "description": "Search query - name, phone number, or email"
+      },
+      "contactId": {
+        "type": "string",
+        "description": "Contact identifier (for get action)"
+      },
+      "limit": {
+        "type": "integer",
+        "default": 10,
+        "description": "Maximum number of results to return"
+      }
+    },
+    "required": ["action"]
+  }
+}
+

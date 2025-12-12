@@ -108,6 +108,22 @@ class LLMClient {
   }
 
   /**
+   * Prewarm the current provider's model for faster first response (iOS pattern)
+   * This is an optional optimization that some providers (like Apple AI) support.
+   * Call early (e.g., during startup) for better UX on first interaction.
+   */
+  async prewarm(): Promise<void> {
+    try {
+      const provider = await this.ensureProvider();
+      if (provider.prewarm) {
+        await provider.prewarm();
+      }
+    } catch {
+      // Silently fail prewarm - it's just an optimization
+    }
+  }
+
+  /**
    * Switch to a different provider
    */
   async switchProvider(providerId: ProviderId): Promise<void> {

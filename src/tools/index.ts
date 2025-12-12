@@ -18,6 +18,36 @@ import {
 import { webFetchTool } from "./web-fetch.ts";
 import type { ToolDefinition, ToolResult } from "../llm/types.ts";
 
+/** Debug logging for tool execution (matches iOS pattern) */
+const DEBUG = process.env.DEBUG === "true" || process.env.DEBUG === "1";
+
+function logToolCall(name: string, args: string): void {
+  if (DEBUG) {
+    console.debug(`[Tool Call] ${name}`);
+    try {
+      const parsed = JSON.parse(args);
+      console.debug(`  Args: ${JSON.stringify(parsed, null, 2).split("\n").join("\n  ")}`);
+    } catch {
+      console.debug(`  Args: ${args}`);
+    }
+  }
+}
+
+function logToolResult(name: string, result: string, durationMs: number): void {
+  if (DEBUG) {
+    const truncated = result.length > 500 ? result.slice(0, 500) + "..." : result;
+    console.debug(`[Tool Result] ${name} (${durationMs}ms)`);
+    console.debug(`  Result: ${truncated.split("\n").join("\n  ")}`);
+  }
+}
+
+function logToolError(name: string, error: string): void {
+  if (DEBUG) {
+    console.debug(`[Tool Error] ${name}`);
+    console.debug(`  Error: ${error}`);
+  }
+}
+
 /**
  * Registry of all available tools
  */
@@ -119,30 +149,41 @@ class ToolRegistry {
   async execute(name: string, args: string): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
+      const errorContent = JSON.stringify({ error: `Tool "${name}" not found` });
+      logToolError(name, `Tool not found`);
       return {
         tool_call_id: "",
         role: "tool",
         name,
-        content: JSON.stringify({ error: `Tool "${name}" not found` }),
+        content: errorContent,
       };
     }
+
+    // Log tool call (iOS pattern)
+    logToolCall(name, args);
+    const startTime = Date.now();
 
     try {
       // Parse and validate arguments
       const parsedArgs = JSON.parse(args);
       const validatedArgs = tool.parameters.parse(parsedArgs);
-      
+
       // Execute the tool
       const result = await tool.execute(validatedArgs);
-      
+      const content = typeof result === "string" ? result : JSON.stringify(result);
+
+      // Log tool result (iOS pattern)
+      logToolResult(name, content, Date.now() - startTime);
+
       return {
         tool_call_id: "",
         role: "tool",
         name,
-        content: typeof result === "string" ? result : JSON.stringify(result),
+        content,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      logToolError(name, errorMessage);
       return {
         tool_call_id: "",
         role: "tool",
