@@ -4,8 +4,44 @@ import SwiftUI
 import FoundationModels
 #endif
 
+#if os(iOS)
+import CarPlay
+import UIKit
+
+/// App delegate to handle CarPlay scene configuration
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        // Check if this is a CarPlay scene
+        if connectingSceneSession.role == .carTemplateApplication {
+            let config = UISceneConfiguration(
+                name: "CarPlay Configuration",
+                sessionRole: .carTemplateApplication
+            )
+            config.delegateClass = CarPlaySceneDelegate.self
+            return config
+        }
+
+        // Default to main app scene
+        let config = UISceneConfiguration(
+            name: "Default Configuration",
+            sessionRole: connectingSceneSession.role
+        )
+        config.delegateClass = SceneDelegate.self
+        return config
+    }
+}
+#endif
+
 @main
 struct ClarissaApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #endif
+
     @StateObject private var appState = AppState()
 
     var body: some Scene {
