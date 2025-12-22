@@ -16,11 +16,15 @@ enum TokenBudget {
     /// Reserve tokens for system instructions
     static let systemReserve = ClarissaConstants.tokenSystemReserve
 
+    /// Reserve tokens for tool schemas (~100 per tool with @Generable)
+    static let toolSchemaReserve = ClarissaConstants.tokenToolSchemaReserve
+
     /// Reserve tokens for the expected response
     static let responseReserve = ClarissaConstants.tokenResponseReserve
 
     /// Maximum tokens for conversation history
-    static let maxHistoryTokens = totalContextWindow - systemReserve - responseReserve
+    /// Accounts for system prompt, tool schemas, and expected response
+    static let maxHistoryTokens = totalContextWindow - systemReserve - toolSchemaReserve - responseReserve
 
     /// Estimate tokens for a string
     /// Community insight: "For Latin text: ~3-4 characters per token, CJK: ~1 char per token"
@@ -118,33 +122,46 @@ final class Agent: ObservableObject {
     }
     
     /// Build the system prompt with memories
-    /// Community insight: "Include examples in your session instructions to guide tool usage"
-    /// Note: Tool names are registered natively with the LLM provider
+    /// Optimized for Apple Foundation Models with:
+    /// - Concise, imperative instructions (saves tokens)
+    /// - Clear tool triggers with few-shot examples
+    /// - Explicit negative rules to avoid unnecessary tool use
+    /// Community insights: "Instructions in English work best", "Use CAPS for critical rules"
     private func buildSystemPrompt() async -> String {
-        // Instructions should be in English for best results per community insight
+        // Keep prompt concise (~600 chars = ~150 tokens) to maximize context for conversation
         var prompt = """
-        You are Clarissa, a helpful AI assistant.
+        You are Clarissa, an iOS assistant.
 
-        TOOL USAGE GUIDELINES:
-        - When the user asks about weather or temperature, use the weather tool.
-        - When the user wants to create, list, or search calendar events, use the calendar tool.
-        - When the user asks to find or look up a contact, use the contacts tool.
-        - When the user wants to create or list reminders/tasks, use the reminders tool.
-        - When the user asks for their location or "where am I", use the location tool.
-        - When the user needs to calculate or do math, use the calculator tool.
-        - When the user wants to fetch or read a webpage/URL, use the web_fetch tool.
-        - When the user asks you to remember something, use the remember tool.
+        ALWAYS USE TOOLS FOR:
+        - Weather/temperature -> weather tool
+        - Math/tip/percent -> calculator tool
+        - Schedule/meeting/event -> calendar tool
+        - Task/reminder/to-do -> reminders tool
+        - Phone/email/contact -> contacts tool
+        - "Where am I" -> location tool
+        - "Remember that..." -> remember tool
 
-        RESPONSE GUIDELINES:
-        - Always explain what you're doing and provide clear, helpful responses.
-        - If a tool fails, explain the error and suggest alternatives if possible.
-        - Be concise but thorough. Format your responses for mobile display.
-        - For non-tool questions, respond directly without using tools.
+        DO NOT USE TOOLS FOR:
+        - General knowledge questions
+        - Opinions or advice
+        - Greetings or chat
+
+        EXAMPLES:
+        "Weather?" -> weather (no params = current location)
+        "Weather in Paris" -> weather(location="Paris")
+        "What's 20% of 85?" -> calculator(expression="85 * 0.20")
+        "Meeting tomorrow 2pm" -> calendar(action=create, title, startDate)
+        "Remind me to call Bob" -> reminders(action=create, title="Call Bob")
+
+        RESPONSE RULES:
+        - Be brief (1-2 sentences)
+        - State result, not process
+        - If tool fails, explain and suggest alternative
         """
 
         // Add memories if any (sanitized in MemoryManager)
         if let memoriesPrompt = await MemoryManager.shared.getForPrompt() {
-            prompt += "\n\n\(memoriesPrompt)"
+            prompt += "\n\nCONTEXT:\n\(memoriesPrompt)"
         }
 
         return prompt
@@ -216,21 +233,34 @@ final class Agent: ObservableObject {
         trimHistoryIfNeeded()
 
         // Get available tools (limited by provider capability)
+        // For providers that handle tools natively (e.g., Foundation Models),
+        // we still pass tool definitions but they're used by the session internally
         let tools = toolRegistry.getDefinitionsLimited(provider.maxTools)
-        
+
+        // Check if provider handles tools natively (e.g., Apple Foundation Models)
+        // Native providers execute tools within the LLM session - no manual execution needed
+        let nativeToolHandling = provider.handlesToolsNatively
+        if nativeToolHandling {
+            ClarissaLogger.agent.info("Using native tool handling (tools executed within LLM session)")
+        }
+
         // ReAct loop
+        // For native tool providers, this typically completes in one iteration
+        // since tools are executed internally by the LLM session
         for _ in 0..<config.maxIterations {
             callbacks?.onThinking()
-            
+
             // Get LLM response with streaming
             var fullContent = ""
             var toolCalls: [ToolCall] = []
-            
+
             for try await chunk in provider.streamComplete(messages: messages, tools: tools) {
                 // Check for task cancellation during streaming
                 try Task.checkCancellation()
 
-                if let content = chunk.content {
+                if let content = chunk.content, content != "null" {
+                    // Filter out literal "null" string which models sometimes output
+                    // when confused about tool calling
                     fullContent += content
                     callbacks?.onStreamChunk(chunk: content)
                 }
@@ -238,15 +268,23 @@ final class Agent: ObservableObject {
                     toolCalls = calls
                 }
             }
-            
+
             // Create assistant message
             let assistantMessage = Message.assistant(
                 fullContent,
                 toolCalls: toolCalls.isEmpty ? nil : toolCalls
             )
             messages.append(assistantMessage)
-            
-            // Check for tool calls
+
+            // For providers with native tool handling, skip manual tool execution
+            // The LLM session has already executed tools and incorporated results
+            if nativeToolHandling {
+                ClarissaLogger.agent.info("Agent run completed (native tool handling)")
+                callbacks?.onResponse(content: fullContent)
+                return fullContent
+            }
+
+            // Check for tool calls (only for non-native providers like OpenRouter)
             if !toolCalls.isEmpty {
                 for toolCall in toolCalls {
                     callbacks?.onToolCall(name: toolCall.name, arguments: toolCall.arguments)
@@ -261,7 +299,9 @@ final class Agent: ObservableObject {
                         ClarissaLogger.tools.info("Tool \(toolCall.name, privacy: .public) completed successfully")
                     } catch {
                         ClarissaLogger.tools.error("Tool \(toolCall.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-                        let errorResult = Self.encodeErrorJSON(error.localizedDescription)
+                        // Include a recovery suggestion to help the model provide useful feedback
+                        let suggestion = Self.getSuggestion(for: toolCall.name, error: error)
+                        let errorResult = Self.encodeErrorJSON(error.localizedDescription, suggestion: suggestion)
                         let toolMessage = Message.tool(callId: toolCall.id, name: toolCall.name, content: errorResult)
                         messages.append(toolMessage)
                         callbacks?.onToolResult(name: toolCall.name, result: errorResult, success: false)
@@ -281,10 +321,22 @@ final class Agent: ObservableObject {
     }
     
     /// Reset conversation (keep system prompt)
+    /// Note: This only clears local message history. Call resetForNewConversation()
+    /// to also reset the LLM provider session.
     func reset() {
         let systemMessage = messages.first { $0.role == .system }
         messages = systemMessage.map { [$0] } ?? []
         trimmedCount = 0
+    }
+
+    /// Reset for a completely new conversation
+    /// This clears both local message history AND the LLM provider's session
+    /// to prevent context bleeding between conversations
+    func resetForNewConversation() async {
+        reset()
+        // Also reset the provider session to clear any cached transcript
+        await provider?.resetSession()
+        ClarissaLogger.agent.info("Agent reset for new conversation (including provider session)")
     }
     
     /// Get conversation history
@@ -344,15 +396,69 @@ final class Agent: ObservableObject {
     // MARK: - JSON Helpers
 
     /// Encode an error message as JSON using proper serialization
+    /// Includes a suggestion for recovery when possible
     /// This avoids issues with special characters that would break string interpolation
-    private static func encodeErrorJSON(_ message: String) -> String {
-        let errorDict: [String: Any] = ["error": message]
+    private static func encodeErrorJSON(_ message: String, suggestion: String? = nil) -> String {
+        var errorDict: [String: Any] = ["error": message]
+        if let suggestion = suggestion {
+            errorDict["suggestion"] = suggestion
+        }
         if let data = try? JSONSerialization.data(withJSONObject: errorDict),
            let jsonString = String(data: data, encoding: .utf8) {
             return jsonString
         }
         // Fallback with escaped message if serialization fails
         return "{\"error\": \"Tool execution failed\"}"
+    }
+
+    /// Get a recovery suggestion for a tool error
+    /// Provides context-aware suggestions based on the tool name and error
+    private static func getSuggestion(for toolName: String, error: Error) -> String? {
+        let errorMessage = error.localizedDescription.lowercased()
+
+        switch toolName {
+        case "weather":
+            if errorMessage.contains("location") || errorMessage.contains("denied") {
+                return "Try specifying a city name like 'weather in San Francisco'"
+            }
+            if errorMessage.contains("timeout") {
+                return "Location request timed out. Please try again or specify a city name."
+            }
+        case "calendar":
+            if errorMessage.contains("access") || errorMessage.contains("denied") {
+                return "Calendar access is required. Please enable it in Settings > Privacy > Calendars."
+            }
+            if errorMessage.contains("title") {
+                return "Please specify what event you'd like to create."
+            }
+        case "contacts":
+            if errorMessage.contains("access") || errorMessage.contains("denied") {
+                return "Contacts access is required. Please enable it in Settings > Privacy > Contacts."
+            }
+        case "reminders":
+            if errorMessage.contains("access") || errorMessage.contains("denied") {
+                return "Reminders access is required. Please enable it in Settings > Privacy > Reminders."
+            }
+        case "location":
+            if errorMessage.contains("denied") || errorMessage.contains("authorization") {
+                return "Location access is required. Please enable it in Settings > Privacy > Location Services."
+            }
+        case "web_fetch":
+            if errorMessage.contains("invalid") || errorMessage.contains("url") {
+                return "Please provide a valid URL starting with http:// or https://"
+            }
+            if errorMessage.contains("timeout") || errorMessage.contains("network") {
+                return "Network error. Please check your connection and try again."
+            }
+        case "calculator":
+            if errorMessage.contains("expression") || errorMessage.contains("invalid") {
+                return "Please check the math expression format. Example: '100 * 0.15' for 15% of 100."
+            }
+        default:
+            break
+        }
+
+        return nil
     }
 }
 

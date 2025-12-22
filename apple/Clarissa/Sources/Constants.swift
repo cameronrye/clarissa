@@ -65,11 +65,25 @@ enum ClarissaConstants {
     /// Note: The 4,096 token limit is for input + output combined, not separate
     static let foundationModelsContextWindow = 4096
 
-    /// Reserve tokens for system instructions
-    static let tokenSystemReserve = 300
+    /// Reserve tokens for system instructions (increased for few-shot examples)
+    static let tokenSystemReserve = 500
+
+    /// Reserve tokens for tool schemas (~100 per tool with @Generable)
+    static let tokenToolSchemaReserve = 400
 
     /// Reserve tokens for the expected response
-    static let tokenResponseReserve = 1500
+    static let tokenResponseReserve = 1200
+
+    // MARK: - Foundation Models Generation Options
+
+    /// Temperature for Foundation Models (0.0-1.0)
+    /// Lower = more focused/deterministic, Higher = more creative/random
+    /// 0.4 is good for tool-calling tasks that need consistency
+    static let foundationModelsTemperature: Double = 0.4
+
+    /// Maximum response tokens for Foundation Models
+    /// Keeps responses concise for mobile UI while leaving room for tool results
+    static let foundationModelsMaxResponseTokens: Int = 400
 
     // MARK: - Session Count Badge
 

@@ -245,6 +245,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             if await provider.isAvailable {
                 agent.setProvider(provider)
                 currentProvider = provider.name
+                // Prewarm the actual session with tools for faster first response
+                provider.prewarm(with: "Help me")
                 return
             }
         }
@@ -370,13 +372,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Clear UI state immediately
         messages.removeAll()
-        agent.reset()
         streamingContent = ""
         errorMessage = nil
-        updateContextStats()
 
-        // Create new session in background (actor ensures thread safety)
+        // Reset agent AND provider session to prevent context bleeding
+        // This is critical for Foundation Models which cache the LanguageModelSession
         Task {
+            await agent.resetForNewConversation()
+            await MainActor.run {
+                updateContextStats()
+            }
             _ = await SessionManager.shared.startNewSession()
         }
     }
@@ -422,7 +427,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         if let session = await SessionManager.shared.switchToSession(id: id) {
             messages.removeAll()
-            agent.reset()
+            // Reset provider session to clear cached context from previous conversation
+            await agent.resetForNewConversation()
 
             // Load messages from session
             for message in session.messages {

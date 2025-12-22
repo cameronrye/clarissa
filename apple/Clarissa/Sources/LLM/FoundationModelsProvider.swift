@@ -15,6 +15,10 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Maximum tools per session (Guide recommends 3-5 max) - nonisolated for Sendable
     nonisolated let maxTools = maxToolsForFoundationModels
 
+    /// Foundation Models handles tools natively within the LanguageModelSession
+    /// Tools are executed automatically and results are incorporated into the response
+    nonisolated let handlesToolsNatively = true
+
     #if canImport(FoundationModels)
     private var session: LanguageModelSession?
     private var currentInstructions: String?
@@ -22,6 +26,10 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
 
     /// Access to the tool registry for native tool calling
     private let toolRegistry: ToolRegistry
+
+    /// Track which tools were used to create the current session
+    /// Session is invalidated if this changes (e.g., user enables/disables tools)
+    private var currentToolSet: Set<String>?
 
     /// Prevents concurrent respond() calls which cause crashes
     /// Community insight: "Don't call respond(to:) on a session again before it returns - this causes a crash"
@@ -89,8 +97,14 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
             return LanguageModelSession(instructions: instructions)
         }
 
-        // Reuse existing session if instructions haven't changed (for main chat with tools)
-        if let existingSession = session, currentInstructions == instructionsText {
+        // Get current enabled tools to check if session needs refresh
+        let enabledToolNames = Set(ToolSettings.shared.enabledToolNames)
+
+        // Reuse existing session if instructions AND tools haven't changed
+        // Session must be invalidated if user enables/disables tools in settings
+        if let existingSession = session,
+           currentInstructions == instructionsText,
+           currentToolSet == enabledToolNames {
             return existingSession
         }
 
@@ -108,6 +122,7 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
 
         session = newSession
         currentInstructions = instructionsText
+        currentToolSet = enabledToolNames
         return newSession
     }
 
@@ -177,12 +192,20 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
                     // Create Prompt struct as per the guide
                     let prompt = Prompt(promptText)
 
+                    // Configure generation options for more focused responses
+                    // Lower temperature = more deterministic, better for tool selection
+                    // Limited response tokens = concise responses for mobile UI
+                    let options = GenerationOptions(
+                        temperature: ClarissaConstants.foundationModelsTemperature,
+                        maximumResponseTokens: ClarissaConstants.foundationModelsMaxResponseTokens
+                    )
+
                     // Check for cancellation before starting stream
                     try Task.checkCancellation()
 
-                    // Stream response using correct API: streamResponse(to: Prompt)
+                    // Stream response using correct API: streamResponse(to: Prompt, options:)
                     // The stream yields ResponseStream.Snapshot with .content property
-                    let stream = session.streamResponse(to: prompt)
+                    let stream = session.streamResponse(to: prompt, options: options)
                     var lastContent = ""
 
                     for try await snapshot in stream {
@@ -190,7 +213,12 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
                         try Task.checkCancellation()
 
                         // Snapshot contains accumulated content - compute delta
-                        let currentContent = snapshot.content
+                        // Filter out the literal "null" string which the model sometimes outputs
+                        // when confused about tool calling (known Apple Intelligence quirk)
+                        var currentContent = snapshot.content
+                        if currentContent == "null" {
+                            currentContent = ""
+                        }
                         if currentContent.count > lastContent.count {
                             let delta = String(currentContent.dropFirst(lastContent.count))
                             continuation.yield(StreamChunk(
@@ -274,10 +302,13 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
     }
 
     /// Reset the session for a new conversation
-    func resetSession() {
+    /// Clears the cached LanguageModelSession to prevent context bleeding between conversations
+    func resetSession() async {
         #if canImport(FoundationModels)
         session = nil
         currentInstructions = nil
+        currentToolSet = nil
+        ClarissaLogger.provider.info("Foundation Models session reset for new conversation")
         #endif
     }
 }

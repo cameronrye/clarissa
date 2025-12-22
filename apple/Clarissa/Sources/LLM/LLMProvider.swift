@@ -82,24 +82,41 @@ struct ToolDefinition: Sendable {
 protocol LLMProvider: Sendable {
     /// Provider name for display
     var name: String { get }
-    
+
     /// Check if the provider is available
     var isAvailable: Bool { get async }
-    
+
     /// Maximum number of tools this provider can handle effectively
     var maxTools: Int { get }
-    
+
+    /// Whether tools are handled natively by the provider
+    /// When true, the provider executes tools internally and returns final results
+    /// When false, the caller must execute tools and continue the conversation
+    var handlesToolsNatively: Bool { get }
+
     /// Stream a completion from the LLM
     func streamComplete(
         messages: [Message],
         tools: [ToolDefinition]
     ) -> AsyncThrowingStream<StreamChunk, Error>
-    
+
     /// Non-streaming completion (convenience)
     func complete(
         messages: [Message],
         tools: [ToolDefinition]
     ) async throws -> Message
+
+    /// Reset the session state for a new conversation
+    /// This clears any cached context/transcript to prevent context bleeding
+    func resetSession() async
+}
+
+/// Default implementations
+extension LLMProvider {
+    var handlesToolsNatively: Bool { false }
+
+    /// Default implementation does nothing (stateless providers don't need reset)
+    func resetSession() async {}
 }
 
 /// Default implementation for non-streaming

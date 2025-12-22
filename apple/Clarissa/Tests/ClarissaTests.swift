@@ -756,19 +756,22 @@ struct TokenBudgetTests {
 
     @Test("System reserve is reasonable size")
     func testSystemReserve() {
-        #expect(TokenBudget.systemReserve == 300)
+        // System reserve increased to 500 for few-shot examples in system prompt
+        #expect(TokenBudget.systemReserve == 500)
         #expect(TokenBudget.systemReserve < TokenBudget.totalContextWindow)
     }
 
     @Test("Response reserve is reasonable size")
     func testResponseReserve() {
-        #expect(TokenBudget.responseReserve == 1500)
+        // Response reserve adjusted to 1200 to balance token budget
+        #expect(TokenBudget.responseReserve == 1200)
         #expect(TokenBudget.responseReserve < TokenBudget.totalContextWindow)
     }
 
     @Test("Max history tokens calculated correctly")
     func testMaxHistoryTokens() {
-        let expected = TokenBudget.totalContextWindow - TokenBudget.systemReserve - TokenBudget.responseReserve
+        // Now includes tool schema reserve (400 tokens for @Generable schemas)
+        let expected = TokenBudget.totalContextWindow - TokenBudget.systemReserve - TokenBudget.toolSchemaReserve - TokenBudget.responseReserve
         #expect(TokenBudget.maxHistoryTokens == expected)
         #expect(TokenBudget.maxHistoryTokens > 0)
     }

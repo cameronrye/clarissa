@@ -5,7 +5,7 @@ enum ToolPriority: Int, Comparable {
     case core = 1      // Essential tools always included
     case important = 2 // Commonly used tools
     case extended = 3  // Specialized tools
-    
+
     static func < (lhs: ToolPriority, rhs: ToolPriority) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
@@ -42,6 +42,41 @@ extension ClarissaTool {
             description: description,
             parameters: parametersSchema
         )
+    }
+}
+
+// MARK: - Typed Arguments Support
+
+/// Protocol for typed tool arguments that can be parsed from JSON or constructed directly
+/// This enables direct argument passing from Apple Foundation Models without JSON round-trips
+protocol TypedToolArguments: Codable, Sendable {
+    /// Create arguments from a JSON string (for OpenRouter/manual tool calls)
+    init(jsonString: String) throws
+}
+
+extension TypedToolArguments {
+    init(jsonString: String) throws {
+        guard let data = jsonString.data(using: .utf8) else {
+            throw ToolError.invalidArguments("Invalid JSON encoding")
+        }
+        self = try JSONDecoder().decode(Self.self, from: data)
+    }
+}
+
+/// Extended protocol for tools that support typed arguments
+/// Tools conforming to this can receive arguments directly without JSON serialization
+protocol TypedClarissaTool: ClarissaTool {
+    associatedtype Arguments: TypedToolArguments
+
+    /// Execute with typed arguments (preferred for Apple Foundation Models)
+    func execute(typedArguments: Arguments) async throws -> String
+}
+
+/// Default implementation bridges typed execution to JSON-based execution
+extension TypedClarissaTool {
+    func execute(arguments: String) async throws -> String {
+        let typedArgs = try Arguments(jsonString: arguments)
+        return try await execute(typedArguments: typedArgs)
     }
 }
 

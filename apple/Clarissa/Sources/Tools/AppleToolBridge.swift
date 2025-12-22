@@ -28,27 +28,36 @@ private func logToolResult(_ name: String, _ result: String) {
 
 // MARK: - Weather Tool
 
+/// Typed arguments for weather tool - Codable for efficient serialization
+struct WeatherToolArgs: Codable, Sendable {
+    var location: String?
+    var latitude: Double?
+    var longitude: Double?
+    var forecast: Bool?
+}
+
 /// Apple Foundation Models Tool for weather information
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleWeatherTool: Tool {
     let name = "weather"
-    let description = "Get current weather and forecast for a location. Can use location name or coordinates."
+    // Enhanced description with specific triggers for better model selection
+    let description = "Get current weather and forecast. TRIGGERS: 'weather', 'temperature', 'hot', 'cold', 'rain', 'sunny', 'forecast'. No params = current location. Returns: conditions, temp, humidity."
 
     private let underlyingTool: WeatherTool
 
     @Generable(description: "Weather request parameters")
     struct Arguments {
         @Guide(description: "Location name (e.g., 'San Francisco, CA'). If omitted, uses current location.")
-        let location: String?
+        var location: String?
 
         @Guide(description: "Latitude coordinate for precise location")
-        let latitude: Double?
+        var latitude: Double?
 
         @Guide(description: "Longitude coordinate for precise location")
-        let longitude: Double?
+        var longitude: Double?
 
         @Guide(description: "Include 5-day forecast in the response")
-        let forecast: Bool?
+        var forecast: Bool?
     }
 
     init(wrapping tool: WeatherTool) {
@@ -57,33 +66,46 @@ struct AppleWeatherTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        var dict: [String: Any] = [:]
-        if let v = arguments.location { dict["location"] = v }
-        if let v = arguments.latitude { dict["latitude"] = v }
-        if let v = arguments.longitude { dict["longitude"] = v }
-        if let v = arguments.forecast { dict["forecast"] = v }
-
-        let jsonString = dict.toJSONString()
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        // Direct conversion without JSON round-trip
+        let typedArgs = WeatherToolArgs(
+            location: arguments.location,
+            latitude: arguments.latitude,
+            longitude: arguments.longitude,
+            forecast: arguments.forecast
+        )
+        let result = try await executeWithTypedArgs(typedArgs)
         logToolResult(name, result)
         return result
+    }
+
+    /// Execute with typed arguments using Codable serialization
+    private func executeWithTypedArgs(_ args: WeatherToolArgs) async throws -> String {
+        let jsonData = try JSONEncoder().encode(args)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        return try await underlyingTool.execute(arguments: jsonString)
     }
 }
 
 // MARK: - Calculator Tool
 
+/// Typed arguments for calculator tool
+struct CalculatorToolArgs: Codable, Sendable {
+    var expression: String
+}
+
 /// Apple Foundation Models Tool for mathematical calculations
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleCalculatorTool: Tool {
     let name = "calculator"
-    let description = "Evaluate mathematical expressions. Supports arithmetic, exponents, parentheses, and functions (sqrt, sin, cos, tan, log, abs, floor, ceil, round, pow) and constants (PI, E)."
+    // Enhanced description with specific triggers and examples
+    let description = "Compute math expressions. TRIGGERS: 'calculate', 'what is X+Y', 'percent', 'tip', 'convert', 'how much'. Example: '47.50 * 0.18' for 18% tip. Returns: numeric result."
 
     private let underlyingTool: CalculatorTool
 
     @Generable(description: "Calculator input")
     struct Arguments {
         @Guide(description: "The mathematical expression to evaluate (e.g., '2 + 2', 'sqrt(16)', 'sin(PI/2)')")
-        let expression: String
+        var expression: String
     }
 
     init(wrapping tool: CalculatorTool) {
@@ -92,8 +114,9 @@ struct AppleCalculatorTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        let dict: [String: Any] = ["expression": arguments.expression]
-        let jsonString = dict.toJSONString()
+        let typedArgs = CalculatorToolArgs(expression: arguments.expression)
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result
@@ -102,39 +125,52 @@ struct AppleCalculatorTool: Tool {
 
 // MARK: - Calendar Tool
 
+/// Typed arguments for calendar tool
+struct CalendarToolArgs: Codable, Sendable {
+    var action: String
+    var title: String?
+    var startDate: String?
+    var endDate: String?
+    var location: String?
+    var notes: String?
+    var daysAhead: Int?
+    var query: String?
+}
+
 /// Apple Foundation Models Tool for calendar operations
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleCalendarTool: Tool {
     let name = "calendar"
-    let description = "Create, list, and search calendar events."
+    // Enhanced description with specific triggers
+    let description = "Create or list calendar events. TRIGGERS: 'schedule', 'meeting', 'appointment', 'calendar', 'what's on'. Actions: create (title+startDate required), list (daysAhead), search (query)."
 
     private let underlyingTool: CalendarTool
 
     @Generable(description: "Calendar operation parameters")
     struct Arguments {
         @Guide(description: "Action to perform: 'create', 'list', or 'search'")
-        let action: String
+        var action: String
 
         @Guide(description: "Event title (required for create)")
-        let title: String?
+        var title: String?
 
         @Guide(description: "Start date/time in ISO 8601 format (e.g., '2024-01-15T10:00:00')")
-        let startDate: String?
+        var startDate: String?
 
         @Guide(description: "End date/time in ISO 8601 format")
-        let endDate: String?
+        var endDate: String?
 
         @Guide(description: "Event location")
-        let location: String?
+        var location: String?
 
         @Guide(description: "Event notes or description")
-        let notes: String?
+        var notes: String?
 
         @Guide(description: "Days ahead to list events (default: 7)")
-        let daysAhead: Int?
+        var daysAhead: Int?
 
         @Guide(description: "Search query for finding events")
-        let query: String?
+        var query: String?
     }
 
     init(wrapping tool: CalendarTool) {
@@ -143,16 +179,18 @@ struct AppleCalendarTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        var dict: [String: Any] = ["action": arguments.action]
-        if let v = arguments.title { dict["title"] = v }
-        if let v = arguments.startDate { dict["startDate"] = v }
-        if let v = arguments.endDate { dict["endDate"] = v }
-        if let v = arguments.location { dict["location"] = v }
-        if let v = arguments.notes { dict["notes"] = v }
-        if let v = arguments.daysAhead { dict["daysAhead"] = v }
-        if let v = arguments.query { dict["query"] = v }
-
-        let jsonString = dict.toJSONString()
+        let typedArgs = CalendarToolArgs(
+            action: arguments.action,
+            title: arguments.title,
+            startDate: arguments.startDate,
+            endDate: arguments.endDate,
+            location: arguments.location,
+            notes: arguments.notes,
+            daysAhead: arguments.daysAhead,
+            query: arguments.query
+        )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result
@@ -161,27 +199,36 @@ struct AppleCalendarTool: Tool {
 
 // MARK: - Contacts Tool
 
+/// Typed arguments for contacts tool
+struct ContactsToolArgs: Codable, Sendable {
+    var action: String
+    var query: String?
+    var contactId: String?
+    var limit: Int?
+}
+
 /// Apple Foundation Models Tool for contacts operations
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleContactsTool: Tool {
     let name = "contacts"
-    let description = "Search and retrieve contact information."
+    // Enhanced description with specific triggers
+    let description = "Look up contact information. TRIGGERS: 'phone number', 'email', 'contact', 'call', 'text', 'message'. Actions: search (query by name). Returns: name, phone, email."
 
     private let underlyingTool: ContactsTool
 
     @Generable(description: "Contacts operation parameters")
     struct Arguments {
         @Guide(description: "Action to perform: 'search' or 'get'")
-        let action: String
+        var action: String
 
         @Guide(description: "Search query - name, phone, or email")
-        let query: String?
+        var query: String?
 
         @Guide(description: "Contact identifier (for get action)")
-        let contactId: String?
+        var contactId: String?
 
         @Guide(description: "Maximum number of results to return (default: 10)")
-        let limit: Int?
+        var limit: Int?
     }
 
     init(wrapping tool: ContactsTool) {
@@ -190,12 +237,14 @@ struct AppleContactsTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        var dict: [String: Any] = ["action": arguments.action]
-        if let v = arguments.query { dict["query"] = v }
-        if let v = arguments.contactId { dict["contactId"] = v }
-        if let v = arguments.limit { dict["limit"] = v }
-
-        let jsonString = dict.toJSONString()
+        let typedArgs = ContactsToolArgs(
+            action: arguments.action,
+            query: arguments.query,
+            contactId: arguments.contactId,
+            limit: arguments.limit
+        )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result
@@ -205,36 +254,48 @@ struct AppleContactsTool: Tool {
 
 // MARK: - Reminders Tool
 
+/// Typed arguments for reminders tool
+struct RemindersToolArgs: Codable, Sendable {
+    var action: String
+    var title: String?
+    var notes: String?
+    var dueDate: String?
+    var priority: Int?
+    var reminderId: String?
+    var listName: String?
+}
+
 /// Apple Foundation Models Tool for reminders operations
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleRemindersTool: Tool {
     let name = "reminders"
-    let description = "Create, list, and complete reminders."
+    // Enhanced description with specific triggers
+    let description = "Create or list reminders/tasks. TRIGGERS: 'remind me', 'reminder', 'task', 'to-do', 'don't forget'. Actions: create (title required), list, complete. Returns: reminder details."
 
     private let underlyingTool: RemindersTool
 
     @Generable(description: "Reminders operation parameters")
     struct Arguments {
         @Guide(description: "Action to perform: 'list', 'create', or 'complete'")
-        let action: String
+        var action: String
 
         @Guide(description: "Title for new reminder (required for create)")
-        let title: String?
+        var title: String?
 
         @Guide(description: "Notes for the reminder")
-        let notes: String?
+        var notes: String?
 
         @Guide(description: "Due date in ISO8601 format (e.g., '2024-01-15T10:00:00')")
-        let dueDate: String?
+        var dueDate: String?
 
         @Guide(description: "Priority: 0=none, 1=high, 5=medium, 9=low")
-        let priority: Int?
+        var priority: Int?
 
         @Guide(description: "Reminder ID (required for complete action)")
-        let reminderId: String?
+        var reminderId: String?
 
         @Guide(description: "Name of reminder list to use")
-        let listName: String?
+        var listName: String?
     }
 
     init(wrapping tool: RemindersTool) {
@@ -243,15 +304,17 @@ struct AppleRemindersTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        var dict: [String: Any] = ["action": arguments.action]
-        if let v = arguments.title { dict["title"] = v }
-        if let v = arguments.notes { dict["notes"] = v }
-        if let v = arguments.dueDate { dict["dueDate"] = v }
-        if let v = arguments.priority { dict["priority"] = v }
-        if let v = arguments.reminderId { dict["reminderId"] = v }
-        if let v = arguments.listName { dict["listName"] = v }
-
-        let jsonString = dict.toJSONString()
+        let typedArgs = RemindersToolArgs(
+            action: arguments.action,
+            title: arguments.title,
+            notes: arguments.notes,
+            dueDate: arguments.dueDate,
+            priority: arguments.priority,
+            reminderId: arguments.reminderId,
+            listName: arguments.listName
+        )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result
@@ -260,18 +323,24 @@ struct AppleRemindersTool: Tool {
 
 // MARK: - Location Tool
 
+/// Typed arguments for location tool
+struct LocationToolArgs: Codable, Sendable {
+    var includeAddress: Bool?
+}
+
 /// Apple Foundation Models Tool for location information
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleLocationTool: Tool {
     let name = "location"
-    let description = "Get the user's current location."
+    // Enhanced description with specific triggers
+    let description = "Get current device location. TRIGGERS: 'where am I', 'my location', 'current location', 'nearby'. Returns: city, address, coordinates."
 
     private let underlyingTool: LocationTool
 
     @Generable(description: "Location request parameters")
     struct Arguments {
         @Guide(description: "Whether to include address details in the response")
-        let includeAddress: Bool?
+        var includeAddress: Bool?
     }
 
     init(wrapping tool: LocationTool) {
@@ -280,10 +349,9 @@ struct AppleLocationTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        var dict: [String: Any] = [:]
-        if let v = arguments.includeAddress { dict["includeAddress"] = v }
-
-        let jsonString = dict.toJSONString()
+        let typedArgs = LocationToolArgs(includeAddress: arguments.includeAddress)
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result
@@ -292,24 +360,32 @@ struct AppleLocationTool: Tool {
 
 // MARK: - Web Fetch Tool
 
+/// Typed arguments for web fetch tool
+struct WebFetchToolArgs: Codable, Sendable {
+    var url: String
+    var format: String?
+    var maxLength: Int?
+}
+
 /// Apple Foundation Models Tool for fetching web content
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleWebFetchTool: Tool {
     let name = "web_fetch"
-    let description = "Fetch content from a URL. Returns text content extracted from the webpage."
+    // Enhanced description with specific triggers
+    let description = "Fetch and read webpage content. TRIGGERS: URL provided, 'read this page', 'fetch', 'get content from'. Returns: extracted text content from the URL."
 
     private let underlyingTool: WebFetchTool
 
     @Generable(description: "Web fetch parameters")
     struct Arguments {
         @Guide(description: "The URL to fetch content from")
-        let url: String
+        var url: String
 
         @Guide(description: "Response format: 'text', 'json', or 'html' (default: text)")
-        let format: String?
+        var format: String?
 
         @Guide(description: "Maximum content length to return")
-        let maxLength: Int?
+        var maxLength: Int?
     }
 
     init(wrapping tool: WebFetchTool) {
@@ -318,11 +394,13 @@ struct AppleWebFetchTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        var dict: [String: Any] = ["url": arguments.url]
-        if let v = arguments.format { dict["format"] = v }
-        if let v = arguments.maxLength { dict["maxLength"] = v }
-
-        let jsonString = dict.toJSONString()
+        let typedArgs = WebFetchToolArgs(
+            url: arguments.url,
+            format: arguments.format,
+            maxLength: arguments.maxLength
+        )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result
@@ -331,18 +409,24 @@ struct AppleWebFetchTool: Tool {
 
 // MARK: - Remember Tool
 
+/// Typed arguments for remember tool
+struct RememberToolArgs: Codable, Sendable {
+    var content: String
+}
+
 /// Apple Foundation Models Tool for storing memories
 @available(iOS 26.0, macOS 26.0, *)
 struct AppleRememberTool: Tool {
     let name = "remember"
-    let description = "Store important information for future conversations. Use this to remember user preferences, facts, or context."
+    // Enhanced description with specific triggers
+    let description = "Save user preferences for future conversations. TRIGGERS: 'remember that', 'remember I', 'my preference is', 'I like'. Returns: confirmation that info was saved."
 
     private let underlyingTool: RememberTool
 
     @Generable(description: "Memory storage parameters")
     struct Arguments {
         @Guide(description: "The content to remember for future conversations")
-        let content: String
+        var content: String
     }
 
     init(wrapping tool: RememberTool) {
@@ -351,8 +435,9 @@ struct AppleRememberTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        let dict: [String: Any] = ["content": arguments.content]
-        let jsonString = dict.toJSONString()
+        let typedArgs = RememberToolArgs(content: arguments.content)
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let result = try await underlyingTool.execute(arguments: jsonString)
         logToolResult(name, result)
         return result

@@ -112,7 +112,8 @@ final class OpenRouterProvider: LLMProvider, @unchecked Sendable {
                             continue
                         }
 
-                        if let content = delta["content"] as? String {
+                        if let content = delta["content"] as? String, content != "null" {
+                            // Filter out literal "null" string which can occur with some model quirks
                             accumulatedContent += content
                             continuation.yield(StreamChunk(content: content, toolCalls: nil, isComplete: false))
                         }

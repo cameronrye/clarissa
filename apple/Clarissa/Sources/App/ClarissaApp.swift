@@ -143,10 +143,14 @@ struct ClarissaApp: App {
     }
 
     /// Prewarm the Foundation Models session for faster first response
+    /// Note: We prewarm the basic session here at app launch for initial model loading
+    /// The actual chat session with tools will be prewarmed in ChatViewModel when provider is set up
     private static func prewarmFoundationModels() async {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, *) {
             guard SystemLanguageModel.default.availability == .available else { return }
+            // Create and prewarm a basic session to trigger model loading
+            // The actual chat session with tools will be prewarmed in ChatViewModel
             let session = LanguageModelSession()
             session.prewarm()
         }

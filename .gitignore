@@ -46,6 +46,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 *.xcscmblueprint
+build/
 
 # Apple Guides
 APPLE_*
