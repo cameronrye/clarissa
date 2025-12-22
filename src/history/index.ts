@@ -17,11 +17,39 @@ interface HistoryData {
 }
 
 /**
+ * Simple async mutex for serializing file operations
+ */
+class AsyncMutex {
+  private queue: (() => void)[] = [];
+  private locked = false;
+
+  async acquire(): Promise<void> {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(resolve);
+    });
+  }
+
+  release(): void {
+    const next = this.queue.shift();
+    if (next) {
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
+
+/**
  * History manager for persisting one-shot queries
  */
 class HistoryManager {
   private entries: HistoryEntry[] = [];
   private loaded = false;
+  private mutex = new AsyncMutex();
 
   /**
    * Load history from disk
@@ -52,26 +80,31 @@ class HistoryManager {
   }
 
   /**
-   * Add a new history entry
+   * Add a new history entry (thread-safe)
    */
   async add(query: string, response: string, model: string): Promise<void> {
-    await this.load();
+    await this.mutex.acquire();
+    try {
+      await this.load();
 
-    const entry: HistoryEntry = {
-      query: query.trim(),
-      response: response.trim(),
-      model,
-      timestamp: new Date().toISOString(),
-    };
+      const entry: HistoryEntry = {
+        query: query.trim(),
+        response: response.trim(),
+        model,
+        timestamp: new Date().toISOString(),
+      };
 
-    this.entries.unshift(entry);
+      this.entries.unshift(entry);
 
-    // Keep only the most recent entries
-    if (this.entries.length > MAX_HISTORY_ENTRIES) {
-      this.entries = this.entries.slice(0, MAX_HISTORY_ENTRIES);
+      // Keep only the most recent entries
+      if (this.entries.length > MAX_HISTORY_ENTRIES) {
+        this.entries = this.entries.slice(0, MAX_HISTORY_ENTRIES);
+      }
+
+      await this.save();
+    } finally {
+      this.mutex.release();
     }
-
-    await this.save();
   }
 
   /**
@@ -91,11 +124,16 @@ class HistoryManager {
   }
 
   /**
-   * Clear all history
+   * Clear all history (thread-safe)
    */
   async clear(): Promise<void> {
-    this.entries = [];
-    await this.save();
+    await this.mutex.acquire();
+    try {
+      this.entries = [];
+      await this.save();
+    } finally {
+      this.mutex.release();
+    }
   }
 }
 

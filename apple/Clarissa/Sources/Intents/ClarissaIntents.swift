@@ -61,6 +61,7 @@ struct AskClarissaIntent: AppIntent {
         // If there's a question, set it as pending for the ChatView to process
         if !question.isEmpty {
             appState.pendingShortcutQuestion = question
+            appState.pendingQuestionSource = .siriShortcut
         }
 
         return .result(

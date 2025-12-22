@@ -67,6 +67,7 @@ Examples:
   ${NAME} "What is 2+2?"       Ask a quick question
   ${NAME} -m gpt-4o "Hello"    Use a specific model
   echo "Hello" | ${NAME}       Pipe input to ${NAME}
+  ${NAME} app "What's today?"  Ask via macOS app (Apple Intelligence)
 
 Interactive Commands:
   /help       Show available commands
@@ -463,6 +464,51 @@ async function runUseModel(modelFile: string) {
   }
 }
 
+/**
+ * Open the native Clarissa macOS app with an optional question
+ * Uses the clarissa:// URL scheme for integration
+ */
+async function openNativeApp(question?: string) {
+  const platform = process.platform;
+
+  if (platform !== "darwin") {
+    console.error("Error: The 'app' command is only available on macOS.");
+    console.log("\nThe native Clarissa app uses Apple Intelligence which requires macOS.");
+    process.exit(1);
+  }
+
+  let url = "clarissa://";
+
+  if (question && question.trim()) {
+    // URL encode the question and use the ask endpoint
+    const encodedQuestion = encodeURIComponent(question.trim());
+    url = `clarissa://ask?q=${encodedQuestion}`;
+    console.log(`Opening Clarissa app with question: "${question}"`);
+  } else {
+    // Just open the app
+    url = "clarissa://new";
+    console.log("Opening Clarissa app...");
+  }
+
+  try {
+    // Use macOS 'open' command to open the URL scheme
+    const proc = Bun.spawn(["open", url], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    await proc.exited;
+
+    if (proc.exitCode !== 0) {
+      console.error("\nFailed to open Clarissa app. Is it installed?");
+      console.log("Install from: https://apps.apple.com/app/clarissa-ai");
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error("Error opening Clarissa app:", error);
+    process.exit(1);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -545,6 +591,14 @@ async function main() {
         process.exit(1);
       }
       await runUseModel(nextArg);
+      process.exit(0);
+    }
+
+    if (arg === "app") {
+      // Open native macOS app with optional question
+      const remainingArgs = args.slice(i + 1).filter((a) => !a.startsWith("-"));
+      const question = remainingArgs.join(" ");
+      await openNativeApp(question);
       process.exit(0);
     }
 

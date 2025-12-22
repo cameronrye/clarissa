@@ -10,6 +10,8 @@ import {
   ensureModelsDir,
   listDownloadedModels,
   MODELS_DIR,
+  downloadModel,
+  deleteModel,
 } from "./download.ts";
 
 describe("Model Download Utilities", () => {
@@ -136,5 +138,44 @@ describe("Model Download Utilities", () => {
       expect(Array.isArray(models)).toBe(true);
     });
   });
+
+	  describe("downloadModel and deleteModel", () => {
+	    const TEST_MODEL = "test-model-download.gguf";
+
+	    test("downloads a model using injected fetch and writes file", async () => {
+	      const data = "test-model-content";
+	      let fetchCalls = 0;
+
+	      const mockFetch: typeof fetch = async () => {
+	        fetchCalls++;
+	        return new Response(data, {
+	          status: 200,
+	          headers: { "content-length": String(data.length) },
+	        });
+	      };
+
+	      const path = await downloadModel("owner/repo", TEST_MODEL, undefined, mockFetch);
+	      expect(path).toBe(getModelPath(TEST_MODEL));
+
+	      const file = Bun.file(path);
+	      expect(await file.exists()).toBe(true);
+	      expect(await file.text()).toBe(data);
+
+	      // Second call should not re-download if file exists
+	      const path2 = await downloadModel("owner/repo", TEST_MODEL, undefined, mockFetch);
+	      expect(path2).toBe(path);
+	      expect(fetchCalls).toBe(1);
+	    });
+
+	    test("deleteModel removes downloaded file", async () => {
+	      const path = getModelPath(TEST_MODEL);
+	      await Bun.write(path, "to-delete");
+	      expect(await Bun.file(path).exists()).toBe(true);
+
+	      const result = await deleteModel(TEST_MODEL);
+	      expect(result).toBe(true);
+	      expect(await Bun.file(path).exists()).toBe(false);
+	    });
+	  });
 });
 

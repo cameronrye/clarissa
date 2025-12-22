@@ -1,9 +1,29 @@
 import { join } from "path";
 import { homedir } from "os";
 import { mkdir, readdir, rm } from "fs/promises";
+import { z } from "zod";
 import type { Message } from "../llm/types.ts";
 
 const SESSION_DIR = join(homedir(), ".clarissa", "sessions");
+
+/**
+ * Zod schema for validating session data loaded from disk.
+ * This prevents corrupted files from causing runtime errors.
+ */
+const sessionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  messages: z.array(
+    z.object({
+      role: z.enum(["system", "user", "assistant", "tool"]),
+      content: z.string().optional().nullable(),
+      tool_calls: z.array(z.any()).optional(),
+      tool_call_id: z.string().optional(),
+    })
+  ),
+});
 
 export interface Session {
   id: string;
@@ -102,7 +122,16 @@ class SessionManager {
       }
 
       const content = await file.json();
-      this.currentSession = content as Session;
+
+      // Validate session data against schema to prevent corrupted files
+      // from causing runtime errors
+      const result = sessionSchema.safeParse(content);
+      if (!result.success) {
+        console.error(`Invalid session data for ${id}:`, result.error.message);
+        return null;
+      }
+
+      this.currentSession = result.data as Session;
       return this.currentSession;
     } catch {
       return null;

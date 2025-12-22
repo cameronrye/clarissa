@@ -5,17 +5,48 @@ import { defineTool } from "./base.ts";
  * Helper to execute git commands
  */
 async function execGit(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const proc = Bun.spawn(["git", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-    cwd: process.cwd(),
-  });
+  try {
+    const proc = Bun.spawn(["git", ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      cwd: process.cwd(),
+    });
 
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
 
-  return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+    return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+  } catch (error) {
+    let message = "Unknown error";
+    if (error instanceof Error) {
+      const anyErr = error as any;
+      if (anyErr?.code === "ENOENT") {
+        message = "Git executable not found. Please install Git and ensure it is available in your PATH.";
+      } else {
+        message = error.message;
+      }
+    }
+
+    return { stdout: "", stderr: message, exitCode: -1 };
+  }
+}
+
+/**
+ * Lightweight helper to check if the git executable is available.
+ *
+ * Uses `git --version` and inspects the result from execGit. If the
+ * executable is missing, execGit returns exitCode -1 with a clear
+ * "Git executable not found" message.
+ */
+export async function isGitAvailable(): Promise<boolean> {
+  const { exitCode, stderr } = await execGit(["--version"]);
+
+  if (exitCode === -1 && stderr.startsWith("Git executable not found")) {
+    return false;
+  }
+
+  return exitCode === 0;
 }
 
 /**

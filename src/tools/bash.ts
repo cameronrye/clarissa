@@ -63,7 +63,16 @@ export const bashTool = defineTool({
         throw error;
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
+      let message = "Unknown error";
+      if (error instanceof Error) {
+        const anyErr = error as any;
+        if (anyErr?.code === "ENOENT") {
+          message =
+            "Bash executable not found. The 'bash' tool requires 'bash' to be installed and available in your PATH.";
+        } else {
+          message = error.message;
+        }
+      }
       return {
         command,
         exitCode: -1,
@@ -74,4 +83,29 @@ export const bashTool = defineTool({
     }
   },
 });
+
+/**
+ * Lightweight helper to check if the bash executable is available.
+ *
+ * Returns true when `bash` can be spawned, false when the executable is
+ * missing (ENOENT). Other errors are treated as "available" since they
+ * typically indicate runtime issues rather than a missing binary.
+ */
+export async function isBashAvailable(): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["bash", "-c", "echo"], {
+      stdout: "ignore",
+      stderr: "ignore",
+      cwd: process.cwd(),
+    });
+    await proc.exited;
+    return true;
+  } catch (error) {
+    const anyErr = error as any;
+    if (anyErr?.code === "ENOENT") {
+      return false;
+    }
+    return true;
+  }
+}
 

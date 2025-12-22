@@ -76,11 +76,16 @@ function getUserFriendlyError(error: unknown): Error {
   return error;
 }
 
-// Type for streaming chunk from OpenRouter SDK
+/**
+ * Type for streaming chunk from OpenRouter SDK.
+ * The SDK's AsyncIterable yields chunks with this structure.
+ * We define this explicitly rather than relying on SDK types to handle
+ * potential version mismatches gracefully.
+ */
 interface SDKStreamChunk {
-  id: string;
-  choices: Array<{
-    delta: {
+  id?: string;
+  choices?: Array<{
+    delta?: {
       role?: string;
       content?: string | null;
       toolCalls?: Array<{
@@ -89,9 +94,25 @@ interface SDKStreamChunk {
         function?: { name?: string; arguments?: string };
       }>;
     };
-    finishReason: string | null;
-    index: number;
+    finishReason?: string | null;
+    index?: number;
   }>;
+}
+
+/**
+ * Type guard to safely extract stream chunk data.
+ * Returns the chunk if it matches expected structure, undefined otherwise.
+ */
+function parseStreamChunk(rawChunk: unknown): SDKStreamChunk | undefined {
+  if (typeof rawChunk !== "object" || rawChunk === null) {
+    return undefined;
+  }
+  // The SDK returns objects with choices array - validate basic structure
+  const chunk = rawChunk as Record<string, unknown>;
+  if (!Array.isArray(chunk.choices)) {
+    return undefined;
+  }
+  return rawChunk as SDKStreamChunk;
 }
 
 function transformMessagesForSDK(
@@ -206,7 +227,9 @@ export class OpenRouterProvider implements LLMProvider {
     const toolCallsMap = new Map<number, { id: string; type: "function"; function: { name: string; arguments: string } }>();
 
     for await (const rawChunk of stream) {
-      const chunk = rawChunk as unknown as SDKStreamChunk;
+      const chunk = parseStreamChunk(rawChunk);
+      if (!chunk) continue;
+
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) continue;
 

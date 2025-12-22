@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "./base.ts";
-import { resolve, relative } from "path";
+import { getSecurePaths } from "./security.ts";
 
 /**
  * Read file tool - view files with line numbers and optional range
@@ -20,19 +20,16 @@ export const readFileTool = defineTool({
     endLine: z
       .number()
       .int()
-      .positive()
+      .refine((n) => n === -1 || n > 0, {
+        message: "endLine must be a positive integer or -1 for end of file",
+      })
       .optional()
       .describe("Ending line number (1-based, inclusive). Use -1 for end of file"),
   }),
   execute: async ({ path, startLine, endLine }) => {
     try {
-      const absolutePath = resolve(process.cwd(), path);
-      const relativePath = relative(process.cwd(), absolutePath);
-
-      // Security check - don't allow reading outside cwd
-      if (relativePath.startsWith("..")) {
-        throw new Error("Cannot read files outside the current directory");
-      }
+      // Security check with canonical path resolution
+      const { absolutePath, relativePath } = getSecurePaths(path);
 
       const file = Bun.file(absolutePath);
       const exists = await file.exists();

@@ -50,7 +50,7 @@ describe("Directory Listing", () => {
 
     test("throws error for path outside cwd", async () => {
       expect(listDirectoryTool.execute({ path: "../../../etc", depth: 2, showHidden: false }))
-        .rejects.toThrow("Cannot list directories outside");
+        .rejects.toThrow("outside the allowed directory");
     });
   });
 });
@@ -130,7 +130,7 @@ describe("File Search", () => {
 
     test("throws error for path outside cwd", async () => {
       expect(searchFilesTool.execute({ pattern: "test", path: "../../../etc", maxResults: 20, caseSensitive: false }))
-        .rejects.toThrow("Cannot search outside");
+        .rejects.toThrow("outside the allowed directory");
     });
   });
 });

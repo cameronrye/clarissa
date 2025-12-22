@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { defineTool } from "./base.ts";
-import { resolve, relative, join } from "path";
+import { join } from "path";
 import { readdir, stat } from "fs/promises";
+import { getSecurePaths } from "./security.ts";
 
 /**
  * List directory tool - tree view with filtering
@@ -32,13 +33,8 @@ export const listDirectoryTool = defineTool({
   }),
   execute: async ({ path = ".", depth = 2, showHidden = false }) => {
     try {
-      const absolutePath = resolve(process.cwd(), path);
-      const relativePath = relative(process.cwd(), absolutePath) || ".";
-
-      // Security check
-      if (relativePath.startsWith("..")) {
-        throw new Error("Cannot list directories outside the current directory");
-      }
+      // Security check with canonical path resolution
+      const { absolutePath, relativePath } = getSecurePaths(path);
 
       const entries: string[] = [];
       const ignoredDirs = new Set(["node_modules", ".git", "dist", "build", ".next", "__pycache__"]);

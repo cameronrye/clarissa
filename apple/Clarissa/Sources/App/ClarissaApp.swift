@@ -62,6 +62,11 @@ struct ClarissaApp: App {
                 // Community insight: "Call prewarm() when you're confident the user will use LLM features"
                 await Self.prewarmFoundationModels()
             }
+            .onOpenURL { url in
+                // Handle URL scheme for CLI integration
+                // Supported: clarissa://ask?q=<question>, clarissa://new, clarissa://memory?action=sync
+                appState.handleURL(url)
+            }
         }
         #if os(macOS)
         .windowStyle(.automatic)

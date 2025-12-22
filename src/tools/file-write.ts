@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { defineTool } from "./base.ts";
-import { resolve, relative, dirname } from "path";
+import { dirname } from "path";
 import { mkdir } from "fs/promises";
+import { getSecurePaths } from "./security.ts";
 
 /**
  * Write file tool - create or overwrite files
@@ -18,13 +19,8 @@ export const writeFileTool = defineTool({
   }),
   execute: async ({ path, content }) => {
     try {
-      const absolutePath = resolve(process.cwd(), path);
-      const relativePath = relative(process.cwd(), absolutePath);
-
-      // Security check - don't allow writing outside cwd
-      if (relativePath.startsWith("..")) {
-        throw new Error("Cannot write files outside the current directory");
-      }
+      // Security check with canonical path resolution
+      const { absolutePath, relativePath } = getSecurePaths(path);
 
       // Create parent directories if needed
       const dir = dirname(absolutePath);

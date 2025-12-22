@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { bashTool } from "./bash.ts";
+import { bashTool, isBashAvailable } from "./bash.ts";
 
 const DEFAULT_TIMEOUT = 30000;
 
@@ -93,5 +93,12 @@ describe("bash tool", () => {
       expect(result.stdout).toBe("hello \"world\"");
     });
   });
+
+	  describe("availability helper", () => {
+	    test("isBashAvailable returns true when bash is present", async () => {
+	      const available = await isBashAvailable();
+	      expect(available).toBe(true);
+	    });
+	  });
 });
 

@@ -56,12 +56,31 @@ describe("File Operations", () => {
 
     test("throws error for path outside cwd", async () => {
       expect(readFileTool.execute({ path: "../../../etc/passwd" }))
-        .rejects.toThrow("Cannot read files outside");
+        .rejects.toThrow("outside the allowed directory");
     });
 
     test("throws error for start line exceeding file length", async () => {
       expect(readFileTool.execute({ path: join(TEST_DIR, "sample.txt"), startLine: 100 }))
         .rejects.toThrow("exceeds file length");
+    });
+
+    test("allows endLine = -1 through parameter schema", () => {
+      const parsed = readFileTool.parameters.parse({
+        path: join(TEST_DIR, "sample.txt"),
+        startLine: 3,
+        endLine: -1,
+      });
+
+      expect(parsed.endLine).toBe(-1);
+    });
+
+    test("rejects invalid endLine values through parameter schema", () => {
+      expect(() =>
+        readFileTool.parameters.parse({
+          path: join(TEST_DIR, "sample.txt"),
+          endLine: 0,
+        }),
+      ).toThrow("endLine must be a positive integer or -1 for end of file");
     });
   });
 
@@ -99,7 +118,7 @@ describe("File Operations", () => {
 
     test("throws error for path outside cwd", async () => {
       expect(writeFileTool.execute({ path: "../../../tmp/test.txt", content: "test" }))
-        .rejects.toThrow("Cannot write files outside");
+        .rejects.toThrow("outside the allowed directory");
     });
   });
 

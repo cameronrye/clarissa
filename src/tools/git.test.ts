@@ -1,11 +1,12 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import {
-  gitStatusTool,
-  gitDiffTool,
-  gitLogTool,
-  gitAddTool,
-  gitBranchTool,
-} from "./git.ts";
+	  gitStatusTool,
+	  gitDiffTool,
+	  gitLogTool,
+	  gitAddTool,
+	  gitBranchTool,
+	  isGitAvailable,
+	} from "./git.ts";
 import { rm, mkdir } from "fs/promises";
 
 const TEST_DIR = "test-git-repo";
@@ -140,5 +141,12 @@ describe("Git Tools", () => {
       expect(branches.output).toContain("feature-branch");
     });
   });
+
+	  describe("availability helper", () => {
+	    test("isGitAvailable returns true when git is present", async () => {
+	      const available = await isGitAvailable();
+	      expect(available).toBe(true);
+	    });
+	  });
 });
 

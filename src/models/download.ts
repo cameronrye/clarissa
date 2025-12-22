@@ -7,7 +7,7 @@
 
 import { join } from "path";
 import { homedir } from "os";
-import { mkdir } from "fs/promises";
+import { mkdir, rename, rm } from "fs/promises";
 
 // Default models directory
 export const MODELS_DIR = join(homedir(), ".clarissa", "models");
@@ -137,7 +137,8 @@ export function getHuggingFaceUrl(repo: string, file: string): string {
 export async function downloadModel(
   repo: string,
   file: string,
-  onProgress?: (progress: DownloadProgress) => void
+  onProgress?: (progress: DownloadProgress) => void,
+  fetchImpl: typeof fetch = fetch
 ): Promise<string> {
   await ensureModelsDir();
 
@@ -150,7 +151,7 @@ export async function downloadModel(
     return destPath;
   }
 
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     headers: {
       "User-Agent": "Clarissa/1.0 (AI Assistant)",
     },
@@ -214,19 +215,19 @@ export async function downloadModel(
       });
     }
 
-    // Rename temp file to final destination
-    await Bun.$`mv ${tempPath} ${destPath}`;
+    // Rename temp file to final destination (cross-platform)
+    await rename(tempPath, destPath);
 
     return destPath;
-  } catch (error) {
-    // Clean up temp file on error
-    try {
-      await Bun.$`rm -f ${tempPath}`;
-    } catch {
-      // Ignore cleanup errors
+    } catch (error) {
+      // Clean up temp file on error
+      try {
+        await rm(tempPath, { force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw error;
     }
-    throw error;
-  }
 }
 
 /**
@@ -271,7 +272,9 @@ export async function listDownloadedModels(): Promise<string[]> {
 export async function deleteModel(filename: string): Promise<boolean> {
   const path = getModelPath(filename);
   try {
-    await Bun.file(path).exists() && (await Bun.$`rm ${path}`);
+    if (await Bun.file(path).exists()) {
+      await rm(path, { force: true });
+    }
     return true;
   } catch {
     return false;

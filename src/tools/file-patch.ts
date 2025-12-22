@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "./base.ts";
-import { resolve, relative } from "path";
+import { getSecurePaths } from "./security.ts";
 
 /**
  * Patch file tool - string replacement editing
@@ -22,13 +22,8 @@ export const patchFileTool = defineTool({
   }),
   execute: async ({ path, oldStr, newStr }) => {
     try {
-      const absolutePath = resolve(process.cwd(), path);
-      const relativePath = relative(process.cwd(), absolutePath);
-
-      // Security check
-      if (relativePath.startsWith("..")) {
-        throw new Error("Cannot edit files outside the current directory");
-      }
+      // Security check with canonical path resolution
+      const { absolutePath, relativePath } = getSecurePaths(path);
 
       const file = Bun.file(absolutePath);
       const exists = await file.exists();

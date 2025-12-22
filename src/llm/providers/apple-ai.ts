@@ -233,6 +233,12 @@ export class AppleAIProvider implements LLMProvider {
       // We only use streaming when no tools are provided.
       const useStreaming = options?.onChunk && !appleTools;
 
+      // If tools are provided but streaming was requested, send initial feedback
+      // so the UI knows the model is working (streaming is disabled with tools)
+      if (options?.onChunk && appleTools) {
+        options.onChunk("");  // Signal that processing has started
+      }
+
       if (useStreaming) {
         let streamError: Error | null = null;
         const streamParser = new StreamingOutputParser();

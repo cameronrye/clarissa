@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { defineTool } from "./base.ts";
-import { resolve, relative, join } from "path";
+import { relative, join } from "path";
 import { readdir, stat } from "fs/promises";
+import { getSecurePaths } from "./security.ts";
 
 interface SearchMatch {
   file: string;
@@ -43,13 +44,8 @@ export const searchFilesTool = defineTool({
   }),
   execute: async ({ pattern, path = ".", filePattern, maxResults = 20, caseSensitive = false }) => {
     try {
-      const absolutePath = resolve(process.cwd(), path);
-      const relativePath = relative(process.cwd(), absolutePath) || ".";
-
-      // Security check
-      if (relativePath !== "." && relativePath.startsWith("..")) {
-        throw new Error("Cannot search outside the current directory");
-      }
+      // Security check with canonical path resolution
+      const { absolutePath, relativePath } = getSecurePaths(path);
 
       // Use non-global regex for testing (global flag causes lastIndex issues with .test())
       const regex = new RegExp(pattern, caseSensitive ? "" : "i");

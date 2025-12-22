@@ -258,8 +258,26 @@ class MCPClientManager {
    * Register cleanup handlers for process exit
    */
   registerCleanupHandlers(): void {
-    const cleanup = () => {
-      // Use sync approach since we're in exit handler
+    let isCleaningUp = false;
+
+    const cleanup = async (): Promise<void> => {
+      if (isCleaningUp) return;
+      isCleaningUp = true;
+
+      const closePromises: Promise<void>[] = [];
+      for (const connection of this.connections.values()) {
+        closePromises.push(
+          Promise.resolve(connection.client.close()).catch(() => {
+            // Ignore errors during cleanup
+          })
+        );
+      }
+      await Promise.allSettled(closePromises);
+      this.connections.clear();
+    };
+
+    // Sync cleanup for normal exit (can't await here)
+    process.on("exit", () => {
       for (const connection of this.connections.values()) {
         try {
           connection.client.close();
@@ -267,17 +285,14 @@ class MCPClientManager {
           // Ignore errors during cleanup
         }
       }
-      this.connections.clear();
-    };
+    });
 
-    process.on("exit", cleanup);
+    // Async cleanup for signals - wait for completion before exit
     process.on("SIGINT", () => {
-      cleanup();
-      process.exit(0);
+      cleanup().finally(() => process.exit(0));
     });
     process.on("SIGTERM", () => {
-      cleanup();
-      process.exit(0);
+      cleanup().finally(() => process.exit(0));
     });
   }
 }
