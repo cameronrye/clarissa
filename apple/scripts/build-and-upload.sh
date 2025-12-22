@@ -53,20 +53,10 @@ build_ios() {
         -exportOptionsPlist "$PROJECT_DIR/ExportOptions.plist" \
         -allowProvisioningUpdates
     
-    log "Uploading iOS to App Store Connect..."
-    
-    xcrun notarytool store-credentials "AppStoreConnect" \
-        --key "$HOME/.appstoreconnect/AuthKey_${API_KEY}.p8" \
-        --key-id "$API_KEY" \
-        --issuer "$API_ISSUER" 2>/dev/null || true
-    
-    xcrun altool --upload-app \
-        -f "$EXPORT_DIR/iOS/Clarissa.ipa" \
-        -t ios \
-        --apiKey "$API_KEY" \
-        --apiIssuer "$API_ISSUER"
-    
-    log "✅ iOS build uploaded successfully!"
+    # Note: xcodebuild -exportArchive with ExportOptions.plist already uploads to App Store Connect
+    # The export step above handles both IPA creation and upload when destination=upload
+
+    log "iOS build uploaded successfully!"
 }
 
 build_macos() {
@@ -89,15 +79,9 @@ build_macos() {
         -exportOptionsPlist "$PROJECT_DIR/ExportOptions.plist" \
         -allowProvisioningUpdates
     
-    log "Uploading macOS to App Store Connect..."
-    
-    xcrun altool --upload-app \
-        -f "$EXPORT_DIR/macOS/Clarissa.app" \
-        -t macos \
-        --apiKey "$API_KEY" \
-        --apiIssuer "$API_ISSUER"
-    
-    log "✅ macOS build uploaded successfully!"
+    # Note: xcodebuild -exportArchive with ExportOptions.plist already uploads to App Store Connect
+
+    log "macOS build uploaded successfully!"
 }
 
 case "${1:-all}" in
