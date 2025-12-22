@@ -146,13 +146,16 @@ describe("Model Download Utilities", () => {
 	      const data = "test-model-content";
 	      let fetchCalls = 0;
 
-	      const mockFetch: typeof fetch = async () => {
-	        fetchCalls++;
-	        return new Response(data, {
-	          status: 200,
-	          headers: { "content-length": String(data.length) },
-	        });
-	      };
+	      const mockFetch = Object.assign(
+	        async () => {
+	          fetchCalls++;
+	          return new Response(data, {
+	            status: 200,
+	            headers: { "content-length": String(data.length) },
+	          });
+	        },
+	        { preconnect: () => {} }
+	      ) as typeof fetch;
 
 	      const path = await downloadModel("owner/repo", TEST_MODEL, undefined, mockFetch);
 	      expect(path).toBe(getModelPath(TEST_MODEL));
