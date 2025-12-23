@@ -48,6 +48,11 @@ struct ChatView: View {
                     viewModel.inputText = suggestion
                     viewModel.sendMessage()
                 })
+
+                Divider()
+
+                // Input area for empty state
+                inputAreaView
             } else {
             // Messages list
             ScrollViewReader { proxy in
@@ -186,6 +191,8 @@ struct ChatView: View {
                     .focused($isInputFocused)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                    .background(Color.clear)
+                    .contentShape(Rectangle())
                     .onSubmit {
                         HapticManager.shared.mediumTap()
                         viewModel.sendMessage()

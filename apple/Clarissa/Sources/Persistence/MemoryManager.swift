@@ -121,19 +121,25 @@ actor MemoryManager {
     func getForPrompt() async -> String? {
         await ensureLoaded()
 
-        guard !memories.isEmpty else { return nil }
+        guard !memories.isEmpty else {
+            logger.debug("getForPrompt: No memories to include")
+            return nil
+        }
 
         // Take most recent memories first
         let recentMemories = memories.suffix(20)
         let memoryList = recentMemories.map { "- \($0.content)" }.joined(separator: "\n")
 
-        return """
-        ## Your Memories
+        logger.info("getForPrompt: Including \(recentMemories.count) memories in system prompt")
 
-        You have remembered the following from previous conversations:
+        return """
+        ## Saved Facts About This User
+
         \(memoryList)
 
-        Use these memories to provide more personalized and contextual responses.
+        IMPORTANT: When the user asks about their name, preferences, or anything in the saved facts above, respond using this information directly. For example:
+        - "Say my name" or "What's my name?" -> Answer with their name from saved facts
+        - "What do you know about me?" -> List the saved facts
         """
     }
 

@@ -157,11 +157,27 @@ final class Agent: ObservableObject {
         - Be brief (1-2 sentences)
         - State result, not process
         - If tool fails, explain and suggest alternative
+        - If user asks about saved facts (name, preferences), answer from Saved Facts section
         """
+
+        // Add disabled tools section so AI can inform user about features that can be enabled
+        let disabledTools = toolRegistry.getDisabledToolDescriptions()
+        if !disabledTools.isEmpty {
+            let disabledList = disabledTools.map { "- \($0.name): \($0.capability)" }.joined(separator: "\n")
+            prompt += """
+
+
+            DISABLED FEATURES (tell user to enable in Settings if they ask for these):
+            \(disabledList)
+            """
+        }
 
         // Add memories if any (sanitized in MemoryManager)
         if let memoriesPrompt = await MemoryManager.shared.getForPrompt() {
             prompt += "\n\nCONTEXT:\n\(memoriesPrompt)"
+            ClarissaLogger.agent.info("System prompt includes memories: \(memoriesPrompt.prefix(200), privacy: .public)...")
+        } else {
+            ClarissaLogger.agent.debug("No memories to include in system prompt")
         }
 
         return prompt

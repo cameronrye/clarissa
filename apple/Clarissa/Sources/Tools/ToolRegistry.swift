@@ -64,6 +64,39 @@ final class ToolRegistry {
             .map { $0.toDefinition() }
     }
 
+    /// Get descriptions of disabled tools for system prompt
+    /// Returns a list of (displayName, capability) tuples for disabled tools
+    func getDisabledToolDescriptions() -> [(name: String, capability: String)] {
+        let enabledNames = ToolSettings.shared.enabledToolNames
+        let disabledTools = ToolSettings.shared.allTools.filter { !enabledNames.contains($0.id) }
+
+        // Map tool IDs to user-friendly capability descriptions
+        return disabledTools.compactMap { toolInfo -> (name: String, capability: String)? in
+            let capability: String
+            switch toolInfo.id {
+            case "remember":
+                capability = "remember information across conversations"
+            case "weather":
+                capability = "get weather forecasts"
+            case "calendar":
+                capability = "manage calendar events"
+            case "contacts":
+                capability = "search contacts"
+            case "reminders":
+                capability = "create reminders and to-dos"
+            case "calculator":
+                capability = "perform math calculations"
+            case "location":
+                capability = "get current location"
+            case "web_fetch":
+                capability = "fetch web content"
+            default:
+                capability = toolInfo.description.lowercased()
+            }
+            return (name: toolInfo.name, capability: capability)
+        }
+    }
+
     /// Execute a tool by name
     /// Tool execution happens off the main thread to prevent UI freezes
     func execute(name: String, arguments: String) async throws -> String {

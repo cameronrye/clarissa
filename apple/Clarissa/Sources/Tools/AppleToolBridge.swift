@@ -16,11 +16,13 @@ import FoundationModels
 // - SpeechRecognizer and voice components are @MainActor isolated
 // - UI updates must happen on MainActor
 //
-// The solution is to wrap all tool executions in executeOnMainActor() which
-// properly hops to the MainActor before executing the underlying tool.
+// The solution is to wrap all tool executions in safeToolExecution() which:
+// 1. Properly hops to the MainActor before executing the underlying tool
+// 2. Catches any errors and returns them as JSON instead of throwing
+//    (Foundation Models throws decodingFailure when tools throw errors)
 //
 // If you add a new Apple Tool Bridge struct:
-// 1. Always use `try await executeOnMainActor { ... }` in the call() method
+// 1. Always use `await safeToolExecution(name) { ... }` in the call() method
 // 2. Capture the underlyingTool in a local variable before the closure
 // 3. Test with actual Foundation Models to verify no crashes
 //
@@ -43,6 +45,56 @@ private func executeOnMainActor<T: Sendable>(_ operation: @escaping @MainActor (
     try await Task { @MainActor in
         try await operation()
     }.value
+}
+
+/// Safely execute a tool operation and return error JSON instead of throwing
+/// Foundation Models may throw decodingFailure when tools throw errors,
+/// so we catch errors and return them as structured JSON responses instead.
+@available(iOS 26.0, macOS 26.0, *)
+private func safeToolExecution(_ toolName: String, _ operation: @escaping @MainActor () async throws -> String) async -> String {
+    do {
+        return try await Task { @MainActor in
+            try await operation()
+        }.value
+    } catch {
+        // Log the error for debugging
+        toolLogger.error("Tool '\(toolName)' failed: \(error.localizedDescription)")
+
+        // Return error as JSON so the model can inform the user
+        let errorMessage = getUserFriendlyError(error)
+        return """
+        {"error": true, "message": "\(errorMessage.replacingOccurrences(of: "\"", with: "\\\""))"}
+        """
+    }
+}
+
+/// Convert error to user-friendly message for tool responses
+private func getUserFriendlyError(_ error: Error) -> String {
+    if let toolError = error as? ToolError {
+        switch toolError {
+        case .notAvailable(let reason):
+            return "Not available: \(reason)"
+        case .permissionDenied(let permission):
+            return "Permission needed for \(permission). Please check Settings."
+        case .invalidArguments:
+            return "Invalid request. Please try rephrasing."
+        case .executionFailed(let reason):
+            return reason
+        }
+    }
+
+    let desc = error.localizedDescription.lowercased()
+    if desc.contains("network") || desc.contains("internet") {
+        return "No internet connection. Please check your connection."
+    }
+    if desc.contains("permission") || desc.contains("denied") {
+        return "Permission denied. Please check app permissions in Settings."
+    }
+    if desc.contains("location") {
+        return "Could not access location. Please enable location services."
+    }
+
+    return "Unable to complete request: \(error.localizedDescription)"
 }
 
 /// Log tool call for debugging
@@ -109,7 +161,7 @@ struct AppleWeatherTool: Tool {
             forecast: arguments.forecast
         )
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -149,7 +201,7 @@ struct AppleCalculatorTool: Tool {
         logToolCall(name, arguments)
         let typedArgs = CalculatorToolArgs(expression: arguments.expression)
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -226,7 +278,7 @@ struct AppleCalendarTool: Tool {
             query: arguments.query
         )
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -283,7 +335,7 @@ struct AppleContactsTool: Tool {
             limit: arguments.limit
         )
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -356,7 +408,7 @@ struct AppleRemindersTool: Tool {
             listName: arguments.listName
         )
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -396,7 +448,7 @@ struct AppleLocationTool: Tool {
         logToolCall(name, arguments)
         let typedArgs = LocationToolArgs(includeAddress: arguments.includeAddress)
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -448,7 +500,7 @@ struct AppleWebFetchTool: Tool {
             maxLength: arguments.maxLength
         )
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
@@ -488,7 +540,7 @@ struct AppleRememberTool: Tool {
         logToolCall(name, arguments)
         let typedArgs = RememberToolArgs(content: arguments.content)
         let tool = underlyingTool
-        let result = try await executeOnMainActor {
+        let result = await safeToolExecution(name) {
             let jsonData = try JSONEncoder().encode(typedArgs)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)

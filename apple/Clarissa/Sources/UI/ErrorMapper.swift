@@ -14,6 +14,10 @@ enum ErrorMapper {
             return mapToolError(toolError)
         }
 
+        if let foundationError = error as? FoundationModelsError {
+            return mapFoundationModelsError(foundationError)
+        }
+
         if let urlError = error as? URLError {
             return mapURLError(urlError)
         }
@@ -92,6 +96,46 @@ enum ErrorMapper {
             return "Secure connection failed. Please try again."
         default:
             return "Network error. Please check your connection and try again."
+        }
+    }
+
+    private static func mapFoundationModelsError(_ error: FoundationModelsError) -> String {
+        switch error {
+        case .notAvailable:
+            return "Apple Intelligence is not available on this device."
+        case .deviceNotEligible:
+            return "This device doesn't support Apple Intelligence. Requires iPhone 15 Pro or later."
+        case .appleIntelligenceNotEnabled:
+            return "Please enable Apple Intelligence in Settings > Apple Intelligence & Siri."
+        case .modelNotReady:
+            return "Apple Intelligence is still setting up. Please wait a moment and try again."
+        case .toolExecutionFailed(let message):
+            // Extract useful info from the message
+            if message.lowercased().contains("location") {
+                return "Could not access location. Please check location permissions in Settings."
+            }
+            if message.lowercased().contains("weather") {
+                return "Unable to get weather information. Please try again."
+            }
+            return "An error occurred: \(message)"
+        case .guardrailViolation:
+            return "I can't help with that request. Please try asking something else."
+        case .refusal(let reason):
+            return "I can't help with that: \(reason)"
+        case .contextWindowExceeded:
+            return "The conversation is too long. Please start a new chat."
+        case .unsupportedLanguage(let locale):
+            return "Language '\(locale)' is not currently supported. Please try in English."
+        case .rateLimited:
+            return "Too many requests. Please wait a moment and try again."
+        case .concurrentRequests:
+            return "Already processing a request. Please wait for it to complete."
+        case .generationFailed(let message):
+            // Provide more helpful messages for common generation failures
+            if message.lowercased().contains("decode") {
+                return "The AI had trouble processing that request. Please try again with a simpler question."
+            }
+            return "Something went wrong with the AI. Please try again."
         }
     }
 }

@@ -121,14 +121,25 @@ private final class WeatherLocationHelper: NSObject, CLLocationManagerDelegate {
 /// Actor to hold the MainActor-isolated WeatherLocationHelper
 @available(iOS 16.0, macOS 13.0, *)
 private actor WeatherLocationHelperHolder {
-    @MainActor private let helper = WeatherLocationHelper()
+    private var helper: WeatherLocationHelper?
+
+    private func getOrCreateHelper() async -> WeatherLocationHelper {
+        if let existing = helper {
+            return existing
+        }
+        let newHelper = await MainActor.run { WeatherLocationHelper() }
+        helper = newHelper
+        return newHelper
+    }
 
     func requestAuthorizationAndWait() async -> CLAuthorizationStatus {
-        await helper.requestAuthorizationAndWait()
+        let h = await getOrCreateHelper()
+        return await h.requestAuthorizationAndWait()
     }
 
     func requestLocation() async throws -> CLLocation {
-        try await helper.requestLocation()
+        let h = await getOrCreateHelper()
+        return try await h.requestLocation()
     }
 }
 
@@ -235,8 +246,14 @@ final class WeatherTool: ClarissaTool, @unchecked Sendable {
 
         let includeForecast = args["forecast"] as? Bool ?? false
 
-        // Fetch weather
-        let weather = try await weatherService.weather(for: location)
+        // Fetch weather with proper error handling for WeatherKit errors
+        let weather: Weather
+        do {
+            weather = try await weatherService.weather(for: location)
+        } catch {
+            // Translate WeatherKit errors to user-friendly messages
+            throw mapWeatherKitError(error)
+        }
 
         var locationDict: [String: Any] = [
             "latitude": location.coordinate.latitude,
@@ -246,7 +263,7 @@ final class WeatherTool: ClarissaTool, @unchecked Sendable {
             locationDict["name"] = name
         }
 
-	        var response: [String: Any] = [
+        var response: [String: Any] = [
             "current": formatCurrentWeather(weather.currentWeather),
             "location": locationDict
         ]
@@ -257,6 +274,43 @@ final class WeatherTool: ClarissaTool, @unchecked Sendable {
 
         let responseData = try JSONSerialization.data(withJSONObject: response)
         return String(data: responseData, encoding: .utf8) ?? "{}"
+    }
+
+    /// Map WeatherKit errors to user-friendly ToolError messages
+    private func mapWeatherKitError(_ error: Error) -> ToolError {
+        let description = error.localizedDescription.lowercased()
+
+        // Check for common WeatherKit error patterns
+        if description.contains("not authorized") || description.contains("unauthorized") {
+            return .notAvailable("Weather service not configured. Please ensure the app has WeatherKit entitlements.")
+        }
+
+        if description.contains("network") || description.contains("internet") || description.contains("connection") {
+            return .executionFailed("Unable to fetch weather data. Please check your internet connection.")
+        }
+
+        if description.contains("rate limit") || description.contains("too many requests") {
+            return .executionFailed("Weather service is temporarily busy. Please try again in a moment.")
+        }
+
+        if description.contains("location") {
+            return .executionFailed("Could not determine location for weather data.")
+        }
+
+        // For URLError, provide network-specific messages
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return .executionFailed("Unable to connect to weather service. Please check your internet connection.")
+            case .timedOut:
+                return .executionFailed("Weather request timed out. Please try again.")
+            default:
+                return .executionFailed("Network error fetching weather: \(urlError.localizedDescription)")
+            }
+        }
+
+        // Generic fallback with the actual error for debugging
+        return .executionFailed("Unable to fetch weather: \(error.localizedDescription)")
     }
 
 	    // MARK: - Geocoding Helpers
@@ -339,43 +393,66 @@ final class WeatherTool: ClarissaTool, @unchecked Sendable {
         return try await locationHelperHolder.requestLocation()
     }
 
+    /// Temperature unit based on user's locale (Fahrenheit for US, Celsius elsewhere)
+    private var preferredTemperatureUnit: UnitTemperature {
+        Locale.current.measurementSystem == .us ? .fahrenheit : .celsius
+    }
+
+    /// Speed unit based on user's locale (mph for US/UK, km/h elsewhere)
+    private var preferredSpeedUnit: UnitSpeed {
+        Locale.current.measurementSystem == .us ? .milesPerHour : .kilometersPerHour
+    }
+
+    /// Distance unit based on user's locale (miles for US/UK, km elsewhere)
+    private var preferredDistanceUnit: UnitLength {
+        Locale.current.measurementSystem == .us ? .miles : .kilometers
+    }
+
     private func formatCurrentWeather(_ current: CurrentWeather) -> [String: Any] {
-        [
+        let temp = current.temperature.converted(to: preferredTemperatureUnit)
+        let feelsLike = current.apparentTemperature.converted(to: preferredTemperatureUnit)
+        let windSpeed = current.wind.speed.converted(to: preferredSpeedUnit)
+        let visibility = current.visibility.converted(to: preferredDistanceUnit)
+
+        return [
             "temperature": [
-                "value": current.temperature.value,
-                "unit": current.temperature.unit.symbol
+                "value": round(temp.value),
+                "unit": temp.unit.symbol
             ],
             "feelsLike": [
-                "value": current.apparentTemperature.value,
-                "unit": current.apparentTemperature.unit.symbol
+                "value": round(feelsLike.value),
+                "unit": feelsLike.unit.symbol
             ],
             "condition": current.condition.description,
             "humidity": current.humidity * 100,
             "windSpeed": [
-                "value": current.wind.speed.value,
-                "unit": current.wind.speed.unit.symbol
+                "value": round(windSpeed.value),
+                "unit": windSpeed.unit.symbol
             ],
             "windDirection": current.wind.direction.description,
             "uvIndex": current.uvIndex.value,
             "visibility": [
-                "value": current.visibility.value,
-                "unit": current.visibility.unit.symbol
+                "value": round(visibility.value * 10) / 10,
+                "unit": visibility.unit.symbol
             ]
         ]
     }
 
     private func formatForecast(_ forecast: Forecast<DayWeather>) -> [[String: Any]] {
-        forecast.prefix(5).map { day in
-            [
+        let tempUnit = preferredTemperatureUnit
+        return forecast.prefix(5).map { day in
+            let high = day.highTemperature.converted(to: tempUnit)
+            let low = day.lowTemperature.converted(to: tempUnit)
+            return [
                 "date": ISO8601DateFormatter().string(from: day.date),
                 "condition": day.condition.description,
                 "highTemperature": [
-                    "value": day.highTemperature.value,
-                    "unit": day.highTemperature.unit.symbol
+                    "value": round(high.value),
+                    "unit": high.unit.symbol
                 ],
                 "lowTemperature": [
-                    "value": day.lowTemperature.value,
-                    "unit": day.lowTemperature.unit.symbol
+                    "value": round(low.value),
+                    "unit": low.unit.symbol
                 ],
                 "precipitationChance": day.precipitationChance * 100,
                 "uvIndex": day.uvIndex.value

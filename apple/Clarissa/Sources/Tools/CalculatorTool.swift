@@ -179,17 +179,80 @@ final class CalculatorTool: ClarissaTool, @unchecked Sendable {
     }
 
     private func evaluateSimple(_ expr: String) throws -> Double {
-        // Wrap in try-catch to handle NSExpression errors gracefully
-        do {
-            let nsExpression = NSExpression(format: expr)
-            guard let result = nsExpression.expressionValue(with: nil, context: nil) as? NSNumber else {
-                throw ToolError.executionFailed("Expression did not evaluate to a number")
+        // Validate expression format BEFORE passing to NSExpression.
+        // NSExpression(format:) throws Objective-C NSException on invalid input,
+        // which Swift's do-catch cannot handle. Pre-validation prevents crashes.
+        try validateForNSExpression(expr)
+
+        let nsExpression = NSExpression(format: expr)
+        guard let result = nsExpression.expressionValue(with: nil, context: nil) as? NSNumber else {
+            throw ToolError.executionFailed("Expression did not evaluate to a number")
+        }
+        return result.doubleValue
+    }
+
+    /// Validates expression format before passing to NSExpression to prevent ObjC exceptions.
+    /// NSExpression throws NSException (not Swift Error) on invalid input, causing crashes.
+    private func validateForNSExpression(_ expr: String) throws {
+        let trimmed = expr.trimmingCharacters(in: .whitespaces)
+
+        guard !trimmed.isEmpty else {
+            throw ToolError.invalidArguments("Expression cannot be empty")
+        }
+
+        // Check for empty parentheses
+        if trimmed.contains("()") {
+            throw ToolError.invalidArguments("Invalid expression: empty parentheses")
+        }
+
+        // Check for expression starting with binary operators (not unary minus)
+        let binaryOps: [Character] = ["*", "/", "%"]
+        if let first = trimmed.first, binaryOps.contains(first) {
+            throw ToolError.invalidArguments("Invalid expression: cannot start with '\(first)'")
+        }
+
+        // Check for expression ending with operators
+        let allOps: [Character] = ["+", "-", "*", "/", "%"]
+        if let last = trimmed.last, allOps.contains(last) {
+            throw ToolError.invalidArguments("Invalid expression: cannot end with '\(last)'")
+        }
+
+        // Check for invalid operator sequences (e.g., "++", "*/", "/*", etc.)
+        // Allow patterns like "+-", "*-", "/-" for unary minus
+        // Note: "*(", "/(", "%(" are valid like "2*(3+1)"
+        let invalidSequences = ["++", "--", "**", "//", "%%", "/*", "*/", "+*", "+/", "+%", "*+", "/+", "%+"]
+        for seq in invalidSequences {
+            if trimmed.contains(seq) {
+                throw ToolError.invalidArguments("Invalid expression: '\(seq)' is not allowed")
             }
-            return result.doubleValue
-        } catch let error as ToolError {
-            throw error
-        } catch {
-            throw ToolError.executionFailed("Invalid mathematical expression")
+        }
+
+        // Check for operator before closing parenthesis: "+)", "*)", etc.
+        for op in allOps {
+            if trimmed.contains("\(op))") {
+                throw ToolError.invalidArguments("Invalid expression: '\(op))' is not allowed")
+            }
+        }
+
+        // Check for opening parenthesis followed by binary operator: "(+", "(*", etc.
+        // Allow "(-" for unary minus
+        for op in binaryOps {
+            if trimmed.contains("(\(op)") {
+                throw ToolError.invalidArguments("Invalid expression: '(\(op)' is not allowed")
+            }
+        }
+        // "(+" is also invalid
+        if trimmed.contains("(+") {
+            throw ToolError.invalidArguments("Invalid expression: '(+' is not allowed")
+        }
+
+        // Check for remaining alphabetic characters (unprocessed function names/variables)
+        // After function replacement, only digits, operators, parentheses, dots, and spaces should remain
+        let allowedAfterProcessing = CharacterSet(charactersIn: "0123456789.+-*/()% ")
+        for scalar in trimmed.unicodeScalars {
+            if !allowedAfterProcessing.contains(scalar) {
+                throw ToolError.invalidArguments("Invalid expression: unexpected character '\(scalar)'")
+            }
         }
     }
 

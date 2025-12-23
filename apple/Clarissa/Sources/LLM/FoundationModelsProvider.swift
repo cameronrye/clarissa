@@ -89,12 +89,16 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
     private func getOrCreateSession(systemPrompt: String?, withTools: Bool = true) -> LanguageModelSession {
         let instructionsText = systemPrompt ?? "You are Clarissa, a helpful AI assistant."
 
+        // Use permissive guardrails to avoid refusals when recalling user-saved facts
+        // This is necessary because the model may otherwise refuse to recall personal info
+        let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
+
         // For tool-less sessions (e.g., prompt enhancement), always create fresh
         // This prevents pollution from previous chat sessions and ensures clean context
         if !withTools {
             let instructions = Instructions(instructionsText)
             // Create a simple session without tools for text generation tasks
-            return LanguageModelSession(instructions: instructions)
+            return LanguageModelSession(model: model, instructions: instructions)
         }
 
         // Get current enabled tools to check if session needs refresh
@@ -105,7 +109,17 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
         if let existingSession = session,
            currentInstructions == instructionsText,
            currentToolSet == enabledToolNames {
+            ClarissaLogger.provider.debug("Reusing existing session - instructions unchanged")
             return existingSession
+        }
+
+        // Log why we're creating a new session
+        if session == nil {
+            ClarissaLogger.provider.info("Creating new session - no existing session")
+        } else if currentInstructions != instructionsText {
+            ClarissaLogger.provider.info("Creating new session - instructions changed (has memories: \(instructionsText.contains("Saved Facts")))")
+        } else {
+            ClarissaLogger.provider.info("Creating new session - tool set changed")
         }
 
         // Get Apple-native tools from the registry (limited to maxTools)
@@ -114,8 +128,9 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
         // Create Instructions struct as per the guide
         let instructions = Instructions(instructionsText)
 
-        // Create session with tools and instructions using correct API
+        // Create session with model, tools and instructions using correct API
         let newSession = LanguageModelSession(
+            model: model,
             tools: appleTools,
             instructions: instructions
         )

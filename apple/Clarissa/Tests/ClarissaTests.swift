@@ -653,7 +653,7 @@ struct MemoryManagerKeychainTests {
 
         let promptSection = await manager.getForPrompt()
         #expect(promptSection != nil)
-        #expect(promptSection!.contains("Your Memories"))
+        #expect(promptSection!.contains("Saved Facts"))
         #expect(promptSection!.contains("- User prefers dark mode"))
         #expect(promptSection!.contains("- User is a software developer"))
     }
