@@ -1,0 +1,209 @@
+Incident Identifier: 9624C8F3-E4DE-480A-AD72-487C028650BB
+Distributor ID:      com.apple.TestFlight
+Hardware Model:      iPhone18,1
+Process:             Clarissa [950]
+Path:                /private/var/containers/Bundle/Application/F23E787C-F55E-4960-80BF-11DB04B907E6/Clarissa.app/Clarissa
+Identifier:          dev.rye.clarissa
+Version:             1.0.0 (4)
+AppStoreTools:       17C53
+AppVariant:          1:iPhone18,1:26
+Beta:                YES
+Code Type:           ARM-64 (Native)
+Role:                Foreground
+Parent Process:      launchd [1]
+Coalition:           dev.rye.clarissa [1115]
+
+Date/Time:           2025-12-22 23:18:39.6197 -0500
+Launch Time:         2025-12-22 23:16:41.7961 -0500
+OS Version:          iPhone OS 26.3 (23D5089e)
+Release Type:        Beta
+Baseband Version:    1.20.03
+Report Version:      104
+
+Exception Type:  EXC_BREAKPOINT (SIGTRAP)
+Exception Codes: 0x0000000000000001, 0x00000001c3ec9540
+Termination Reason: SIGNAL 5 Trace/BPT trap: 5
+Terminating Process: exc handler [950]
+
+Triggered by Thread:  7
+
+
+Thread 0 name:
+Thread 0:
+0   libswiftCore.dylib            	0x00000001873a1abc std::__1::pair<swift::HashMapElementWrapper<swift::GenericCacheEntry>*, unsigned int> swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::find<sw... + 116 (Concurrent.h:0)
+1   libswiftCore.dylib            	0x00000001873a5490 std::__1::pair<swift::GenericCacheEntry*, bool> swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInser... + 188 (Concurrent.h:824)
+2   libswiftCore.dylib            	0x00000001873a51e0 std::__1::pair<swift::GenericCacheEntry*, swift::MetadataResponse> swift::LockingConcurrentMap<swift::GenericCacheEntry, swift::LockingConcurrentMapStorage<swift::GenericCacheEntry, (unsigned short... + 88 (MetadataCache.h:288)
+3   libswiftCore.dylib            	0x000000018738cc84 _swift_getGenericMetadata(swift::MetadataRequest, void const* const*, swift::TargetTypeContextDescriptor<swift::InProcess> const*) + 264 (Metadata.cpp:842)
+4   libswiftCore.dylib            	0x00000001877ded8c __swift_instantiateCanonicalPrespecializedGenericMetadata + 40 (<compiler-generated>:0)
+5   SwiftUI                       	0x0000000193006430 _UIHostingView.as<A>(_:) + 116 (<stdin>:0)
+6   SwiftUICore                   	0x00000001942ee784 ViewGraphRootValueUpdater.isRendering.getter + 96 (ViewRendererHost.swift:123)
+7   SwiftUICore                   	0x00000001942ee4e4 ViewGraphRootValueUpdater.graphDidChange() + 72 (ViewRendererHost.swift:383)
+8   SwiftUICore                   	0x0000000194466624 GraphHost.graphInvalidation(from:) + 316 (GraphHost.swift:377)
+9   SwiftUICore                   	0x0000000194465254 closure #2 in GraphHost.init(data:) + 84 (GraphHost.swift:252)
+10  AttributeGraph                	0x00000001bd196964 AG::Graph::Context::call_invalidation(AG::AttributeID) + 116 (ag-graph.cc:120)
+11  AttributeGraph                	0x00000001bd186890 AG::Graph::propagate_dirty(AG::AttributeID) + 732 (ag-graph-update.cc:166)
+12  SwiftUICore                   	0x0000000194359d0c specialized closure #1 in withTransaction<A>(_:_:) + 352 (Transaction.swift:250)
+13  SwiftUICore                   	0x00000001943599c0 specialized GraphHost.runTransaction(_:do:id:) + 200
+14  SwiftUICore                   	0x00000001942eb2d8 GraphHost.flushTransactions() + 184 (GraphHost.swift:730)
+15  SwiftUI                       	0x0000000193084a80 <deduplicated_symbol> + 24
+16  SwiftUICore                   	0x00000001942e5578 partial apply for closure #1 in ViewGraphRootValueUpdater.updateGraph<A>(body:) + 28 (<compiler-generated>:0)
+17  SwiftUICore                   	0x00000001942e7f54 ViewGraphRootValueUpdater._updateViewGraph<A>(body:) + 232 (ViewRendererHost.swift:424)
+18  SwiftUICore                   	0x00000001942e54d0 ViewGraphRootValueUpdater.updateGraph<A>(body:) + 180 (ViewRendererHost.swift:378)
+19  SwiftUI                       	0x0000000193084a4c closure #1 in closure #1 in closure #1 in _UIHostingView.beginTransaction() + 172 (_UIHostingView.swift:468)
+20  SwiftUI                       	0x0000000193084998 partial apply for closure #1 in closure #1 in closure #1 in _UIHostingView.beginTransaction() + 24 (<compiler-generated>:0)
+21  SwiftUICore                   	0x00000001942ddaa8 closure #1 in static Update.ensure<A>(_:) + 56 (Update.swift:205)
+22  SwiftUICore                   	0x00000001942ddcec static Update.ensure<A>(_:) + 100 (Update.swift:202)
+23  SwiftUI                       	0x0000000193084970 partial apply for closure #1 in closure #1 in _UIHostingView.beginTransaction() + 80 (<compiler-generated>:0)
+24  SwiftUICore                   	0x000000019440bd68 <deduplicated_symbol> + 28
+25  SwiftUICore                   	0x00000001942ceab0 specialized static NSRunLoop.flushObservers() + 364 (RunLoopUtils.swift:45)
+26  SwiftUICore                   	0x00000001942ce91c @objc closure #1 in static NSRunLoop.addObserver(_:) + 28 (<compiler-generated>:22)
+27  CoreFoundation                	0x000000018a304ea0 __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__ + 36 (CFRunLoop.c:1829)
+28  CoreFoundation                	0x000000018a2ee58c __CFRunLoopDoObservers + 648 (CFRunLoop.c:1965)
+29  CoreFoundation                	0x000000018a2c5740 __CFRunLoopRun + 924 (CFRunLoop.c:3011)
+30  CoreFoundation                	0x000000018a2c4a6c _CFRunLoopRunSpecificWithOptions + 532 (CFRunLoop.c:3462)
+31  GraphicsServices              	0x000000022d0f8498 GSEventRunModal + 120 (GSEvent.c:2049)
+32  UIKitCore                     	0x000000018fd6f70c -[UIApplication _run] + 792 (UIApplication.m:3904)
+33  UIKitCore                     	0x000000018fd17f6c UIApplicationMain + 336 (UIApplication.m:5579)
+34  SwiftUI                       	0x000000019302dd20 closure #1 in KitRendererCommon(_:) + 168 (UIKitApp.swift:65)
+35  SwiftUI                       	0x000000019302a8d4 runApp<A>(_:) + 112 (UIKitApp.swift:16)
+36  SwiftUI                       	0x000000019302a3c0 static App.main() + 172 (App.swift:137)
+37  Clarissa                      	0x00000001007f55ac static ClarissaApp.$main() + 52 (ClarissaApp.swift:0)
+38  Clarissa                      	0x00000001007f55ac main + 64
+39  dyld                          	0x00000001872a2e28 start + 7116 (dyldMain.cpp:1477)
+
+Thread 1 name:
+Thread 1:
+0   libsystem_kernel.dylib        	0x0000000236293cd4 mach_msg2_trap + 8
+1   libsystem_kernel.dylib        	0x00000002362972f8 mach_msg2_internal + 76 (mach_msg.c:201)
+2   libsystem_kernel.dylib        	0x0000000236297214 mach_msg_overwrite + 428 (mach_msg.c:0)
+3   libsystem_kernel.dylib        	0x000000023629705c mach_msg + 24 (mach_msg.c:323)
+4   CoreFoundation                	0x000000018a2ee868 __CFRunLoopServiceMachPort + 160 (CFRunLoop.c:2650)
+5   CoreFoundation                	0x000000018a2c5848 __CFRunLoopRun + 1188 (CFRunLoop.c:3035)
+6   CoreFoundation                	0x000000018a2c4a6c _CFRunLoopRunSpecificWithOptions + 532 (CFRunLoop.c:3462)
+7   Foundation                    	0x00000001882ad0e4 -[NSRunLoop(NSRunLoop) runMode:beforeDate:] + 212 (NSRunLoop.m:375)
+8   Foundation                    	0x00000001882ad2bc -[NSRunLoop(NSRunLoop) runUntilDate:] + 64 (NSRunLoop.m:422)
+9   UIKitCore                     	0x000000018fd4479c -[UIEventFetcher threadMain] + 408 (UIEventFetcher.m:1333)
+10  Foundation                    	0x000000018794621c __NSThread__start__ + 732 (NSThread.m:997)
+11  libsystem_pthread.dylib       	0x00000001e7dab44c _pthread_start + 136 (pthread.c:931)
+12  libsystem_pthread.dylib       	0x00000001e7da78cc thread_start + 8
+
+Thread 2 name:
+Thread 2:
+0   libsystem_kernel.dylib        	0x0000000236293cd4 mach_msg2_trap + 8
+1   libsystem_kernel.dylib        	0x00000002362972f8 mach_msg2_internal + 76 (mach_msg.c:201)
+2   libsystem_kernel.dylib        	0x0000000236297214 mach_msg_overwrite + 428 (mach_msg.c:0)
+3   libsystem_kernel.dylib        	0x000000023629705c mach_msg + 24 (mach_msg.c:323)
+4   CoreFoundation                	0x000000018a2ee868 __CFRunLoopServiceMachPort + 160 (CFRunLoop.c:2650)
+5   CoreFoundation                	0x000000018a2c5848 __CFRunLoopRun + 1188 (CFRunLoop.c:3035)
+6   CoreFoundation                	0x000000018a2c4a6c _CFRunLoopRunSpecificWithOptions + 532 (CFRunLoop.c:3462)
+7   Foundation                    	0x00000001882ad0e4 -[NSRunLoop(NSRunLoop) runMode:beforeDate:] + 212 (NSRunLoop.m:375)
+8   Foundation                    	0x00000001878ed51c -[NSRunLoop(NSRunLoop) run] + 64 (NSRunLoop.m:400)
+9   UIKitCore                     	0x00000001904c3094 closure #2 in InProcessAnimationManager.startAdvancing(_:) + 280 (InProcessAnimationManager.swift:1106)
+10  UIKitCore                     	0x000000018fcf2944 <deduplicated_symbol> + 36
+11  Foundation                    	0x000000018794621c __NSThread__start__ + 732 (NSThread.m:997)
+12  libsystem_pthread.dylib       	0x00000001e7dab44c _pthread_start + 136 (pthread.c:931)
+13  libsystem_pthread.dylib       	0x00000001e7da78cc thread_start + 8
+
+Thread 3 name:
+Thread 3:
+0   libsystem_kernel.dylib        	0x0000000236293c50 semaphore_wait_trap + 8
+1   caulk                         	0x000000029ce5943c caulk::semaphore::timed_wait(double) + 224 (semaphore.cpp:98)
+2   caulk                         	0x000000029ce59488 caulk::concurrent::details::worker_thread::run() + 32 (messenger.cpp:237)
+3   caulk                         	0x000000029ce5dbf4 void* caulk::thread_proxy<std::__1::tuple<caulk::thread::attributes, void (caulk::concurrent::details::worker_thread::*)(), std::__1::tuple<caulk::concurrent::details::worker_thread*>>>(void*) + 96 (thread.h:196)
+4   libsystem_pthread.dylib       	0x00000001e7dab44c _pthread_start + 136 (pthread.c:931)
+5   libsystem_pthread.dylib       	0x00000001e7da78cc thread_start + 8
+
+Thread 4 name:
+Thread 4:
+0   libsystem_kernel.dylib        	0x0000000236293c50 semaphore_wait_trap + 8
+1   caulk                         	0x000000029ce5943c caulk::semaphore::timed_wait(double) + 224 (semaphore.cpp:98)
+2   caulk                         	0x000000029ce59488 caulk::concurrent::details::worker_thread::run() + 32 (messenger.cpp:237)
+3   caulk                         	0x000000029ce5dbf4 void* caulk::thread_proxy<std::__1::tuple<caulk::thread::attributes, void (caulk::concurrent::details::worker_thread::*)(), std::__1::tuple<caulk::concurrent::details::worker_thread*>>>(void*) + 96 (thread.h:196)
+4   libsystem_pthread.dylib       	0x00000001e7dab44c _pthread_start + 136 (pthread.c:931)
+5   libsystem_pthread.dylib       	0x00000001e7da78cc thread_start + 8
+
+Thread 5:
+
+Thread 6 name:
+Thread 6:
+0   libobjc.A.dylib               	0x000000018721f83c objc_autoreleaseReturnValue + 40 (NSObject.mm:2322)
+1   Foundation                    	0x000000018837ad60 -[NSXPCConnection _sendInvocation:orArguments:count:methodSignature:selector:withProxy:] + 96 (NSXPCConnection.m:1326)
+2   CoreFoundation                	0x000000018a2ed1cc ___forwarding___ + 1072 (NSForwarding.m:3650)
+3   CoreFoundation                	0x000000018a2f5200 _CF_forwarding_prep_0 + 96
+4   AudioAnalytics                	0x00000001c9530b58 ServerClient.sendMessageOnQueue(reporterID:message:category:type:rateLimit:) + 2676 (ServerClient.swift:0)
+5   AudioAnalytics                	0x00000001c9530088 closure #1 in ServerClient.sendMessage(reporterID:message:category:type:) + 36 (ServerClient.swift:218)
+6   AudioAnalytics                	0x00000001c952ef1c partial apply for thunk for @callee_guaranteed () -> () + 28 (<compiler-generated>:0)
+7   AudioAnalytics                	0x00000001c952e81c thunk for @escaping @callee_guaranteed () -> () + 28 (<compiler-generated>:0)
+8   libdispatch.dylib             	0x00000001c3edf7fc _dispatch_client_callout + 16 (client_callout.mm:85)
+9   libdispatch.dylib             	0x00000001c3ed58c0 _dispatch_lane_barrier_sync_invoke_and_complete + 56 (queue.c:1128)
+10  AudioAnalytics                	0x00000001c952fe14 AudioAnalyticsSendMessage(_:_:_:_:) + 464 (AudioAnalyticsClientWrap.swift:181)
+11  AudioAnalytics                	0x00000001c9530038 AudioAnalyticsSendMessage + 64 (<compiler-generated>:0)
+12  CoreHaptics                   	0x000000021e9d8574 -[CHMetrics logMetric:value:] + 288 (CHMetrics.mm:434)
+13  CoreHaptics                   	0x000000021e9f9240 __47-[CHHapticEngine doStartWithCompletionHandler:]_block_invoke + 40 (CHHapticEngine.mm:1237)
+14  CoreHaptics                   	0x000000021ea004f4 __58-[CHHapticEngine(CHHapticEngineInternal) dispatchOnLocal:]_block_invoke + 52 (CHHapticEngine.mm:2001)
+15  libdispatch.dylib             	0x00000001c3ec5adc _dispatch_call_block_and_release + 32 (init.c:1575)
+16  libdispatch.dylib             	0x00000001c3edf7fc _dispatch_client_callout + 16 (client_callout.mm:85)
+17  libdispatch.dylib             	0x00000001c3ece468 _dispatch_lane_serial_drain + 740 (queue.c:3991)
+18  libdispatch.dylib             	0x00000001c3ecef44 _dispatch_lane_invoke + 388 (queue.c:4082)
+19  libdispatch.dylib             	0x00000001c3ed93ec _dispatch_root_queue_drain_deferred_wlh + 292 (queue.c:7265)
+20  libdispatch.dylib             	0x00000001c3ed8ce4 _dispatch_workloop_worker_thread + 692 (queue.c:6859)
+21  libsystem_pthread.dylib       	0x00000001e7da83b8 _pthread_wqthread + 292 (pthread.c:2696)
+22  libsystem_pthread.dylib       	0x00000001e7da78c0 start_wqthread + 8
+
+Thread 7 name:
+Thread 7 Crashed:
+0   libdispatch.dylib             	0x00000001c3ec9540 _dispatch_assert_queue_fail + 120 (queue.c:54)
+1   libdispatch.dylib             	0x00000001c3efb704 dispatch_assert_queue$V2.cold.1 + 116 (queue.c:84)
+2   libdispatch.dylib             	0x00000001c3ec94c4 dispatch_assert_queue + 108 (queue.c:81)
+3   libswift_Concurrency.dylib    	0x000000018875603c _swift_task_checkIsolatedSwift + 48 (ExecutorBridge.swift:35)
+4   libswift_Concurrency.dylib    	0x00000001887b5724 swift_task_isCurrentExecutorWithFlagsImpl(swift::SerialExecutorRef, swift::swift_task_is_current_executor_flag) + 356 (Actor.cpp:0)
+5   Clarissa                      	0x000000010080fab4 _checkExpectedExecutor(_filenameStart:_filenameLength:_filenameIsASCII:_line:_executor:) + 4 (/<compiler-generated>:0)
+6   Clarissa                      	0x000000010080fab4 protocol witness for LLMProvider.streamComplete(messages:tools:) in conformance FoundationModelsProvider + 160
+7   Clarissa                      	0x00000001008110d0 specialized LLMProvider.complete(messages:tools:) + 76 (LLMProvider.swift:128)
+8   Clarissa                      	0x00000001007f4bb1 <deduplicated_symbol> + 1
+9   Clarissa                      	0x000000010081a5c5 PromptEnhancer.enhance(_:using:) + 1 (PromptEnhancer.swift:58)
+10  Clarissa                      	0x0000000100883a65 ChatViewModel.enhanceCurrentPrompt() + 1 (ChatViewModel.swift:572)
+11  Clarissa                      	0x00000001008657fd <deduplicated_symbol> + 1
+12  Clarissa                      	0x00000001007f4bb1 <deduplicated_symbol> + 1
+13  Clarissa                      	0x00000001007f4681 specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A) + 1 (/<compiler-generated>:0)
+14  Clarissa                      	0x00000001007f4bb1 <deduplicated_symbol> + 1
+15  libswift_Concurrency.dylib    	0x00000001887bd7b1 completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*) + 1 (Task.cpp:546)
+
+Thread 8:
+
+
+Thread 7 crashed with ARM Thread State (64-bit):
+    x0: 0xffffffffb0000000   x1: 0x0000000000000060   x2: 0xfffff0007fc00000   x3: 0x0000000000000001
+    x4: 0x0000000105a66680   x5: 0x0000000000000000   x6: 0x0068637461707369   x7: 0x0000000105a66600
+    x8: 0x00000001f32d2000   x9: 0x00000000ffbec59f  x10: 0x0000000000000000  x11: 0x0000000000000000
+   x12: 0x0168134000413a60  x13: 0x0168033e80413000  x14: 0x0000000000013800  x15: 0x000000000000001d
+   x16: 0x952d000105a66600  x17: 0x000000068033e800  x18: 0x0000000000000000  x19: 0x0000000105a65a00
+   x20: 0x000000010558a980  x21: 0x00000001f5891db0  x22: 0x0000000112eced80  x23: 0x000000011418fbb8
+   x24: 0x000000016f696c90  x25: 0x0000000112c2b470  x26: 0x000000010558a980  x27: 0x00000001f64d2e20
+   x28: 0x00000001f64d2600   fp: 0x000000016f696bf0   lr: 0x00000001c3ec9538
+    sp: 0x000000016f696bb0   pc: 0x00000001c3ec9540        cpsr: 0x0
+   esr: 0xf2000001 (Breakpoint) brk 1
+
+
+Binary Images:
+        0x1007f0000 -         0x10091ffff Clarissa arm64  <1a52b48905883f348570d83659b343ea> /var/containers/Bundle/Application/F23E787C-F55E-4960-80BF-11DB04B907E6/Clarissa.app/Clarissa
+        0x1053c4000 -         0x1053cffff libobjc-trampolines.dylib arm64e  <9628a66a762b30abbd9fcd0052496d53> /private/preboot/Cryptexes/OS/usr/lib/libobjc-trampolines.dylib
+        0x18721c000 -         0x18726db2f libobjc.A.dylib arm64e  <103ca9c5acfb3f43b48ae25ec944b428> /usr/lib/libobjc.A.dylib
+        0x18729e000 -         0x18733cb77 dyld arm64e  <1713978e5f4f366da2585c6619465e97> /usr/lib/dyld
+        0x187358000 -         0x1878e379f libswiftCore.dylib arm64e  <d93dc96bdf83311f9e2b20e0509cf8e0> /usr/lib/swift/libswiftCore.dylib
+        0x1878e4000 -         0x188750cbf Foundation arm64e  <309e2d0aeedb312dbbb9bfddac76da4a> /System/Library/Frameworks/Foundation.framework/Foundation
+        0x188751000 -         0x1887d9d97 libswift_Concurrency.dylib arm64e  <9874da85b3b93fc5b9e447e92916ea9c> /usr/lib/swift/libswift_Concurrency.dylib
+        0x18a2a8000 -         0x18a82e73f CoreFoundation arm64e  <b437a1424f113effb5ad42a0f9be9911> /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+        0x18fcd1000 -         0x19212fc7f UIKitCore arm64e  <48736f98163c3430ac2054e325234380> /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore
+        0x192ffc000 -         0x19427debf SwiftUI arm64e  <f0ca645b6d443176ab4969bfb40f9c4b> /System/Library/Frameworks/SwiftUI.framework/SwiftUI
+        0x1942cc000 -         0x1951fe39f SwiftUICore arm64e  <7f670d3495833c6a8b4b6952a18824cb> /System/Library/Frameworks/SwiftUICore.framework/SwiftUICore
+        0x1bd182000 -         0x1bd1c94bf AttributeGraph arm64e  <a406b249fa39390fb1244b9cf422cf8d> /System/Library/PrivateFrameworks/AttributeGraph.framework/AttributeGraph
+        0x1c3ec4000 -         0x1c3f0a21f libdispatch.dylib arm64e  <1d3589c497913915b16b9ec6bf3a080d> /usr/lib/system/libdispatch.dylib
+        0x1c952b000 -         0x1c95570df AudioAnalytics arm64e  <28d9587bc28b3f87b46713a3fb781376> /System/Library/PrivateFrameworks/AudioAnalytics.framework/AudioAnalytics
+        0x1e7da7000 -         0x1e7db344f libsystem_pthread.dylib arm64e  <b3b8b5f428d53361b23b4359da7ee56c> /usr/lib/system/libsystem_pthread.dylib
+        0x21e9b8000 -         0x21ea377df CoreHaptics arm64e  <f810012b99f33018b9cc5d5861370611> /System/Library/Frameworks/CoreHaptics.framework/CoreHaptics
+        0x22d0f7000 -         0x22d0ff7ff GraphicsServices arm64e  <76d596067e573f86a4a2c11623b1f893> /System/Library/PrivateFrameworks/GraphicsServices.framework/GraphicsServices
+        0x236293000 -         0x2362cdd3b libsystem_kernel.dylib arm64e  <55df573f31e8330391dec86fa5b68975> /usr/lib/system/libsystem_kernel.dylib
+        0x29ce55000 -         0x29ce7dd9f caulk arm64e  <004ff7ddcb24385fb0379abee4fc6131> /System/Library/PrivateFrameworks/caulk.framework/caulk
+
+EOF

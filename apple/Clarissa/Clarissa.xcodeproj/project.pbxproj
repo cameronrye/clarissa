@@ -279,7 +279,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = Resources/Clarissa-iOS.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Resources/Clarissa-macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
@@ -318,7 +318,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = Resources/Clarissa-iOS.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Resources/Clarissa-macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
