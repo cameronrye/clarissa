@@ -3,11 +3,47 @@ import os.log
 #if canImport(FoundationModels)
 import FoundationModels
 
+// MARK: - Apple Tool Bridge
+//
+// IMPORTANT: Actor Isolation Notes for Foundation Models Tool Integration
+//
+// Apple's Foundation Models framework calls Tool.call() from a BACKGROUND THREAD
+// (specifically from ToolCallCoordinator.runLoop). This creates a critical actor
+// isolation issue because our underlying tools may access @MainActor isolated code:
+//
+// - CLLocationManager (WeatherTool, LocationTool) requires MainActor
+// - ToolRegistry is @MainActor isolated
+// - SpeechRecognizer and voice components are @MainActor isolated
+// - UI updates must happen on MainActor
+//
+// The solution is to wrap all tool executions in executeOnMainActor() which
+// properly hops to the MainActor before executing the underlying tool.
+//
+// If you add a new Apple Tool Bridge struct:
+// 1. Always use `try await executeOnMainActor { ... }` in the call() method
+// 2. Capture the underlyingTool in a local variable before the closure
+// 3. Test with actual Foundation Models to verify no crashes
+//
+// Reference: Thread 4 crash in _dispatch_assert_queue_fail when this is violated
+
 // MARK: - Debug Logging
 
 /// Logger for tool debugging
 /// Community insight: Use DEBUG logging to debug tool invocation issues
 private let toolLogger = Logger(subsystem: "dev.rye.Clarissa", category: "AppleTools")
+
+// MARK: - MainActor Helper
+
+/// Execute an async closure on the MainActor
+/// Foundation Models calls tools from a background thread, but our underlying tools
+/// may access @MainActor isolated code (CLLocationManager, Keychain, etc.)
+/// This helper ensures proper actor isolation to prevent Swift concurrency crashes
+@available(iOS 26.0, macOS 26.0, *)
+private func executeOnMainActor<T: Sendable>(_ operation: @escaping @MainActor () async throws -> T) async throws -> T {
+    try await Task { @MainActor in
+        try await operation()
+    }.value
+}
 
 /// Log tool call for debugging
 @inline(__always)
@@ -66,23 +102,20 @@ struct AppleWeatherTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
-        // Direct conversion without JSON round-trip
         let typedArgs = WeatherToolArgs(
             location: arguments.location,
             latitude: arguments.latitude,
             longitude: arguments.longitude,
             forecast: arguments.forecast
         )
-        let result = try await executeWithTypedArgs(typedArgs)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
-    }
-
-    /// Execute with typed arguments using Codable serialization
-    private func executeWithTypedArgs(_ args: WeatherToolArgs) async throws -> String {
-        let jsonData = try JSONEncoder().encode(args)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        return try await underlyingTool.execute(arguments: jsonString)
     }
 }
 
@@ -115,9 +148,12 @@ struct AppleCalculatorTool: Tool {
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
         let typedArgs = CalculatorToolArgs(expression: arguments.expression)
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }
@@ -189,9 +225,12 @@ struct AppleCalendarTool: Tool {
             daysAhead: arguments.daysAhead,
             query: arguments.query
         )
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }
@@ -243,9 +282,12 @@ struct AppleContactsTool: Tool {
             contactId: arguments.contactId,
             limit: arguments.limit
         )
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }
@@ -313,9 +355,12 @@ struct AppleRemindersTool: Tool {
             reminderId: arguments.reminderId,
             listName: arguments.listName
         )
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }
@@ -350,9 +395,12 @@ struct AppleLocationTool: Tool {
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
         let typedArgs = LocationToolArgs(includeAddress: arguments.includeAddress)
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }
@@ -399,9 +447,12 @@ struct AppleWebFetchTool: Tool {
             format: arguments.format,
             maxLength: arguments.maxLength
         )
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }
@@ -436,9 +487,12 @@ struct AppleRememberTool: Tool {
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
         let typedArgs = RememberToolArgs(content: arguments.content)
-        let jsonData = try JSONEncoder().encode(typedArgs)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-        let result = try await underlyingTool.execute(arguments: jsonString)
+        let tool = underlyingTool
+        let result = try await executeOnMainActor {
+            let jsonData = try JSONEncoder().encode(typedArgs)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            return try await tool.execute(arguments: jsonString)
+        }
         logToolResult(name, result)
         return result
     }

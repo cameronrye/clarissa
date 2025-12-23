@@ -703,13 +703,18 @@ struct EmptyStateView: View {
                 Text("Your AI assistant")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+
+                Text("Type a message below to get started")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
             }
 
             Spacer()
 
             // Suggested prompts
             VStack(alignment: .leading, spacing: 8) {
-                Text("Try asking:")
+                Text("Or try one of these:")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)

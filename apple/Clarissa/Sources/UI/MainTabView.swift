@@ -228,7 +228,7 @@ struct SessionSidebarRow: View {
         Button(action: onTap) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-	                    Text(session.title)
+                    Text(session.title)
                         .font(.subheadline)
                         .fontWeight(isCurrentSession ? .semibold : .regular)
                         .lineLimit(1)
