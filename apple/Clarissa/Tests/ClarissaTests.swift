@@ -283,7 +283,7 @@ struct ToolTests {
 	        let weatherTool = WeatherTool()
 	        #expect(weatherTool.name == "weather")
 	        #expect(weatherTool.requiresConfirmation == false)
-	        #expect(weatherTool.priority == .extended)
+	        #expect(weatherTool.priority == .core)
 	    }
 
     @Test("Location tool properties")

@@ -727,11 +727,11 @@ struct EmptyStateView: View {
         ]
     ]
 
-    /// General prompts always available (no tool required)
+    /// General prompts always available (task-oriented, things the model can actually do)
     private static let generalPrompts = [
         "What can you help me with?",
-        "Tell me a joke",
-        "How does photosynthesis work?"
+        "What day is it today?",
+        "Help me draft a quick message"
     ]
 
     /// Generate suggestions based on enabled tools
@@ -851,46 +851,65 @@ struct EmptyStateView: View {
     }
 }
 
-/// View for displaying tool execution status
+/// View for displaying tool execution status with optional rich result display
 struct ToolStatusView: View {
     let message: ChatMessage
     var onRetry: (() -> Void)? = nil
 
+    /// Try to parse the tool result into a displayable format
+    private var parsedResult: AnyToolResult? {
+        guard let toolName = message.toolName,
+              let toolResult = message.toolResult,
+              message.toolStatus == .completed else {
+            return nil
+        }
+        return ToolResultParser.parse(toolName: toolName, jsonResult: toolResult)
+    }
+
     /// Color based on tool status with accessibility in mind
-    /// Uses distinct hues that work better for colorblind users
     private var statusColor: Color {
         switch message.toolStatus {
         case .running:
-            return ClarissaTheme.purple  // Purple for running (neutral, distinct)
+            return ClarissaTheme.purple
         case .completed:
-            return ClarissaTheme.cyan    // Cyan/teal for success (distinct from red)
+            return ClarissaTheme.cyan
         case .failed:
-            return .red                  // Red for failure (universal warning)
+            return .red
         case .none:
             return ClarissaTheme.cyan
         }
     }
 
-    /// Icon based on tool status - uses distinct shapes for accessibility
+    /// Icon based on tool status
     private var statusIcon: String {
         switch message.toolStatus {
         case .running:
-            return "circle.dotted"       // Dotted circle for running
+            return "circle.dotted"
         case .completed:
-            return "checkmark.circle.fill"  // Checkmark for success
+            return "checkmark.circle.fill"
         case .failed:
-            return "exclamationmark.triangle.fill"  // Triangle for failure (distinct shape)
+            return "exclamationmark.triangle.fill"
         case .none:
             return "circle.fill"
         }
     }
 
-    /// Background color with appropriate opacity
-    private var backgroundColor: Color {
-        statusColor.opacity(0.15)
+    var body: some View {
+        if let result = parsedResult {
+            // Rich result card for parseable tool results
+            ToolResultCard(
+                toolName: message.toolName ?? "Tool",
+                displayName: message.content,
+                result: result,
+                status: message.toolStatus ?? .completed
+            )
+        } else {
+            // Simple status view for running/failed/unparseable results
+            simpleStatusView
+        }
     }
 
-    var body: some View {
+    private var simpleStatusView: some View {
         HStack(spacing: 8) {
             if message.toolStatus == .running {
                 ProgressView()
@@ -904,7 +923,6 @@ struct ToolStatusView: View {
             Text(message.content)
                 .font(.subheadline)
 
-            // Retry button for failed tools
             if message.toolStatus == .failed, let onRetry = onRetry {
                 Button {
                     onRetry()
@@ -918,7 +936,7 @@ struct ToolStatusView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(backgroundColor)
+        .background(statusColor.opacity(0.15))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

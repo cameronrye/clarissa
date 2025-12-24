@@ -1,5 +1,8 @@
 import AppIntents
 import Foundation
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 // MARK: - App Shortcuts Provider
 
@@ -29,6 +32,27 @@ struct ClarissaShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "New Conversation",
             systemImageName: "plus.bubble"
+        )
+
+        AppShortcut(
+            intent: StartVoiceModeIntent(),
+            phrases: [
+                "Voice mode with \(.applicationName)",
+                "Talk to \(.applicationName) with voice",
+                "Start voice chat with \(.applicationName)"
+            ],
+            shortTitle: "Voice Mode",
+            systemImageName: "waveform"
+        )
+
+        AppShortcut(
+            intent: QuickQuestionIntent(),
+            phrases: [
+                "Quick question for \(.applicationName)",
+                "Ask \(.applicationName) quickly"
+            ],
+            shortTitle: "Quick Question",
+            systemImageName: "questionmark.bubble"
         )
     }
 }
@@ -94,6 +118,74 @@ struct StartNewConversationIntent: AppIntent {
     }
 }
 
+// MARK: - Start Voice Mode Intent
+
+/// Intent for starting voice mode
+@available(iOS 16.0, macOS 13.0, *)
+struct StartVoiceModeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Voice Mode"
+    static let description = IntentDescription(
+        "Start a voice conversation with Clarissa",
+        categoryName: "Assistant"
+    )
+
+    static let openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let appState = AppState.shared
+        appState.requestVoiceMode = true
+
+        return .result(dialog: "Starting voice mode with Clarissa")
+    }
+}
+
+// MARK: - Quick Question Intent
+
+/// Intent for asking a quick question without opening the full app
+@available(iOS 16.0, macOS 13.0, *)
+struct QuickQuestionIntent: AppIntent {
+    static let title: LocalizedStringResource = "Quick Question"
+    static let description = IntentDescription(
+        "Ask Clarissa a quick question",
+        categoryName: "Assistant"
+    )
+
+    @Parameter(title: "Question")
+    var question: String
+
+    static let openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        let appState = AppState.shared
+
+        if !question.isEmpty {
+            appState.pendingShortcutQuestion = question
+            appState.pendingQuestionSource = .siriShortcut
+        }
+
+        return .result(
+            dialog: "Asking Clarissa...",
+            view: ShortcutResultView(question: question)
+        )
+    }
+}
+
+// MARK: - Control Center Button Intent (iOS 18+)
+
+/// A simple button intent for Control Center
+@available(iOS 18.0, macOS 15.0, *)
+struct OpenClarissaControlIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Clarissa"
+    static let description = IntentDescription("Open Clarissa")
+    static let openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult {
+        return .result()
+    }
+}
+
 // MARK: - Shortcut Result View
 
 import SwiftUI
@@ -125,4 +217,3 @@ struct ShortcutResultView: View {
         .padding()
     }
 }
-

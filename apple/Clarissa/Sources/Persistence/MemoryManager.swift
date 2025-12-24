@@ -6,8 +6,8 @@ private let logger = Logger(subsystem: "dev.rye.Clarissa", category: "MemoryMana
 /// Manages long-term memories for the agent
 /// On macOS, syncs with CLI at ~/.clarissa/memories.json for cross-app memory sharing
 /// On iOS, uses Keychain for secure storage
-actor MemoryManager {
-    static let shared = MemoryManager()
+public actor MemoryManager {
+    public static let shared = MemoryManager()
 
     private var memories: [Memory] = []
     private var isLoaded = false
@@ -158,7 +158,7 @@ actor MemoryManager {
     }
 
     /// Force reload memories from all sources (useful for CLI sync)
-    func reload() async {
+    public func reload() async {
         isLoaded = false
         await load()
         logger.info("Reloaded memories, now have \(self.memories.count) memories")

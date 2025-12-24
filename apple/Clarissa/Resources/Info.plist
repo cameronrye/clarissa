@@ -81,6 +81,14 @@
     <array>
         <!-- Required for voice mode to continue speaking when app is backgrounded -->
         <string>audio</string>
+        <!-- Required for background memory sync -->
+        <string>processing</string>
+    </array>
+
+    <!-- Background Task Identifiers -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>dev.rye.Clarissa.memorySync</string>
     </array>
 
     <!-- Scene Configuration for CarPlay Support -->

@@ -1,28 +1,40 @@
 import Foundation
 
 /// System prompt for the prompt enhancement feature.
-/// Instructs the LLM to improve prompts while preserving intent.
-/// Uses direct, imperative instructions with examples for on-device models.
+/// Optimized for Apple's on-device model - focuses on clarity for tool execution.
+/// Keeps prompts short and direct rather than making them verbose.
 private let enhancementSystemPrompt = """
-You are a text enhancer. The user will give you a question or request. Your job is to rewrite it to be clearer and more effective.
-
-IMPORTANT: Output ONLY the improved version of the text. Nothing else.
+Rewrite the user's request to be clearer. Output ONLY the rewritten text.
 
 Example:
-User: "tell me about cats"
-Output: "What are the key characteristics, behaviors, and care requirements for domestic cats as pets?"
+User: "weather"
+Output: "What's the weather right now?"
 
 Example:
-User: "how do I cook rice"
-Output: "What is the best method for cooking fluffy white rice on the stovetop, including the ideal water-to-rice ratio and cooking time?"
+User: "remind me about the thing tomorrow"
+Output: "Set a reminder for tomorrow"
+
+Example:
+User: "whats 15% of 50 dolars"
+Output: "What's 15% of $50?"
 
 Rules:
-- Add specific details and context
-- Fix grammar and spelling
-- Make it more precise
-- Keep the original intent
-- Output ONLY the enhanced text, no explanations
+- Keep it short and direct
+- Fix typos and grammar
+- Add missing context (like "current" for weather)
+- Output ONLY the improved text
 """
+
+/// Keywords that indicate the prompt is already clear enough for tool use
+private let clearToolTriggers = [
+    "weather", "forecast", "temperature",
+    "remind", "reminder", "task",
+    "calendar", "schedule", "meeting", "event", "appointment",
+    "calculate", "what's", "what is", "how much", "percent", "tip",
+    "contact", "phone", "email", "call",
+    "where am i", "location", "address",
+    "remember that", "don't forget"
+]
 
 /// Actor responsible for enhancing user prompts using an LLM provider.
 /// Thread-safe and can be used from any context.
@@ -32,7 +44,28 @@ actor PromptEnhancer {
 
     private init() {}
 
+    /// Check if a prompt is already clear enough and doesn't need enhancement
+    private func isAlreadyClear(_ prompt: String) -> Bool {
+        let lowercased = prompt.lowercased()
+
+        // Skip if prompt contains clear tool triggers
+        for trigger in clearToolTriggers {
+            if lowercased.contains(trigger) {
+                return true
+            }
+        }
+
+        // Skip very short prompts that are likely already direct
+        // (e.g., "weather?" or "my calendar")
+        if prompt.count <= 15 {
+            return true
+        }
+
+        return false
+    }
+
     /// Enhances a user prompt using the provided LLM provider.
+    /// Skips enhancement for prompts that are already clear or tool-triggering.
     ///
     /// - Parameters:
     ///   - prompt: The original prompt text to enhance
@@ -42,6 +75,12 @@ actor PromptEnhancer {
     func enhance(_ prompt: String, using provider: any LLMProvider) async throws -> String {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
+            return prompt
+        }
+
+        // Skip enhancement for already-clear prompts
+        if isAlreadyClear(trimmedPrompt) {
+            ClarissaLogger.agent.info("Prompt already clear, skipping enhancement")
             return prompt
         }
 

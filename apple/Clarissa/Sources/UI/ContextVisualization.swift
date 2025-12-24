@@ -39,6 +39,7 @@ struct ContextIndicatorView: View {
                 .padding(4)
         }
         .glassEffect(.regular.tint(glassTint), in: .circle)
+        .accessibilityIdentifier("ContextIndicator")
         .accessibilityLabel("Context usage: \(Int(stats.usagePercent * 100)) percent")
         .accessibilityHint("Tap for context details")
     }
@@ -48,6 +49,7 @@ struct ContextIndicatorView: View {
             gaugeContent
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("ContextIndicator")
         .accessibilityLabel("Context usage: \(Int(stats.usagePercent * 100)) percent")
         .accessibilityHint("Tap for context details")
     }

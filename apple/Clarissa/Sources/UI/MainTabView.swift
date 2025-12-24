@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Main navigation for Clarissa
 /// - iPhone: Tab-based navigation with iOS 26 Liquid Glass tab bar
@@ -274,6 +277,8 @@ enum ClarissaTab: Hashable {
 struct ChatTabContent: View {
     @ObservedObject var viewModel: ChatViewModel
     @State private var showContextDetails = false
+    @State private var showShareSheet = false
+    @State private var exportedText = ""
     @Namespace private var chatNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -314,6 +319,11 @@ struct ChatTabContent: View {
                         .presentationDetents([.medium, .large])
                         .scrollContentBackground(.hidden)
                 }
+                #if os(iOS)
+                .sheet(isPresented: $showShareSheet) {
+                    ShareSheet(items: [exportedText])
+                }
+                #endif
                 #if os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: .newConversation)) { _ in
                     viewModel.requestNewSession()
@@ -337,6 +347,17 @@ struct ChatTabContent: View {
         }
     }
 
+    private func exportConversation() {
+        exportedText = viewModel.exportConversation()
+        #if os(iOS)
+        showShareSheet = true
+        #else
+        // On macOS, copy to clipboard
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(exportedText, forType: .string)
+        #endif
+    }
+
     private var titleView: some View {
         Text("Clarissa")
             .font(.headline.bold())
@@ -355,6 +376,21 @@ struct ChatTabContent: View {
     private var toolbarButtons: some View {
         GlassEffectContainer(spacing: 20) {
             HStack(spacing: 12) {
+                // Share/Export button - only show when there are messages
+                if !viewModel.messages.isEmpty {
+                    Button {
+                        HapticManager.shared.lightTap()
+                        exportConversation()
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.title3)
+                    }
+                    .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
+                    .glassEffectID("export", in: chatNamespace)
+                    .accessibilityLabel("Export conversation")
+                    .accessibilityHint("Double-tap to share or copy this conversation")
+                }
+
                 Button {
                     HapticManager.shared.lightTap()
                     viewModel.requestNewSession()
@@ -388,6 +424,22 @@ struct ChatTabContent: View {
     }
 }
 
+// MARK: - Share Sheet for iOS
+
+#if os(iOS)
+import UIKit
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif
+
 
 // MARK: - History Tab Content
 
@@ -398,6 +450,21 @@ struct HistoryTabContent: View {
     @State private var currentSessionId: UUID?
     @State private var sessionToDelete: Session?
     @State private var showDeleteConfirmation = false
+    @State private var searchText = ""
+
+    /// Filtered sessions based on search text
+    private var filteredSessions: [Session] {
+        if searchText.isEmpty {
+            return sessions
+        }
+        let query = searchText.lowercased()
+        return sessions.filter { session in
+            session.title.lowercased().contains(query) ||
+            session.messages.contains { msg in
+                msg.content.lowercased().contains(query)
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -408,8 +475,10 @@ struct HistoryTabContent: View {
                         systemImage: "clock.arrow.circlepath",
                         description: Text("Your conversations will appear here.")
                     )
+                } else if filteredSessions.isEmpty && !searchText.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
                 } else {
-                    ForEach(sessions) { session in
+                    ForEach(filteredSessions) { session in
                         SessionRowView(
                             session: session,
                             isCurrentSession: session.id == currentSessionId,
@@ -424,6 +493,7 @@ struct HistoryTabContent: View {
                     .onDelete(perform: deleteSessions)
                 }
             }
+            .searchable(text: $searchText, prompt: "Search conversations")
             .navigationTitle("History")
             .refreshable {
                 await loadData()
@@ -454,9 +524,13 @@ struct HistoryTabContent: View {
     }
 
     private func deleteSessions(at offsets: IndexSet) {
-        // Only handle single deletion with confirmation
-        guard let firstIndex = offsets.first else { return }
-        sessionToDelete = sessions[firstIndex]
+        // Map filtered indices back to original sessions
+        let sessionsToDelete = offsets.compactMap { index -> Session? in
+            guard index < filteredSessions.count else { return nil }
+            return filteredSessions[index]
+        }
+        guard let session = sessionsToDelete.first else { return }
+        sessionToDelete = session
         showDeleteConfirmation = true
     }
 }

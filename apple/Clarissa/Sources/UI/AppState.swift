@@ -5,7 +5,12 @@ public final class AppState: ObservableObject {
     /// Shared instance for App Intents access
     public static let shared = AppState()
 
-    @Published public var isOnboardingComplete: Bool = UserDefaults.standard.bool(forKey: "onboardingComplete")
+    /// Whether the app is running in screenshot/demo mode for App Store screenshots
+    public var isScreenshotMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-SCREENSHOT_MODE")
+    }
+
+    @Published public var isOnboardingComplete: Bool
     @Published public var selectedProvider: LLMProviderType {
         didSet {
             // Persist provider selection
@@ -21,12 +26,22 @@ public final class AppState: ObservableObject {
     /// Request to start a new conversation (from Shortcut or URL)
     @Published public var requestNewConversation: Bool = false
 
+    /// Request to start voice mode (from Shortcut)
+    @Published public var requestVoiceMode: Bool = false
+
     /// Source of the pending question for analytics/logging
     @Published public var pendingQuestionSource: QuestionSource = .direct
 
     private static let providerKey = "selectedProviderType"
 
     public init() {
+        // In screenshot mode, always skip onboarding
+        if ProcessInfo.processInfo.arguments.contains("-SCREENSHOT_MODE") {
+            self.isOnboardingComplete = true
+        } else {
+            self.isOnboardingComplete = UserDefaults.standard.bool(forKey: "onboardingComplete")
+        }
+
         // Load persisted provider selection with fallback to default
         if let savedRaw = UserDefaults.standard.string(forKey: Self.providerKey),
            let savedProvider = LLMProviderType(rawValue: savedRaw) {

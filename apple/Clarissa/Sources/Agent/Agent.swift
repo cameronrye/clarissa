@@ -3,6 +3,39 @@ import Foundation
 /// Configuration for the agent
 struct AgentConfig {
     var maxIterations: Int = ClarissaConstants.defaultMaxIterations
+    var maxRetries: Int = 3
+    var baseRetryDelay: TimeInterval = 1.0  // seconds
+}
+
+// MARK: - Retry Helper
+
+/// Retry configuration for handling rate limits and transient errors
+enum RetryHelper {
+    /// Check if an error is retryable (rate limits, transient failures)
+    static func isRetryable(_ error: Error) -> Bool {
+        // Check for Foundation Models rate limiting
+        if let fmError = error as? FoundationModelsError {
+            switch fmError {
+            case .rateLimited, .concurrentRequests:
+                return true
+            default:
+                return false
+            }
+        }
+        // Check for URLSession rate limit responses
+        if let urlError = error as? URLError {
+            return urlError.code == .timedOut || urlError.code == .networkConnectionLost
+        }
+        return false
+    }
+
+    /// Calculate delay with exponential backoff
+    static func delay(forAttempt attempt: Int, baseDelay: TimeInterval) -> TimeInterval {
+        let delay = baseDelay * pow(2.0, Double(attempt))
+        // Add jitter to prevent thundering herd
+        let jitter = Double.random(in: 0...0.5)
+        return min(delay + jitter, 30.0)  // Cap at 30 seconds
+    }
 }
 
 // MARK: - Token Management
@@ -266,23 +299,51 @@ final class Agent: ObservableObject {
         for _ in 0..<config.maxIterations {
             callbacks?.onThinking()
 
-            // Get LLM response with streaming
+            // Get LLM response with streaming (with retry for rate limits)
             var fullContent = ""
             var toolCalls: [ToolCall] = []
+            var lastError: Error?
 
-            for try await chunk in provider.streamComplete(messages: messages, tools: tools) {
-                // Check for task cancellation during streaming
-                try Task.checkCancellation()
+            // Retry loop for transient errors like rate limiting
+            for attempt in 0..<config.maxRetries {
+                do {
+                    fullContent = ""
+                    toolCalls = []
 
-                if let content = chunk.content, content != "null" {
-                    // Filter out literal "null" string which models sometimes output
-                    // when confused about tool calling
-                    fullContent += content
-                    callbacks?.onStreamChunk(chunk: content)
+                    for try await chunk in provider.streamComplete(messages: messages, tools: tools) {
+                        // Check for task cancellation during streaming
+                        try Task.checkCancellation()
+
+                        if let content = chunk.content, content != "null" {
+                            // Filter out literal "null" string which models sometimes output
+                            // when confused about tool calling
+                            fullContent += content
+                            callbacks?.onStreamChunk(chunk: content)
+                        }
+                        if let calls = chunk.toolCalls {
+                            toolCalls = calls
+                        }
+                    }
+                    // Success - break out of retry loop
+                    lastError = nil
+                    break
+                } catch {
+                    lastError = error
+
+                    // Check if error is retryable
+                    if RetryHelper.isRetryable(error) && attempt < self.config.maxRetries - 1 {
+                        let delay = RetryHelper.delay(forAttempt: attempt, baseDelay: self.config.baseRetryDelay)
+                        ClarissaLogger.agent.info("Rate limited, retrying in \(delay)s (attempt \(attempt + 1)/\(self.config.maxRetries))")
+                        try await Task.sleep(for: .seconds(delay))
+                        continue
+                    }
+                    throw error
                 }
-                if let calls = chunk.toolCalls {
-                    toolCalls = calls
-                }
+            }
+
+            // If we exhausted retries, throw the last error
+            if let error = lastError {
+                throw error
             }
 
             // Create assistant message
@@ -296,8 +357,9 @@ final class Agent: ObservableObject {
             // The LLM session has already executed tools and incorporated results
             if nativeToolHandling {
                 ClarissaLogger.agent.info("Agent run completed (native tool handling)")
-                callbacks?.onResponse(content: fullContent)
-                return fullContent
+                let finalContent = Self.applyRefusalFallback(fullContent)
+                callbacks?.onResponse(content: finalContent)
+                return finalContent
             }
 
             // Check for tool calls (only for non-native providers like OpenRouter)
@@ -328,12 +390,52 @@ final class Agent: ObservableObject {
 
             // No tool calls - final response
             ClarissaLogger.agent.info("Agent run completed with response")
-            callbacks?.onResponse(content: fullContent)
-            return fullContent
+            let finalContent = Self.applyRefusalFallback(fullContent)
+            callbacks?.onResponse(content: finalContent)
+            return finalContent
         }
 
         ClarissaLogger.agent.warning("Agent reached max iterations")
         throw AgentError.maxIterationsReached
+    }
+
+    // MARK: - Refusal Detection
+
+    /// Phrases that indicate the model is refusing a request
+    private static let refusalPhrases = [
+        "i cannot fulfill",
+        "i can't fulfill",
+        "i'm not able to",
+        "i am not able to",
+        "i cannot help with",
+        "i can't help with",
+        "i'm unable to",
+        "i am unable to",
+        "i cannot assist",
+        "i can't assist",
+        "sorry, but i cannot",
+        "sorry, but i can't",
+        "i'm sorry, but i cannot",
+        "i'm sorry, but i can't"
+    ]
+
+    /// Friendly redirect message when model refuses
+    private static let refusalFallback = """
+        I'm best at helping with tasks like checking your calendar, setting reminders, getting weather updates, and doing calculations. What can I help you with?
+        """
+
+    /// Check if a response is a refusal and provide a helpful redirect if so
+    private static func applyRefusalFallback(_ content: String) -> String {
+        let lowercased = content.lowercased()
+
+        for phrase in refusalPhrases {
+            if lowercased.contains(phrase) {
+                ClarissaLogger.agent.info("Detected refusal response, applying fallback")
+                return refusalFallback
+            }
+        }
+
+        return content
     }
     
     /// Reset conversation (keep system prompt)

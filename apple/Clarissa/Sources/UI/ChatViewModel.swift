@@ -388,6 +388,12 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     /// Load the current session from persistence
     private func loadCurrentSession() async {
+        // In screenshot mode, load demo data instead of real session
+        if DemoData.isScreenshotMode {
+            loadDemoData()
+            return
+        }
+
         let session = await SessionManager.shared.getCurrentSession()
         let savedMessages = session.messages
 
@@ -403,10 +409,48 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         updateContextStats()
     }
 
+    /// Load demo data for screenshot mode based on current scenario
+    private func loadDemoData() {
+        let scenario = DemoData.currentScenario
+        switch scenario {
+        case .welcome:
+            // Empty state with suggestions - no messages needed
+            messages = []
+        case .conversation:
+            messages = DemoData.getConversationChatMessages()
+        case .context:
+            // Load some messages and set demo context stats for context visualizer
+            messages = DemoData.getConversationChatMessages()
+            contextStats = DemoData.demoContextStats
+        case .settings:
+            // Settings screen doesn't need messages
+            messages = []
+        }
+    }
+
     /// Save the current session
     private func saveCurrentSession() async {
         let messagesToSave = agent.getMessagesForSave()
         await SessionManager.shared.updateCurrentSession(messages: messagesToSave)
+    }
+
+    /// Export conversation as markdown text
+    func exportConversation() -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .short
+
+        var markdown = "# Clarissa Conversation\n\n"
+        markdown += "_Exported on \(dateFormatter.string(from: Date()))_\n\n"
+        markdown += "---\n\n"
+
+        for message in messages {
+            if message.role != .system {
+                markdown += "\(message.toMarkdown())\n\n"
+            }
+        }
+
+        return markdown
     }
 
     /// Switch to a different session
@@ -480,6 +524,7 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     func onToolResult(name: String, result: String, success: Bool) {
         if let index = messages.lastIndex(where: { $0.toolName == name }) {
             messages[index].toolStatus = success ? .completed : .failed
+            messages[index].toolResult = result
         }
         // After tool completes, we're processing the result
         thinkingStatus = .processing
@@ -699,5 +744,21 @@ struct ChatMessage: Identifiable {
     var content: String
     var toolName: String?
     var toolStatus: ToolStatus?
+    var toolResult: String?  // JSON result from tool execution
     let timestamp = Date()
+
+    /// Export message as markdown
+    func toMarkdown() -> String {
+        switch role {
+        case .user:
+            return "**You:** \(content)"
+        case .assistant:
+            return "**Clarissa:** \(content)"
+        case .system:
+            return "_System: \(content)_"
+        case .tool:
+            let status = toolStatus == .completed ? "completed" : (toolStatus == .failed ? "failed" : "running")
+            return "> Tool: \(toolName ?? "unknown") (\(status))"
+        }
+    }
 }

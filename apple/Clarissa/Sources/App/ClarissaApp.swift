@@ -5,11 +5,24 @@ import FoundationModels
 #endif
 
 #if os(iOS)
+import BackgroundTasks
 import CarPlay
 import UIKit
 
-/// App delegate to handle CarPlay scene configuration
+/// Background task identifier for memory sync
+private let backgroundMemorySyncTaskId = "dev.rye.Clarissa.memorySync"
+
+/// App delegate to handle CarPlay scene configuration and background tasks
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Register background tasks
+        registerBackgroundTasks()
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         configurationForConnecting connectingSceneSession: UISceneSession,
@@ -30,6 +43,48 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             name: "Default Configuration",
             sessionRole: connectingSceneSession.role
         )
+    }
+
+    // MARK: - Background Tasks
+
+    private func registerBackgroundTasks() {
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: backgroundMemorySyncTaskId,
+            using: nil
+        ) { task in
+            self.handleMemorySyncTask(task as! BGProcessingTask)
+        }
+    }
+
+    private func handleMemorySyncTask(_ task: BGProcessingTask) {
+        // Schedule next task
+        scheduleMemorySyncTask()
+
+        // Create async task to perform sync
+        let syncTask = Task {
+            await MemoryManager.shared.reload()
+            task.setTaskCompleted(success: true)
+        }
+
+        // Handle expiration
+        task.expirationHandler = {
+            syncTask.cancel()
+            task.setTaskCompleted(success: false)
+        }
+    }
+
+    /// Schedule background memory sync task
+    func scheduleMemorySyncTask() {
+        let request = BGProcessingTaskRequest(identifier: backgroundMemorySyncTaskId)
+        request.requiresNetworkConnectivity = false
+        request.requiresExternalPower = false
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)  // 15 minutes
+
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            ClarissaLogger.agent.error("Failed to schedule background task: \(error.localizedDescription)")
+        }
     }
 }
 #endif
@@ -68,6 +123,12 @@ struct ClarissaApp: App {
                 // Supported: clarissa://ask?q=<question>, clarissa://new, clarissa://memory?action=sync
                 appState.handleURL(url)
             }
+            #if os(iOS)
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                // Schedule background memory sync when app enters background
+                appDelegate.scheduleMemorySyncTask()
+            }
+            #endif
         }
         #if os(macOS)
         .windowStyle(.automatic)
