@@ -11,6 +11,47 @@ interface SearchMatch {
 }
 
 /**
+ * Maximum allowed regex pattern length to prevent ReDoS attacks
+ */
+const MAX_PATTERN_LENGTH = 500;
+
+/**
+ * Patterns that are known to be vulnerable to ReDoS
+ * These check for common catastrophic backtracking patterns
+ */
+const DANGEROUS_REGEX_PATTERNS = [
+  // Nested quantifiers like (a+)+ or (a*)*
+  /\([^)]*[+*][^)]*\)[+*]/,
+  // Overlapping alternations with quantifiers
+  /\([^|)]+\|[^|)]+\)[+*]/,
+];
+
+/**
+ * Validate regex pattern for potential ReDoS vulnerabilities
+ */
+function validateRegexPattern(pattern: string): { valid: boolean; reason?: string } {
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    return { valid: false, reason: `Pattern too long (max ${MAX_PATTERN_LENGTH} characters)` };
+  }
+
+  for (const dangerous of DANGEROUS_REGEX_PATTERNS) {
+    if (dangerous.test(pattern)) {
+      return { valid: false, reason: "Pattern contains potentially dangerous nested quantifiers" };
+    }
+  }
+
+  // Try to compile the regex to catch syntax errors early
+  try {
+    new RegExp(pattern);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Invalid regex";
+    return { valid: false, reason: msg };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Search files tool - grep-like regex search
  */
 export const searchFilesTool = defineTool({
@@ -44,6 +85,12 @@ export const searchFilesTool = defineTool({
   }),
   execute: async ({ pattern, path = ".", filePattern, maxResults = 20, caseSensitive = false }) => {
     try {
+      // Validate regex pattern to prevent ReDoS attacks
+      const patternValidation = validateRegexPattern(pattern);
+      if (!patternValidation.valid) {
+        throw new Error(`Invalid search pattern: ${patternValidation.reason}`);
+      }
+
       // Security check with canonical path resolution
       const { absolutePath, relativePath } = getSecurePaths(path);
 

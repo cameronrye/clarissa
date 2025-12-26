@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { homedir } from "os";
 import { join } from "path";
-import { mkdirSync, existsSync } from "fs";
+import { mkdirSync, existsSync, readFileSync } from "fs";
 
 export const CONFIG_DIR = join(homedir(), ".clarissa");
 export const CONFIG_FILE = join(CONFIG_DIR, "config.json");
@@ -48,7 +48,9 @@ export async function initConfig(keys: ApiKeys): Promise<void> {
 export function hasApiKey(): boolean {
   try {
     if (!existsSync(CONFIG_FILE)) return false;
-    const content = require(CONFIG_FILE);
+    // Use readFileSync + JSON.parse instead of require() for consistency
+    // require() caches results and is unusual in ESM context
+    const content = JSON.parse(readFileSync(CONFIG_FILE, "utf-8"));
     return Boolean(
       content?.openrouterApiKey ||
       content?.openaiApiKey ||

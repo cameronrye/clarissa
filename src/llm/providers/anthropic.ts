@@ -103,7 +103,7 @@ export class AnthropicProvider implements LLMProvider {
         throw lastError;
       }
     }
-    throw lastError;
+    throw lastError ?? new Error("Unexpected retry loop exit");
   }
 
   private async doChat(messages: Message[], model: string, options?: ChatOptions): Promise<ChatResponse> {
@@ -123,11 +123,18 @@ export class AnthropicProvider implements LLMProvider {
             content.push({ type: "text", text: msg.content });
           }
           for (const tc of msg.tool_calls) {
+            // Safely parse tool arguments, fallback to empty object on malformed JSON
+            let parsedInput: unknown = {};
+            try {
+              parsedInput = JSON.parse(tc.function.arguments);
+            } catch {
+              // Malformed JSON in tool arguments - use empty object
+            }
             content.push({
               type: "tool_use",
               id: tc.id,
               name: tc.function.name,
-              input: JSON.parse(tc.function.arguments),
+              input: parsedInput,
             });
           }
           anthropicMessages.push({ role: "assistant", content });

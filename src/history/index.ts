@@ -1,5 +1,6 @@
 import { join } from "path";
 import { existsSync } from "fs";
+import { z } from "zod";
 import { CONFIG_DIR } from "../config/index.ts";
 
 const HISTORY_FILE = join(CONFIG_DIR, "history.json");
@@ -12,9 +13,21 @@ export interface HistoryEntry {
   timestamp: string;
 }
 
-interface HistoryData {
-  entries: HistoryEntry[];
-}
+/**
+ * Schema for validating history data from disk
+ */
+const historyEntrySchema = z.object({
+  query: z.string(),
+  response: z.string(),
+  model: z.string(),
+  timestamp: z.string(),
+});
+
+const historyDataSchema = z.object({
+  entries: z.array(historyEntrySchema),
+});
+
+type HistoryData = z.infer<typeof historyDataSchema>;
 
 /**
  * Simple async mutex for serializing file operations
@@ -59,10 +72,17 @@ class HistoryManager {
 
     try {
       if (existsSync(HISTORY_FILE)) {
-        const data: HistoryData = JSON.parse(
-          await Bun.file(HISTORY_FILE).text()
-        );
-        this.entries = data.entries || [];
+        const content = JSON.parse(await Bun.file(HISTORY_FILE).text());
+
+        // Validate history data against schema to prevent corrupted files
+        // from causing runtime errors
+        const result = historyDataSchema.safeParse(content);
+        if (!result.success) {
+          console.error("Invalid history data:", result.error.message);
+          this.entries = [];
+        } else {
+          this.entries = result.data.entries;
+        }
       }
     } catch {
       this.entries = [];
@@ -108,19 +128,29 @@ class HistoryManager {
   }
 
   /**
-   * Get all history entries
+   * Get all history entries (thread-safe)
    */
   async list(): Promise<HistoryEntry[]> {
-    await this.load();
-    return [...this.entries];
+    await this.mutex.acquire();
+    try {
+      await this.load();
+      return [...this.entries];
+    } finally {
+      this.mutex.release();
+    }
   }
 
   /**
-   * Get recent entries
+   * Get recent entries (thread-safe)
    */
   async getRecent(count: number = 10): Promise<HistoryEntry[]> {
-    await this.load();
-    return this.entries.slice(0, count);
+    await this.mutex.acquire();
+    try {
+      await this.load();
+      return this.entries.slice(0, count);
+    } finally {
+      this.mutex.release();
+    }
   }
 
   /**

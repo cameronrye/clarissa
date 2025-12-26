@@ -164,6 +164,11 @@ export async function downloadModel(
   const contentLength = response.headers.get("content-length");
   const total = contentLength ? parseInt(contentLength, 10) : 0;
 
+  // Warn if content-length is missing (progress tracking won't work accurately)
+  if (!contentLength) {
+    console.warn("Warning: Server did not provide Content-Length header. Download progress may be inaccurate.");
+  }
+
   // Stream directly to file to avoid memory issues with large files
   const reader = response.body?.getReader();
   if (!reader) {
@@ -176,6 +181,7 @@ export async function downloadModel(
   let downloaded = 0;
   let lastUpdate = Date.now();
   let lastDownloaded = 0;
+  let success = false;
 
   try {
     while (true) {
@@ -218,16 +224,26 @@ export async function downloadModel(
     // Rename temp file to final destination (cross-platform)
     await rename(tempPath, destPath);
 
+    success = true;
     return destPath;
-    } catch (error) {
-      // Clean up temp file on error
+  } finally {
+    // Always attempt to close the file handle
+    if (!success) {
+      try {
+        await fileHandle.end();
+      } catch {
+        // Ignore close errors during cleanup
+      }
+    }
+    // Clean up temp file on error
+    if (!success) {
       try {
         await rm(tempPath, { force: true });
       } catch {
         // Ignore cleanup errors
       }
-      throw error;
     }
+  }
 }
 
 /**

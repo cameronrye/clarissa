@@ -2,6 +2,49 @@ import { z } from "zod";
 import { defineTool } from "./base.ts";
 
 /**
+ * Dangerous command patterns that should be blocked for safety.
+ * These patterns match commands that could cause severe system damage.
+ */
+const DANGEROUS_PATTERNS = [
+  // Recursive deletion of root or important directories
+  /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?(-[a-zA-Z]*r[a-zA-Z]*\s+)?[\/~]\s*$/i,
+  /rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+)?(-[a-zA-Z]*f[a-zA-Z]*\s+)?[\/~]\s*$/i,
+  /rm\s+-rf\s+\/\s*$/i,
+  /rm\s+-rf\s+\/\*/i,
+  // Fork bomb patterns
+  /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;?\s*:/,
+  // Overwriting boot records or critical system files
+  />\s*\/dev\/sd[a-z]/i,
+  /dd\s+.*of=\/dev\/sd[a-z]/i,
+  /mkfs\s+.*\/dev\/sd[a-z]/i,
+  // Chmod 777 on root
+  /chmod\s+(-[a-zA-Z]*R[a-zA-Z]*\s+)?777\s+\/\s*$/i,
+  // Dangerous redirects
+  />\s*\/dev\/null\s*2>&1\s*<\s*\/dev\/null/,
+  // Kill all processes
+  /kill\s+-9\s+-1/,
+  /killall\s+-9\s+/,
+];
+
+/**
+ * Check if a command matches any dangerous patterns
+ */
+function isDangerousCommand(command: string): { dangerous: boolean; reason?: string } {
+  const trimmed = command.trim();
+
+  for (const pattern of DANGEROUS_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        dangerous: true,
+        reason: `Command matches dangerous pattern: ${pattern.toString()}`,
+      };
+    }
+  }
+
+  return { dangerous: false };
+}
+
+/**
  * Bash tool for executing shell commands
  */
 export const bashTool = defineTool({
@@ -21,6 +64,18 @@ export const bashTool = defineTool({
       .describe("Timeout in milliseconds (default: 30000)"),
   }),
   execute: async ({ command, timeout = 30000 }) => {
+    // Check for dangerous commands before execution
+    const dangerCheck = isDangerousCommand(command);
+    if (dangerCheck.dangerous) {
+      return {
+        command,
+        exitCode: -1,
+        stdout: "",
+        stderr: `Command blocked for safety: ${dangerCheck.reason}`,
+        success: false,
+      };
+    }
+
     try {
       // Use Bun's shell for command execution
       const proc = Bun.spawn(["bash", "-c", command], {

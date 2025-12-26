@@ -1,8 +1,20 @@
 import { join } from "path";
 import { homedir } from "os";
 import { mkdir } from "fs/promises";
+import { z } from "zod";
 
 const MEMORY_FILE = join(homedir(), ".clarissa", "memories.json");
+
+/**
+ * Schema for validating memory data from disk
+ */
+const memorySchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  createdAt: z.string(),
+});
+
+const memoriesArraySchema = z.array(memorySchema);
 
 /** Maximum number of memories to store (matches iOS) */
 const MAX_MEMORIES = 100;
@@ -107,7 +119,16 @@ class MemoryManager {
 
       if (await file.exists()) {
         const content = await file.json();
-        this.memories = content as Memory[];
+
+        // Validate memory data against schema to prevent corrupted files
+        // from causing runtime errors
+        const result = memoriesArraySchema.safeParse(content);
+        if (!result.success) {
+          console.error("Invalid memory data:", result.error.message);
+          this.memories = [];
+        } else {
+          this.memories = result.data as Memory[];
+        }
       }
       this.loaded = true;
     } catch {
