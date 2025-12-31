@@ -277,14 +277,14 @@ struct ToolTests {
         #expect(remindersTool.priority == .extended)
     }
 
-	    @Test("Weather tool properties")
-	    @available(iOS 16.0, macOS 13.0, *)
-	    func testWeatherToolProperties() {
-	        let weatherTool = WeatherTool()
-	        #expect(weatherTool.name == "weather")
-	        #expect(weatherTool.requiresConfirmation == false)
-	        #expect(weatherTool.priority == .core)
-	    }
+    @Test("Weather tool properties")
+    @available(iOS 16.0, macOS 13.0, *)
+    func testWeatherToolProperties() {
+        let weatherTool = WeatherTool()
+        #expect(weatherTool.name == "weather")
+        #expect(weatherTool.requiresConfirmation == false)
+        #expect(weatherTool.priority == .core)
+    }
 
     @Test("Location tool properties")
     func testLocationToolProperties() {

@@ -60,14 +60,9 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         #endif
     }
 
-    deinit {
-        // Clean up voice manager resources
-        if let voiceManager = voiceManager {
-            Task { @MainActor in
-                await voiceManager.cleanup()
-            }
-        }
-    }
+    // Note: VoiceManager cleanup is handled via scenePhase in ChatView
+    // Do NOT use Task in deinit - it's undefined behavior and may not complete
+    // VoiceManager's own deinit handles NotificationCenter observer removal
 
     // MARK: - macOS Menu Command Observers
 
@@ -518,7 +513,23 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     /// Delete a session
     func deleteSession(id: UUID) async {
+        // Check if we're deleting the active conversation
+        let currentId = await SessionManager.shared.getCurrentSessionId()
+        let isDeletingActiveConversation = currentId == id
+
         await SessionManager.shared.deleteSession(id: id)
+
+        // If we deleted the active conversation, clear chat and show new conversation screen
+        if isDeletingActiveConversation {
+            await MainActor.run {
+                startNewSession()
+            }
+        }
+    }
+
+    /// Rename a session
+    func renameSession(id: UUID, newTitle: String) async {
+        await SessionManager.shared.renameSession(id: id, newTitle: newTitle)
     }
 
     // MARK: - AgentCallbacks

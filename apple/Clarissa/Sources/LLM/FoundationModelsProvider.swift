@@ -89,8 +89,11 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
     private func getOrCreateSession(systemPrompt: String?, withTools: Bool = true) -> LanguageModelSession {
         let instructionsText = systemPrompt ?? "You are Clarissa, a helpful AI assistant."
 
-        // Use permissive guardrails to avoid refusals when recalling user-saved facts
-        // This is necessary because the model may otherwise refuse to recall personal info
+        // Use permissive guardrails for the memory feature to work correctly.
+        // The app allows users to save personal facts (e.g., "My name is Cameron", "I prefer dark mode")
+        // which are stored in the system prompt. Without permissive guardrails, the model may refuse
+        // to recall these user-provided facts, breaking the core memory functionality.
+        // This setting only affects content transformations, not safety guardrails.
         let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
 
         // For tool-less sessions (e.g., prompt enhancement), always create fresh

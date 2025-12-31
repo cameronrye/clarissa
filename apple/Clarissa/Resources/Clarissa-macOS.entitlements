@@ -18,9 +18,8 @@
     <key>com.apple.security.personal-information.addressbook</key>
     <true/>
 
-    <!-- Reminders access -->
-    <key>com.apple.security.personal-information.reminders</key>
-    <true/>
+    <!-- Note: Reminders entitlement not supported on macOS App Store -->
+    <!-- Reminders functionality uses EventKit which is available without entitlement on macOS -->
 
     <!-- Location access -->
     <key>com.apple.security.personal-information.location</key>

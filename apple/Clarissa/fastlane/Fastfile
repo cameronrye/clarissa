@@ -3,9 +3,11 @@
 
 default_platform(:ios)
 
-# Shared configuration
-SCREENSHOT_OUTPUT = "./fastlane/screenshots"
-PROJECT_PATH = "../Clarissa.xcodeproj"
+# Shared configuration - use absolute paths to avoid directory confusion
+FASTLANE_DIR = File.dirname(__FILE__)
+PROJECT_DIR = File.expand_path("..", FASTLANE_DIR)
+SCREENSHOT_OUTPUT = File.join(FASTLANE_DIR, "screenshots")
+PROJECT_PATH = File.join(PROJECT_DIR, "Clarissa.xcodeproj")
 
 platform :ios do
   desc "Capture iOS screenshots via UI tests"
@@ -55,8 +57,8 @@ platform :ios do
     Dir.glob(File.join(screenshots_cache, "*.png")).each do |file|
       filename = File.basename(file)
       UI.message("Found screenshot: #{filename}")
-      # Filename format: "DeviceName-ScreenshotName.png"
-      if filename =~ /^(.+?)-(.+)\.png$/
+      # Filename format: "DeviceName-XX-ScreenshotName.png" where XX is 2 digits
+      if filename =~ /^(.+)-(\d{2}-.+)\.png$/
         device_name = $1
         screenshot_name = $2
         device_dir = File.join(SCREENSHOT_OUTPUT, "en-US", device_name)
@@ -190,33 +192,54 @@ lane :marketing_all do
   frame_all
 end
 
-desc "Copy framed screenshots to App Store directory"
+desc "Copy screenshots to App Store directory"
 lane :export do
   require 'fileutils'
-  
+
   source = SCREENSHOT_OUTPUT
-  dest = "../screenshots"
-  
-  # Map fastlane device names to our directory structure
+  dest = File.join(PROJECT_DIR, "screenshots")
+
+  # Map fastlane device names to App Store directory structure
+  # Using display sizes that match App Store Connect requirements
   mappings = {
     "iPhone 17 Pro Max" => "iPhone-6.9",
-    "iPhone 17 Pro" => "iPhone-6.5",
+    "iPhone 17 Pro" => "iPhone-6.7",
     "iPad Pro 13-inch (M5)" => "iPad-13",
     "Mac" => "macOS"
   }
-  
+
+  total_copied = 0
+
   mappings.each do |device, folder|
     device_dir = File.join(source, "en-US", device)
     target_dir = File.join(dest, folder)
-    
-    if File.directory?(device_dir)
-      FileUtils.mkdir_p(target_dir)
-      Dir.glob(File.join(device_dir, "*_framed.png")).each do |file|
+
+    next unless File.directory?(device_dir)
+
+    FileUtils.mkdir_p(target_dir)
+
+    # Try framed screenshots first, fall back to raw screenshots
+    framed_files = Dir.glob(File.join(device_dir, "*_framed.png"))
+
+    if framed_files.any?
+      framed_files.each do |file|
         basename = File.basename(file).gsub(/_framed/, "")
         FileUtils.cp(file, File.join(target_dir, basename))
+        total_copied += 1
       end
-      UI.success("Copied framed screenshots to #{target_dir}")
+      UI.success("Copied #{framed_files.count} framed screenshots to #{target_dir}")
+    else
+      # Copy raw screenshots if no framed versions exist
+      raw_files = Dir.glob(File.join(device_dir, "*.png"))
+      raw_files.each do |file|
+        basename = File.basename(file)
+        FileUtils.cp(file, File.join(target_dir, basename))
+        total_copied += 1
+      end
+      UI.success("Copied #{raw_files.count} raw screenshots to #{target_dir}")
     end
   end
+
+  UI.important("Total: #{total_copied} screenshots exported to #{dest}")
 end
 

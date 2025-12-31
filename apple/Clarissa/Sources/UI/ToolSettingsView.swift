@@ -3,13 +3,19 @@ import SwiftUI
 /// Standalone view for managing tools - accessible from overflow menu
 struct ToolSettingsView: View {
     @EnvironmentObject var appState: AppState
-    @State private var tools: [ToolInfo] = []
-    @State private var enabledCount: Int = 0
-    @State private var isAtLimit: Bool = false
+    @State private var tools: [ToolInfo]
+    @State private var enabledCount: Int
+    @State private var isAtLimit: Bool
     let onDismiss: (() -> Void)?
 
     init(onDismiss: (() -> Void)? = nil) {
         self.onDismiss = onDismiss
+        // Initialize state with current tool settings
+        // This ensures tools are available immediately, not just after .task runs
+        let settings = ToolSettings.shared
+        _tools = State(initialValue: settings.allTools)
+        _enabledCount = State(initialValue: settings.enabledCount)
+        _isAtLimit = State(initialValue: settings.isAtFoundationModelsLimit)
     }
 
     private var isFoundationModels: Bool {
@@ -17,9 +23,35 @@ struct ToolSettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        #if os(macOS)
+        macOSContent
+        #else
+        iOSContent
+        #endif
+    }
+
+    #if os(macOS)
+    private var macOSContent: some View {
+        VStack(spacing: 0) {
+            // Header with title and done button
+            HStack {
+                Text("Tools")
+                    .font(.headline)
+                Spacer()
+                if let onDismiss = onDismiss {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(ClarissaTheme.purple)
+                }
+            }
+            .padding()
+
+            Divider()
+
+            // Tools list
             List {
-                // Built-in tools section
                 Section {
                     ForEach(tools) { tool in
                         ToolRow(
@@ -45,7 +77,46 @@ struct ToolSettingsView: View {
                     }
                 }
 
-                // Custom tools section
+                Section {
+                    customToolsComingSoon
+                } header: {
+                    Text("Custom Tools")
+                }
+            }
+        }
+        .frame(minWidth: 400, minHeight: 400)
+    }
+    #endif
+
+    #if os(iOS)
+    private var iOSContent: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(tools) { tool in
+                        ToolRow(
+                            tool: tool,
+                            isAtLimit: isFoundationModels && isAtLimit,
+                            onToggle: {
+                                ToolSettings.shared.toggleTool(tool.id)
+                                refreshTools()
+                            }
+                        )
+                    }
+                } header: {
+                    if isFoundationModels {
+                        Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
+                    } else {
+                        Text("Built-in Tools")
+                    }
+                } footer: {
+                    if isFoundationModels {
+                        Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
+                    } else {
+                        Text("Select which tools the assistant can use.")
+                    }
+                }
+
                 Section {
                     customToolsComingSoon
                 } header: {
@@ -53,7 +124,6 @@ struct ToolSettingsView: View {
                 }
             }
             .navigationTitle("Tools")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if let onDismiss = onDismiss {
@@ -62,22 +132,15 @@ struct ToolSettingsView: View {
                     }
                 }
             }
-            #else
-            .toolbar {
-                if let onDismiss = onDismiss {
-                    ToolbarItem(placement: .confirmationAction) {
-                        toolsDoneButton(onDismiss: onDismiss)
-                    }
-                }
-            }
-            #endif
         }
         .tint(ClarissaTheme.purple)
-        .onAppear {
+        .task {
             refreshTools()
         }
     }
+    #endif
 
+    @MainActor
     private func refreshTools() {
         tools = ToolSettings.shared.allTools
         enabledCount = ToolSettings.shared.enabledCount

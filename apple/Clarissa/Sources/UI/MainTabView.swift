@@ -17,14 +17,10 @@ public struct MainTabView: View {
     public init() {}
 
     public var body: some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            adaptiveNavigation
-        } else {
-            ContentView()
-        }
+        adaptiveNavigation
     }
 
-    @available(iOS 26.0, macOS 26.0, *)
+    // Note: iOS 26+ is the minimum deployment target, so no availability check needed
     @ViewBuilder
     private var adaptiveNavigation: some View {
         #if os(macOS)
@@ -40,7 +36,6 @@ public struct MainTabView: View {
         #endif
     }
 
-    @available(iOS 26.0, macOS 26.0, *)
     private var splitViewNavigation: some View {
         NavigationSplitView {
             SidebarView(viewModel: chatViewModel, selectedTab: $selectedTab)
@@ -69,7 +64,6 @@ public struct MainTabView: View {
         }
     }
 
-    @available(iOS 26.0, macOS 26.0, *)
     private var tabViewNavigation: some View {
         TabView(selection: $selectedTab) {
             Tab("Chat", systemImage: "bubble.left.and.bubble.right", value: .chat) {
@@ -107,7 +101,6 @@ public struct MainTabView: View {
 
 // MARK: - Sidebar View for iPad/macOS
 
-@available(iOS 26.0, macOS 26.0, *)
 struct SidebarView: View {
     @ObservedObject var viewModel: ChatViewModel
     @Binding var selectedTab: ClarissaTab
@@ -185,6 +178,20 @@ struct SidebarView: View {
             onDelete: {
                 sessionToDelete = session
                 showDeleteConfirmation = true
+            },
+            onRename: { newTitle in
+                Task {
+                    await viewModel.renameSession(id: session.id, newTitle: newTitle)
+                    if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+                        sessions[index] = Session(
+                            id: session.id,
+                            title: newTitle,
+                            messages: session.messages,
+                            createdAt: session.createdAt,
+                            updatedAt: Date()
+                        )
+                    }
+                }
             }
         )
     }
@@ -228,53 +235,86 @@ struct SidebarView: View {
 
 // MARK: - Session Sidebar Row
 
-@available(iOS 26.0, macOS 26.0, *)
 struct SessionSidebarRow: View {
     let session: Session
     let isCurrentSession: Bool
     let onTap: () -> Void
     var onDelete: (() -> Void)? = nil
+    var onRename: ((String) -> Void)? = nil
     @State private var isHovered = false
+    @State private var isRenamingInline = false
+    @State private var editingTitle = ""
+    @FocusState private var isTitleFieldFocused: Bool
 
     var body: some View {
-        Button(action: onTap) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                if isRenamingInline {
+                    TextField("Title", text: $editingTitle)
+                        .font(.subheadline)
+                        .fontWeight(isCurrentSession ? .semibold : .regular)
+                        .textFieldStyle(.plain)
+                        .focused($isTitleFieldFocused)
+                        .onSubmit {
+                            saveRename()
+                        }
+                        .onKeyPress(.escape) {
+                            cancelRename()
+                            return .handled
+                        }
+                } else {
                     Text(session.title)
                         .font(.subheadline)
                         .fontWeight(isCurrentSession ? .semibold : .regular)
                         .lineLimit(1)
+                }
 
+                if !isRenamingInline {
                     Text(session.updatedAt, style: .relative)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-
-                Spacer()
-
-                if isCurrentSession {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(ClarissaTheme.purple)
-                        .font(.caption)
-                }
             }
-            #if os(macOS)
-            .padding(.vertical, 4)
-            .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.primary.opacity(0.05) : Color.clear)
-            )
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isHovered = hovering
-                }
+
+            Spacer()
+
+            if isCurrentSession && !isRenamingInline {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(ClarissaTheme.purple)
+                    .font(.caption)
             }
-            #endif
         }
-        .buttonStyle(.plain)
         #if os(macOS)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? Color.primary.opacity(0.05) : Color.clear)
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        #endif
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isRenamingInline {
+                onTap()
+            }
+        }
+        .gesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    startRename()
+                }
+        )
         .contextMenu {
+            Button {
+                startRename()
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
             if let onDelete = onDelete {
                 Button(role: .destructive) {
                     onDelete()
@@ -283,7 +323,27 @@ struct SessionSidebarRow: View {
                 }
             }
         }
-        #endif
+    }
+
+    private func startRename() {
+        editingTitle = session.title
+        isRenamingInline = true
+        isTitleFieldFocused = true
+    }
+
+    private func saveRename() {
+        let trimmed = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != session.title {
+            onRename?(trimmed)
+        }
+        isRenamingInline = false
+        isTitleFieldFocused = false
+    }
+
+    private func cancelRename() {
+        isRenamingInline = false
+        isTitleFieldFocused = false
+        editingTitle = session.title
     }
 }
 
@@ -293,16 +353,22 @@ enum ClarissaTab: Hashable {
     case settings
 }
 
-@available(iOS 26.0, macOS 26.0, *)
+/// Wrapper for share sheet content to use item-based presentation
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
 struct ChatTabContent: View {
     @ObservedObject var viewModel: ChatViewModel
     @EnvironmentObject var appState: AppState
     @State private var showContextDetails = false
-    @State private var showShareSheet = false
+    @State private var shareItem: ShareItem?
     @State private var showHistorySheet = false
     @State private var showSettingsSheet = false
     @State private var showToolsSheet = false
-    @State private var exportedText = ""
+    @State private var showMemoriesSheet = false
+    @State private var showCopiedAlert = false
     @Namespace private var chatNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -353,28 +419,24 @@ struct ChatTabContent: View {
                         showToolsSheet = false
                     }
                     .environmentObject(appState)
+                    #if os(iOS)
                     .presentationDetents([.medium, .large])
                     .scrollContentBackground(.hidden)
+                    #else
+                    .frame(minWidth: 400, minHeight: 500)
+                    #endif
                 }
-                #if os(iOS)
-                .sheet(isPresented: $showShareSheet) {
-                    ShareSheet(items: [exportedText])
-                }
-                .sheet(isPresented: $showHistorySheet) {
-                    SessionHistoryView(viewModel: viewModel) {
-                        showHistorySheet = false
+                .sheet(isPresented: $showMemoriesSheet) {
+                    MemorySettingsView {
+                        showMemoriesSheet = false
                     }
+                    #if os(iOS)
                     .presentationDetents([.medium, .large])
                     .scrollContentBackground(.hidden)
+                    #else
+                    .frame(minWidth: 400, minHeight: 500)
+                    #endif
                 }
-                .sheet(isPresented: $showSettingsSheet) {
-                    SettingsView(onProviderChange: {
-                        viewModel.refreshProvider()
-                    })
-                    .presentationDetents([.large])
-                    .scrollContentBackground(.hidden)
-                }
-                #endif
                 #if os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: .newConversation)) { _ in
                     viewModel.requestNewSession()
@@ -396,16 +458,43 @@ struct ChatTabContent: View {
         } message: {
             Text("Your current conversation will be saved to history.")
         }
+        #if os(iOS)
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.text])
+        }
+        .sheet(isPresented: $showHistorySheet) {
+            SessionHistoryView(viewModel: viewModel) {
+                showHistorySheet = false
+            }
+            .presentationDetents([.medium, .large])
+            .scrollContentBackground(.hidden)
+        }
+        .sheet(isPresented: $showSettingsSheet) {
+            SettingsView(onProviderChange: {
+                viewModel.refreshProvider()
+            })
+            .presentationDetents([.large])
+            .scrollContentBackground(.hidden)
+        }
+        #endif
+        #if os(macOS)
+        .alert("Copied to Clipboard", isPresented: $showCopiedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The conversation has been copied to your clipboard.")
+        }
+        #endif
     }
 
     private func exportConversation() {
-        exportedText = viewModel.exportConversation()
+        let text = viewModel.exportConversation()
         #if os(iOS)
-        showShareSheet = true
+        shareItem = ShareItem(text: text)
         #else
         // On macOS, copy to clipboard
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(exportedText, forType: .string)
+        NSPasteboard.general.setString(text, forType: .string)
+        showCopiedAlert = true
         #endif
     }
 
@@ -474,6 +563,14 @@ struct ChatTabContent: View {
                 Label("Tools", systemImage: "wrench.and.screwdriver")
             }
 
+            // Memories
+            Button {
+                HapticManager.shared.lightTap()
+                showMemoriesSheet = true
+            } label: {
+                Label("Memories", systemImage: "brain.head.profile")
+            }
+
             // Settings (iOS only - macOS has sidebar and menu bar)
             #if os(iOS)
             Button {
@@ -506,7 +603,7 @@ struct ChatTabContent: View {
         .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
         .glassEffectID("overflow", in: chatNamespace)
         .accessibilityLabel("More options")
-        .accessibilityHint("Double-tap for new chat, voice mode, history, tools, settings, and share")
+        .accessibilityHint("Double-tap for new chat, voice mode, history, tools, memories, settings, and share")
     }
 }
 
@@ -517,9 +614,14 @@ import UIKit
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
+    @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            // Sheet will dismiss automatically
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
@@ -529,7 +631,6 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 // MARK: - History Tab Content
 
-@available(iOS 26.0, macOS 26.0, *)
 struct HistoryTabContent: View {
     @ObservedObject var viewModel: ChatViewModel
     @State private var sessions: [Session] = []
@@ -666,6 +767,20 @@ struct HistoryTabContent: View {
                     onDelete: {
                         sessionToDelete = session
                         showDeleteAlert = true
+                    },
+                    onRename: { newTitle in
+                        Task {
+                            await viewModel.renameSession(id: session.id, newTitle: newTitle)
+                            if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+                                sessions[index] = Session(
+                                    id: session.id,
+                                    title: newTitle,
+                                    messages: session.messages,
+                                    createdAt: session.createdAt,
+                                    updatedAt: Date()
+                                )
+                            }
+                        }
                     }
                 )
                 .tag(session.id)
@@ -742,7 +857,6 @@ struct HistoryTabContent: View {
 
 // MARK: - Settings Tab Content
 
-@available(iOS 26.0, macOS 26.0, *)
 struct SettingsTabContent: View {
     @EnvironmentObject var appState: AppState
 

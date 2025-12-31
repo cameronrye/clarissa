@@ -1116,6 +1116,21 @@ struct SessionHistoryView: View {
                     onDelete: {
                         sessionToDelete = session
                         showDeleteAlert = true
+                    },
+                    onRename: { newTitle in
+                        Task {
+                            await viewModel.renameSession(id: session.id, newTitle: newTitle)
+                            // Update local array
+                            if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+                                sessions[index] = Session(
+                                    id: session.id,
+                                    title: newTitle,
+                                    messages: session.messages,
+                                    createdAt: session.createdAt,
+                                    updatedAt: Date()
+                                )
+                            }
+                        }
                     }
                 )
                 .tag(session.id)
@@ -1208,6 +1223,11 @@ struct SessionRowView: View {
     var isEditing: Bool = false
     let onTap: () -> Void
     var onDelete: (() -> Void)? = nil
+    var onRename: ((String) -> Void)? = nil
+
+    @State private var isRenamingInline: Bool = false
+    @State private var editingTitle: String = ""
+    @FocusState private var isTitleFieldFocused: Bool
 
     /// Get a preview of the last user message
     private var messagePreview: String? {
@@ -1222,28 +1242,42 @@ struct SessionRowView: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    if isRenamingInline {
+                        TextField("Title", text: $editingTitle)
+                            .font(.headline)
+                            .textFieldStyle(.plain)
+                            .focused($isTitleFieldFocused)
+                            .onSubmit {
+                                saveRename()
+                            }
+                            .onKeyPress(.escape) {
+                                cancelRename()
+                                return .handled
+                            }
+                    } else {
                         Text(session.title)
                             .font(.headline)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
-
-                        if isCurrentSession {
-                            currentBadge
-                        }
                     }
 
-                    // Message preview
-                    if let preview = messagePreview {
-                        Text(preview)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    if isCurrentSession && !isRenamingInline {
+                        currentBadge
                     }
+                }
 
+                // Message preview
+                if let preview = messagePreview, !isRenamingInline {
+                    Text(preview)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if !isRenamingInline {
                     HStack(spacing: 4) {
                         Image(systemName: "message")
                             .font(.caption2)
@@ -1254,20 +1288,35 @@ struct SessionRowView: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 }
-
-                Spacer()
-
-                if !isEditing {
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
             }
-            .padding(.vertical, 4)
+
+            Spacer()
+
+            if !isEditing && !isRenamingInline {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
-        .disabled(isEditing)
-        #if os(macOS)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isRenamingInline && !isEditing {
+                onTap()
+            }
+        }
+        .gesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    startRename()
+                }
+        )
         .contextMenu {
+            Button {
+                startRename()
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
             if let onDelete = onDelete {
                 Button(role: .destructive) {
                     onDelete()
@@ -1276,7 +1325,37 @@ struct SessionRowView: View {
                 }
             }
         }
+        #if os(iOS)
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                startRename()
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            .tint(ClarissaTheme.purple)
+        }
         #endif
+    }
+
+    private func startRename() {
+        editingTitle = session.title
+        isRenamingInline = true
+        isTitleFieldFocused = true
+    }
+
+    private func saveRename() {
+        let trimmed = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != session.title {
+            onRename?(trimmed)
+        }
+        isRenamingInline = false
+        isTitleFieldFocused = false
+    }
+
+    private func cancelRename() {
+        isRenamingInline = false
+        isTitleFieldFocused = false
+        editingTitle = session.title
     }
 
     /// Badge indicating current session - uses solid background per Liquid Glass guide

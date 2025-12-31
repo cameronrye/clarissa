@@ -2,7 +2,8 @@ import SwiftUI
 
 @MainActor
 public final class AppState: ObservableObject {
-    /// Shared instance for App Intents access
+    /// Shared singleton instance - use this in production code
+    /// Note: Direct init() is intentionally public for SwiftUI previews
     public static let shared = AppState()
 
     /// Whether the app is running in screenshot/demo mode for App Store screenshots

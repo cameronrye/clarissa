@@ -274,9 +274,11 @@ private struct PermissionsPageView: View {
     @State private var speechGranted = false
     @State private var remindersGranted = false
 
-    private let eventStore = EKEventStore()
-    private let contactStore = CNContactStore()
-    private let locationManager = CLLocationManager()
+    // Use static instances to avoid recreating on every view update
+    // These are reference types that should persist across view recreations
+    private static let eventStore = EKEventStore()
+    private static let contactStore = CNContactStore()
+    private static let locationManager = CLLocationManager()
 
     var body: some View {
         VStack(spacing: 16) {
@@ -358,7 +360,7 @@ private struct PermissionsPageView: View {
         remindersGranted = remindersStatus == .fullAccess
 
         // Check location
-        let locationStatus = locationManager.authorizationStatus
+        let locationStatus = Self.locationManager.authorizationStatus
         #if os(macOS)
         locationGranted = locationStatus == .authorized || locationStatus == .authorizedAlways
         #else
@@ -373,10 +375,11 @@ private struct PermissionsPageView: View {
     private func requestCalendarAccess() {
         Task {
             do {
-                let granted = try await eventStore.requestFullAccessToEvents()
+                let granted = try await Self.eventStore.requestFullAccessToEvents()
                 await MainActor.run { calendarGranted = granted }
             } catch {
-                // Handle error silently
+                // Log error but don't show alert - user can proceed without permission
+                ClarissaLogger.ui.error("Calendar permission request failed: \(error.localizedDescription)")
             }
         }
     }
@@ -384,10 +387,11 @@ private struct PermissionsPageView: View {
     private func requestContactsAccess() {
         Task {
             do {
-                let granted = try await contactStore.requestAccess(for: .contacts)
+                let granted = try await Self.contactStore.requestAccess(for: .contacts)
                 await MainActor.run { contactsGranted = granted }
             } catch {
-                // Handle error silently
+                // Log error but don't show alert - user can proceed without permission
+                ClarissaLogger.ui.error("Contacts permission request failed: \(error.localizedDescription)")
             }
         }
     }
@@ -395,16 +399,17 @@ private struct PermissionsPageView: View {
     private func requestRemindersAccess() {
         Task {
             do {
-                let granted = try await eventStore.requestFullAccessToReminders()
+                let granted = try await Self.eventStore.requestFullAccessToReminders()
                 await MainActor.run { remindersGranted = granted }
             } catch {
-                // Handle error silently
+                // Log error but don't show alert - user can proceed without permission
+                ClarissaLogger.ui.error("Reminders permission request failed: \(error.localizedDescription)")
             }
         }
     }
 
     private func requestLocationAccess() {
-        locationManager.requestWhenInUseAuthorization()
+        Self.locationManager.requestWhenInUseAuthorization()
         // Check again after a delay
         Task {
             try? await Task.sleep(for: .seconds(1))

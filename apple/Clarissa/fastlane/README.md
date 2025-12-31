@@ -43,7 +43,7 @@ Full workflow: capture all + frame all
 [bundle exec] fastlane export
 ```
 
-Copy framed screenshots to App Store directory
+Copy screenshots to App Store directory
 
 ----
 

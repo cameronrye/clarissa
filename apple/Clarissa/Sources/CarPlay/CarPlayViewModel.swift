@@ -66,12 +66,15 @@ public final class CarPlayViewModel: ObservableObject {
     }
 
     private func setupProvider() async {
-        let provider = FoundationModelsProvider()
-        if await provider.isAvailable {
-            agent.setProvider(provider)
-        } else {
-            error = "AI not available on this device"
+        // FoundationModelsProvider requires iOS 26+ for Apple Intelligence
+        if #available(iOS 26.0, *) {
+            let provider = FoundationModelsProvider()
+            if await provider.isAvailable {
+                agent.setProvider(provider)
+                return
+            }
         }
+        error = "AI not available on this device"
     }
 
     private func setupVoiceCallbacks() {

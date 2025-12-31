@@ -122,15 +122,16 @@ final class VoiceManager: ObservableObject {
     deinit {
         // Remove NotificationCenter observers - this is safe in deinit
         // since we're just removing references, not accessing actor-isolated state
+        // Note: cleanup() may have already removed these, but removeObserver is idempotent
         NotificationCenter.default.removeObserver(self)
     }
 
     /// Clean up all voice resources - call before discarding VoiceManager
+    /// Note: Observer removal in deinit is the primary cleanup path;
+    /// this method is for explicit cleanup when needed before deallocation
     func cleanup() async {
         await exitVoiceMode()
         cancellables.removeAll()
-        // Remove notification observers
-        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupObservers() {

@@ -68,15 +68,21 @@ private final class LocationHelper: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         Task { @MainActor in
-            self.locationContinuation?.resume(returning: location)
-            self.locationContinuation = nil
+            // Atomically check and nil to prevent double resumption
+            if let continuation = self.locationContinuation {
+                self.locationContinuation = nil
+                continuation.resume(returning: location)
+            }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            self.locationContinuation?.resume(throwing: error)
-            self.locationContinuation = nil
+            // Atomically check and nil to prevent double resumption
+            if let continuation = self.locationContinuation {
+                self.locationContinuation = nil
+                continuation.resume(throwing: error)
+            }
         }
     }
 
@@ -86,8 +92,11 @@ private final class LocationHelper: NSObject, CLLocationManagerDelegate {
             // Only resume if we're actively waiting for authorization
             guard self.isWaitingForAuthorization else { return }
             self.isWaitingForAuthorization = false
-            self.authorizationContinuation?.resume(returning: status)
-            self.authorizationContinuation = nil
+            // Atomically check and nil to prevent double resumption
+            if let continuation = self.authorizationContinuation {
+                self.authorizationContinuation = nil
+                continuation.resume(returning: status)
+            }
         }
     }
 }

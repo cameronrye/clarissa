@@ -154,6 +154,11 @@ enum SpeechError: LocalizedError {
 
 /// Handles AVAudioEngine operations on a dedicated queue to avoid dispatch assertion failures
 /// Works on both iOS and macOS - uses AVAudioSession on iOS only
+///
+/// Thread Safety: This class is @unchecked Sendable because it uses manual synchronization:
+/// - `engineLock` (NSLock) protects `isReconfiguring` and audio engine state transitions
+/// - `queue` serializes all audio engine operations
+/// - Mutable callbacks are only accessed from the serialized queue
 private final class AudioEngineHandler: @unchecked Sendable {
     private let audioEngine = AVAudioEngine()
     private let queue = DispatchQueue(label: "com.clarissa.audioengine", qos: .userInitiated)

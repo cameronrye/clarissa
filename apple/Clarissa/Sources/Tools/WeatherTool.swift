@@ -93,16 +93,22 @@ private final class WeatherLocationHelper: NSObject, CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         Task { @MainActor in
             self.isRequestingLocation = false
-            self.locationContinuation?.resume(returning: location)
-            self.locationContinuation = nil
+            // Atomically check and nil to prevent double resumption
+            if let continuation = self.locationContinuation {
+                self.locationContinuation = nil
+                continuation.resume(returning: location)
+            }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
             self.isRequestingLocation = false
-            self.locationContinuation?.resume(throwing: error)
-            self.locationContinuation = nil
+            // Atomically check and nil to prevent double resumption
+            if let continuation = self.locationContinuation {
+                self.locationContinuation = nil
+                continuation.resume(throwing: error)
+            }
         }
     }
 

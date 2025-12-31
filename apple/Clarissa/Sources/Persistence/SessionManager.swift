@@ -107,6 +107,27 @@ actor SessionManager {
         await save()
     }
 
+    /// Rename a session
+    func renameSession(id: UUID, newTitle: String) async {
+        await ensureLoaded()
+
+        guard let index = sessions.firstIndex(where: { $0.id == id }) else {
+            ClarissaLogger.persistence.error("Session not found for rename: \(id.uuidString, privacy: .public)")
+            return
+        }
+
+        let trimmedTitle = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            ClarissaLogger.persistence.warning("Cannot rename session to empty title")
+            return
+        }
+
+        sessions[index].title = trimmedTitle
+        sessions[index].updatedAt = Date()
+        ClarissaLogger.persistence.info("Renamed session to: \(trimmedTitle, privacy: .public)")
+        await save()
+    }
+
     /// Get the current session ID
     func getCurrentSessionId() async -> UUID? {
         await ensureLoaded()
@@ -149,8 +170,25 @@ actor SessionManager {
 
         do {
             let data = try Data(contentsOf: fileURL)
-            sessions = try JSONDecoder().decode([Session].self, from: data)
-            currentSessionId = sessions.first?.id
+            let decoder = JSONDecoder()
+
+            // Try to decode new format with currentSessionId first
+            if let persistedData = try? decoder.decode(PersistedSessionData.self, from: data) {
+                sessions = persistedData.sessions
+                // Restore the persisted currentSessionId, or fall back to first session
+                if let savedId = persistedData.currentSessionId,
+                   sessions.contains(where: { $0.id == savedId }) {
+                    currentSessionId = savedId
+                } else {
+                    currentSessionId = sessions.first?.id
+                }
+            } else {
+                // Fall back to old format (array of sessions only) for migration
+                sessions = try decoder.decode([Session].self, from: data)
+                currentSessionId = sessions.first?.id
+                ClarissaLogger.persistence.info("Migrated from old session format")
+            }
+
             isLoaded = true
 
             // Log details about loaded sessions
@@ -161,7 +199,7 @@ actor SessionManager {
                     "Session '\(session.title, privacy: .public)': \(session.messages.count) total (\(userMessages) user, \(assistantMessages) assistant)"
                 )
             }
-            ClarissaLogger.persistence.info("Loaded \(self.sessions.count) sessions total")
+            ClarissaLogger.persistence.info("Loaded \(self.sessions.count) sessions total, active: \(self.currentSessionId?.uuidString ?? "none", privacy: .public)")
         } catch {
             ClarissaLogger.persistence.error("Failed to load sessions: \(error.localizedDescription)")
             isLoaded = true
@@ -172,12 +210,19 @@ actor SessionManager {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(sessions)
+            let persistedData = PersistedSessionData(sessions: sessions, currentSessionId: currentSessionId)
+            let data = try encoder.encode(persistedData)
             try data.write(to: fileURL, options: .atomic)
         } catch {
             ClarissaLogger.persistence.error("Failed to save sessions: \(error.localizedDescription)")
         }
     }
+}
+
+/// Wrapper for persisted session data including the active session ID
+private struct PersistedSessionData: Codable {
+    let sessions: [Session]
+    let currentSessionId: UUID?
 }
 
 /// A conversation session

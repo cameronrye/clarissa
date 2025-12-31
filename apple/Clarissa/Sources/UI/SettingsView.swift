@@ -820,6 +820,175 @@ struct MemoryListView: View {
     }
 }
 
+/// Standalone view for managing memories - accessible from overflow menu
+struct MemorySettingsView: View {
+    @State private var memories: [Memory] = []
+    @State private var showClearConfirmation = false
+    let onDismiss: (() -> Void)?
+
+    init(onDismiss: (() -> Void)? = nil) {
+        self.onDismiss = onDismiss
+    }
+
+    var body: some View {
+        #if os(macOS)
+        macOSContent
+        #else
+        iOSContent
+        #endif
+    }
+
+    #if os(macOS)
+    private var macOSContent: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Memories")
+                    .font(.headline)
+                Spacer()
+                if let onDismiss = onDismiss {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(ClarissaTheme.purple)
+                }
+            }
+            .padding()
+
+            Divider()
+
+            List {
+                memorySection
+                clearSection
+            }
+        }
+        .frame(minWidth: 400, minHeight: 400)
+        .task {
+            await loadMemories()
+        }
+    }
+    #endif
+
+    #if os(iOS)
+    private var iOSContent: some View {
+        NavigationStack {
+            List {
+                memorySection
+                clearSection
+            }
+            .navigationTitle("Memories")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if let onDismiss = onDismiss {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        doneButton(onDismiss: onDismiss)
+                    }
+                }
+            }
+        }
+        .tint(ClarissaTheme.purple)
+        .task {
+            await loadMemories()
+        }
+        .confirmationDialog(
+            "Clear All Memories",
+            isPresented: $showClearConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All", role: .destructive) {
+                Task {
+                    await MemoryManager.shared.clear()
+                    memories = []
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete all stored memories. This action cannot be undone.")
+        }
+    }
+    #endif
+
+    @ViewBuilder
+    private var memorySection: some View {
+        Section {
+            if memories.isEmpty {
+                ContentUnavailableView(
+                    "No Memories",
+                    systemImage: "brain.head.profile",
+                    description: Text("Clarissa will remember important information you share during conversations.")
+                )
+                .listRowBackground(Color.clear)
+            } else {
+                ForEach(memories) { memory in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(memory.content)
+                        Text(memory.createdAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .onDelete(perform: deleteMemories)
+            }
+        } header: {
+            if !memories.isEmpty {
+                Text("\(memories.count) \(memories.count == 1 ? "Memory" : "Memories")")
+            }
+        } footer: {
+            if !memories.isEmpty {
+                Text("Swipe left on a memory to delete it.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var clearSection: some View {
+        if !memories.isEmpty {
+            Section {
+                Button(role: .destructive) {
+                    showClearConfirmation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("Clear All Memories")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func doneButton(onDismiss: @escaping () -> Void) -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button("Done") {
+                onDismiss()
+            }
+            .buttonStyle(.glassProminent)
+            .tint(ClarissaTheme.purple)
+        } else {
+            Button("Done") {
+                onDismiss()
+            }
+            .foregroundStyle(ClarissaTheme.purple)
+        }
+    }
+
+    private func loadMemories() async {
+        memories = await MemoryManager.shared.getAll()
+    }
+
+    private func deleteMemories(at offsets: IndexSet) {
+        HapticManager.shared.warning()
+
+        for index in offsets {
+            let memory = memories[index]
+            Task {
+                await MemoryManager.shared.remove(id: memory.id)
+            }
+        }
+        memories.remove(atOffsets: offsets)
+    }
+}
+
 #Preview {
     SettingsView()
         .environmentObject(AppState())
