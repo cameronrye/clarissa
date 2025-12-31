@@ -2,8 +2,10 @@ import SwiftUI
 
 /// Standalone view for managing tools - accessible from overflow menu
 struct ToolSettingsView: View {
-    @ObservedObject private var settings = ToolSettings.shared
     @EnvironmentObject var appState: AppState
+    @State private var tools: [ToolInfo] = []
+    @State private var enabledCount: Int = 0
+    @State private var isAtLimit: Bool = false
     let onDismiss: (() -> Void)?
 
     init(onDismiss: (() -> Void)? = nil) {
@@ -19,16 +21,19 @@ struct ToolSettingsView: View {
             List {
                 // Built-in tools section
                 Section {
-                    ForEach(settings.allTools) { tool in
+                    ForEach(tools) { tool in
                         ToolRow(
                             tool: tool,
-                            isAtLimit: isFoundationModels && settings.isAtFoundationModelsLimit,
-                            onToggle: { settings.toggleTool(tool.id) }
+                            isAtLimit: isFoundationModels && isAtLimit,
+                            onToggle: {
+                                ToolSettings.shared.toggleTool(tool.id)
+                                refreshTools()
+                            }
                         )
                     }
                 } header: {
                     if isFoundationModels {
-                        Text("Enabled: \(settings.enabledCount)/\(maxToolsForFoundationModels)")
+                        Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
                     } else {
                         Text("Built-in Tools")
                     }
@@ -68,6 +73,15 @@ struct ToolSettingsView: View {
             #endif
         }
         .tint(ClarissaTheme.purple)
+        .onAppear {
+            refreshTools()
+        }
+    }
+
+    private func refreshTools() {
+        tools = ToolSettings.shared.allTools
+        enabledCount = ToolSettings.shared.enabledCount
+        isAtLimit = ToolSettings.shared.isAtFoundationModelsLimit
     }
 
     @ViewBuilder
@@ -118,6 +132,42 @@ struct ToolSettingsView: View {
             .clipShape(Capsule())
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Embedded Tools List (for Settings tab)
+
+/// Embeddable version without NavigationStack for use inside Settings
+struct EmbeddedToolsListView: View {
+    let isFoundationModels: Bool
+
+    @ObservedObject private var settings = ToolSettings.shared
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(settings.allTools) { tool in
+                    ToolRow(
+                        tool: tool,
+                        isAtLimit: isFoundationModels && settings.isAtFoundationModelsLimit,
+                        onToggle: { settings.toggleTool(tool.id) }
+                    )
+                }
+            } header: {
+                if isFoundationModels {
+                    Text("Enabled: \(settings.enabledCount)/\(maxToolsForFoundationModels)")
+                } else {
+                    Text("Built-in Tools")
+                }
+            } footer: {
+                if isFoundationModels {
+                    Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
+                } else {
+                    Text("Select which tools the assistant can use.")
+                }
+            }
+        }
+        .navigationTitle("Tools")
     }
 }
 

@@ -92,7 +92,7 @@ public struct OnboardingView: View {
             .padding(.bottom, 8)
             #endif
 
-            // Buttons with glass morphing on iOS 26+
+            // Buttons with glass morphing on iOS/macOS 26+
             if #available(iOS 26.0, macOS 26.0, *) {
                 glassButtonsSection
             } else {
@@ -137,7 +137,7 @@ public struct OnboardingView: View {
         }
     }
 
-    // MARK: - Glass Buttons Section (iOS 26+)
+    // MARK: - Glass Buttons Section (iOS/macOS 26+)
 
     @available(iOS 26.0, macOS 26.0, *)
     private var glassButtonsSection: some View {
@@ -191,21 +191,25 @@ public struct OnboardingView: View {
             .accessibilityLabel("Get Started")
             .accessibilityHint("Double-tap to complete onboarding and start using Clarissa")
         } else {
-            Button {
-                HapticManager.shared.success()
-                appState.completeOnboarding()
-            } label: {
-                Text("Get Started")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(ClarissaTheme.gradient)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-            .accessibilityLabel("Get Started")
-            .accessibilityHint("Double-tap to complete onboarding and start using Clarissa")
+            legacyGetStartedButton
         }
+    }
+
+    private var legacyGetStartedButton: some View {
+        Button {
+            HapticManager.shared.success()
+            appState.completeOnboarding()
+        } label: {
+            Text("Get Started")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(ClarissaTheme.gradient)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .accessibilityLabel("Get Started")
+        .accessibilityHint("Double-tap to complete onboarding and start using Clarissa")
     }
 
     @ViewBuilder
@@ -229,23 +233,27 @@ public struct OnboardingView: View {
             .accessibilityLabel("Continue")
             .accessibilityHint("Double-tap to go to the next page")
         } else {
-            Button {
-                HapticManager.shared.lightTap()
-                withAnimation(reduceMotion ? .none : .easeInOut) {
-                    currentPage += 1
-                }
-            } label: {
-                Text("Continue")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(ClarissaTheme.gradient)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-            .accessibilityLabel("Continue")
-            .accessibilityHint("Double-tap to go to the next page")
+            legacyContinueButton
         }
+    }
+
+    private var legacyContinueButton: some View {
+        Button {
+            HapticManager.shared.lightTap()
+            withAnimation(reduceMotion ? .none : .easeInOut) {
+                currentPage += 1
+            }
+        } label: {
+            Text("Continue")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(ClarissaTheme.gradient)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .accessibilityLabel("Continue")
+        .accessibilityHint("Double-tap to go to the next page")
     }
 }
 

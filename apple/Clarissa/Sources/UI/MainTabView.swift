@@ -174,14 +174,19 @@ struct SidebarView: View {
     private func sessionRow(for session: Session) -> some View {
         SessionSidebarRow(
             session: session,
-            isCurrentSession: session.id == currentSessionId
-        ) {
-            HapticManager.shared.lightTap()
-            Task {
-                await viewModel.switchToSession(id: session.id)
-                selectedTab = .chat
+            isCurrentSession: session.id == currentSessionId,
+            onTap: {
+                HapticManager.shared.lightTap()
+                Task {
+                    await viewModel.switchToSession(id: session.id)
+                    selectedTab = .chat
+                }
+            },
+            onDelete: {
+                sessionToDelete = session
+                showDeleteConfirmation = true
             }
-        }
+        )
     }
 
     @ViewBuilder
@@ -228,6 +233,7 @@ struct SessionSidebarRow: View {
     let session: Session
     let isCurrentSession: Bool
     let onTap: () -> Void
+    var onDelete: (() -> Void)? = nil
     @State private var isHovered = false
 
     var body: some View {
@@ -267,6 +273,17 @@ struct SessionSidebarRow: View {
             #endif
         }
         .buttonStyle(.plain)
+        #if os(macOS)
+        .contextMenu {
+            if let onDelete = onDelete {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        #endif
     }
 }
 
@@ -292,30 +309,35 @@ struct ChatTabContent: View {
     var body: some View {
         NavigationStack {
             ChatView(viewModel: viewModel)
-                .navigationTitle("Clarissa")
                 #if os(iOS)
+                .navigationTitle("Clarissa")
                 .navigationBarTitleDisplayMode(.inline)
+                #else
+                .navigationTitle("")
                 #endif
                 .toolbar {
                     #if os(iOS)
                     ToolbarItem(placement: .topBarLeading) {
                         leadingToolbarItems
                     }
-                    #else
-                    ToolbarItem(placement: .navigation) {
-                        leadingToolbarItems
-                    }
-                    #endif
 
                     ToolbarItem(placement: .principal) {
                         titleView
                     }
 
-                    #if os(iOS)
                     ToolbarItem(placement: .topBarTrailing) {
                         trailingToolbarItems
                     }
                     #else
+                    ToolbarItem(placement: .navigation) {
+                        leadingToolbarItems
+                    }
+
+                    ToolbarItem(placement: .principal) {
+                        titleView
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+
                     ToolbarItem(placement: .primaryAction) {
                         trailingToolbarItems
                     }
@@ -325,6 +347,14 @@ struct ChatTabContent: View {
                     ContextDetailSheet(stats: viewModel.contextStats)
                         .presentationDetents([.medium, .large])
                         .scrollContentBackground(.hidden)
+                }
+                .sheet(isPresented: $showToolsSheet) {
+                    ToolSettingsView {
+                        showToolsSheet = false
+                    }
+                    .environmentObject(appState)
+                    .presentationDetents([.medium, .large])
+                    .scrollContentBackground(.hidden)
                 }
                 #if os(iOS)
                 .sheet(isPresented: $showShareSheet) {
@@ -342,14 +372,6 @@ struct ChatTabContent: View {
                         viewModel.refreshProvider()
                     })
                     .presentationDetents([.large])
-                    .scrollContentBackground(.hidden)
-                }
-                .sheet(isPresented: $showToolsSheet) {
-                    ToolSettingsView {
-                        showToolsSheet = false
-                    }
-                    .environmentObject(appState)
-                    .presentationDetents([.medium, .large])
                     .scrollContentBackground(.hidden)
                 }
                 #endif
@@ -434,7 +456,7 @@ struct ChatTabContent: View {
 
             Divider()
 
-            // History
+            // History (iOS only - macOS has sidebar)
             #if os(iOS)
             Button {
                 HapticManager.shared.lightTap()
@@ -442,6 +464,7 @@ struct ChatTabContent: View {
             } label: {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
+            #endif
 
             // Tools
             Button {
@@ -451,7 +474,8 @@ struct ChatTabContent: View {
                 Label("Tools", systemImage: "wrench.and.screwdriver")
             }
 
-            // Settings
+            // Settings (iOS only - macOS has sidebar and menu bar)
+            #if os(iOS)
             Button {
                 HapticManager.shared.lightTap()
                 showSettingsSheet = true
@@ -473,8 +497,12 @@ struct ChatTabContent: View {
             }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .font(.title3)
+                .font(.title2)
         }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .frame(width: 36, height: 36)
+        .contentShape(Circle())
         .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
         .glassEffectID("overflow", in: chatNamespace)
         .accessibilityLabel("More options")
@@ -506,9 +534,22 @@ struct HistoryTabContent: View {
     @ObservedObject var viewModel: ChatViewModel
     @State private var sessions: [Session] = []
     @State private var currentSessionId: UUID?
-    @State private var sessionToDelete: Session?
-    @State private var showDeleteConfirmation = false
     @State private var searchText = ""
+    @State private var sessionToDelete: Session?
+    @State private var showDeleteAlert = false
+    #if os(iOS)
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedSessions: Set<UUID> = []
+    @State private var showDeleteConfirmation = false
+    #endif
+
+    private var isEditing: Bool {
+        #if os(iOS)
+        return editMode == .active
+        #else
+        return false
+        #endif
+    }
 
     /// Filtered sessions based on search text
     private var filteredSessions: [Session] {
@@ -526,44 +567,12 @@ struct HistoryTabContent: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if sessions.isEmpty {
-                    ContentUnavailableView(
-                        "No History",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Your conversations will appear here.")
-                    )
-                } else if filteredSessions.isEmpty && !searchText.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
-                } else {
-                    ForEach(filteredSessions) { session in
-                        SessionRowView(
-                            session: session,
-                            isCurrentSession: session.id == currentSessionId,
-                            onTap: {
-                                HapticManager.shared.lightTap()
-                                Task {
-                                    await viewModel.switchToSession(id: session.id)
-                                }
-                            }
-                        )
-                    }
-                    .onDelete(perform: deleteSessions)
-                }
-            }
-            .searchable(text: $searchText, prompt: "Search conversations")
-            .navigationTitle("History")
-            .refreshable {
-                await loadData()
-            }
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            #endif
+            historyList
         }
         .task {
             await loadData()
         }
-        .alert("Delete Conversation", isPresented: $showDeleteConfirmation, presenting: sessionToDelete) { session in
+        .alert("Delete Conversation", isPresented: $showDeleteAlert, presenting: sessionToDelete) { session in
             Button("Delete", role: .destructive) {
                 Task {
                     await viewModel.deleteSession(id: session.id)
@@ -571,26 +580,164 @@ struct HistoryTabContent: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
-        } message: { session in
+        } message: { _ in
             Text("Are you sure you want to delete this conversation? This action cannot be undone.")
         }
+        #if os(iOS)
+        .onChange(of: editMode) { _, newMode in
+            if newMode == .inactive {
+                selectedSessions.removeAll()
+            }
+        }
+        .confirmationDialog(
+            "Delete \(selectedSessions.count) Conversation\(selectedSessions.count == 1 ? "" : "s")?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                deleteSelectedSessions()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        #endif
     }
+
+    @ViewBuilder
+    private var historyList: some View {
+        #if os(iOS)
+        List(selection: $selectedSessions) {
+            historyListContent
+        }
+        .environment(\.editMode, $editMode)
+        .searchable(text: $searchText, prompt: "Search conversations")
+        .navigationTitle("History")
+        .refreshable {
+            await loadData()
+        }
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if !sessions.isEmpty {
+                    editButton
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if isEditing && !selectedSessions.isEmpty {
+                    deleteSelectedButton
+                }
+            }
+        }
+        #else
+        List {
+            historyListContent
+        }
+        .searchable(text: $searchText, prompt: "Search conversations")
+        .navigationTitle("History")
+        .refreshable {
+            await loadData()
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var historyListContent: some View {
+        if sessions.isEmpty {
+            ContentUnavailableView(
+                "No History",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("Your conversations will appear here.")
+            )
+        } else if filteredSessions.isEmpty && !searchText.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+        } else {
+            ForEach(filteredSessions) { session in
+                SessionRowView(
+                    session: session,
+                    isCurrentSession: session.id == currentSessionId,
+                    isEditing: isEditing,
+                    onTap: {
+                        HapticManager.shared.lightTap()
+                        Task {
+                            await viewModel.switchToSession(id: session.id)
+                        }
+                    },
+                    onDelete: {
+                        sessionToDelete = session
+                        showDeleteAlert = true
+                    }
+                )
+                .tag(session.id)
+            }
+            #if os(iOS)
+            .onDelete(perform: deleteSessions)
+            #endif
+        }
+    }
+
+    #if os(iOS)
+    @ViewBuilder
+    private var editButton: some View {
+        Button {
+            HapticManager.shared.lightTap()
+            withAnimation {
+                editMode = isEditing ? .inactive : .active
+            }
+        } label: {
+            Text(isEditing ? "Done" : "Select")
+        }
+        .foregroundStyle(ClarissaTheme.purple)
+    }
+
+    @ViewBuilder
+    private var deleteSelectedButton: some View {
+        Button(role: .destructive) {
+            HapticManager.shared.warning()
+            showDeleteConfirmation = true
+        } label: {
+            Text("Delete (\(selectedSessions.count))")
+        }
+    }
+    #endif
 
     private func loadData() async {
         sessions = await viewModel.getAllSessions()
         currentSessionId = await viewModel.getCurrentSessionId()
     }
 
+    #if os(iOS)
     private func deleteSessions(at offsets: IndexSet) {
-        // Map filtered indices back to original sessions
+        HapticManager.shared.warning()
         let sessionsToDelete = offsets.compactMap { index -> Session? in
             guard index < filteredSessions.count else { return nil }
             return filteredSessions[index]
         }
-        guard let session = sessionsToDelete.first else { return }
-        sessionToDelete = session
-        showDeleteConfirmation = true
+        for session in sessionsToDelete {
+            sessions.removeAll { $0.id == session.id }
+        }
+        Task {
+            for session in sessionsToDelete {
+                await viewModel.deleteSession(id: session.id)
+            }
+        }
     }
+
+    private func deleteSelectedSessions() {
+        HapticManager.shared.warning()
+        let idsToDelete = selectedSessions
+        sessions.removeAll { idsToDelete.contains($0.id) }
+        selectedSessions.removeAll()
+        withAnimation {
+            editMode = .inactive
+        }
+        Task {
+            for id in idsToDelete {
+                await viewModel.deleteSession(id: id)
+            }
+        }
+    }
+    #endif
 }
 
 // MARK: - Settings Tab Content

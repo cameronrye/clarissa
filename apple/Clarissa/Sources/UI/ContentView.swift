@@ -21,7 +21,10 @@ public struct ContentView: View {
         NavigationStack {
             ChatView(viewModel: chatViewModel)
                 #if os(iOS)
+                .navigationTitle("Clarissa")
                 .navigationBarTitleDisplayMode(.inline)
+                #else
+                .navigationTitle("")
                 #endif
                 .toolbar {
                     #if os(iOS)
@@ -48,7 +51,7 @@ public struct ContentView: View {
                         }
                     }
 
-                    // macOS: Principal placement for title
+                    // macOS: Principal placement for title with gradient
                     ToolbarItem(placement: .principal) {
                         titleView
                     }
@@ -163,6 +166,7 @@ public struct ContentView: View {
                 Image(systemName: "plus.circle")
                     .font(.title3)
             }
+            .buttonStyle(.plain)
             .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
             .glassEffectID("newSession", in: toolbarNamespace)
             .accessibilityLabel("New conversation")
@@ -196,6 +200,7 @@ public struct ContentView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.title3)
             }
+            .buttonStyle(.plain)
             .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
             .glassEffectID("history", in: toolbarNamespace)
             .accessibilityLabel("Conversation history")
@@ -224,6 +229,7 @@ public struct ContentView: View {
                     .font(.title3)
                     .symbolEffect(.bounce, value: chatViewModel.isVoiceModeActive)
             }
+            .buttonStyle(.plain)
             .glassEffect(
                 reduceMotion
                     ? .regular.tint(chatViewModel.isVoiceModeActive ? ClarissaTheme.pink : nil)
@@ -258,6 +264,7 @@ public struct ContentView: View {
                 Image(systemName: "gear")
                     .font(.title3)
             }
+            .buttonStyle(.plain)
             .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
             .glassEffectID("settings", in: toolbarNamespace)
             .accessibilityLabel("Settings")

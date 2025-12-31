@@ -118,8 +118,14 @@ actor SessionManager {
         await ensureLoaded()
 
         guard let session = sessions.first(where: { $0.id == id }) else {
+            ClarissaLogger.persistence.error("Session not found: \(id.uuidString, privacy: .public)")
             return nil
         }
+
+        ClarissaLogger.persistence.info(
+            "Switching to session '\(session.title, privacy: .public)' with \(session.messages.count) total messages"
+        )
+
         currentSessionId = id
         await save() // Persist the session switch immediately
         return session
@@ -136,6 +142,7 @@ actor SessionManager {
 
     private func load() async {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            ClarissaLogger.persistence.info("No sessions file found, starting fresh")
             isLoaded = true
             return
         }
@@ -145,7 +152,16 @@ actor SessionManager {
             sessions = try JSONDecoder().decode([Session].self, from: data)
             currentSessionId = sessions.first?.id
             isLoaded = true
-            ClarissaLogger.persistence.info("Loaded \(self.sessions.count) sessions")
+
+            // Log details about loaded sessions
+            for session in sessions {
+                let userMessages = session.messages.filter { $0.role == .user }.count
+                let assistantMessages = session.messages.filter { $0.role == .assistant }.count
+                ClarissaLogger.persistence.info(
+                    "Session '\(session.title, privacy: .public)': \(session.messages.count) total (\(userMessages) user, \(assistantMessages) assistant)"
+                )
+            }
+            ClarissaLogger.persistence.info("Loaded \(self.sessions.count) sessions total")
         } catch {
             ClarissaLogger.persistence.error("Failed to load sessions: \(error.localizedDescription)")
             isLoaded = true

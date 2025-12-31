@@ -1,6 +1,29 @@
 import SwiftUI
 import AVFoundation
 
+#if os(macOS)
+/// Tab options for macOS Settings
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "General"
+    case tools = "Tools"
+    case voice = "Voice"
+    case shortcuts = "Shortcuts"
+    case about = "About"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .general: return "gearshape"
+        case .tools: return "wrench.and.screwdriver"
+        case .voice: return "speaker.wave.2"
+        case .shortcuts: return "keyboard"
+        case .about: return "info.circle"
+        }
+    }
+}
+#endif
+
 public struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -19,6 +42,10 @@ public struct SettingsView: View {
     @State private var availableVoices: [AVSpeechSynthesisVoice] = []
     @State private var testSynthesizer: AVSpeechSynthesizer?
     @State private var isTestingVoice = false
+
+    #if os(macOS)
+    @State private var selectedTab: SettingsTab = .general
+    #endif
 
     // Namespace for glass morphing in settings
     @Namespace private var settingsNamespace
@@ -39,6 +66,307 @@ public struct SettingsView: View {
     ]
 
     public var body: some View {
+        #if os(macOS)
+        macOSSettingsView
+            .tint(ClarissaTheme.purple)
+            .task {
+                await loadInitialData()
+            }
+        #else
+        iOSSettingsView
+            .tint(ClarissaTheme.purple)
+            .task {
+                await loadInitialData()
+            }
+        #endif
+    }
+
+    private func loadInitialData() async {
+        memories = await MemoryManager.shared.getAll()
+        openRouterApiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
+        loadAvailableVoices()
+    }
+
+    // MARK: - macOS Tabbed Settings
+
+    #if os(macOS)
+    private var macOSSettingsView: some View {
+        TabView(selection: $selectedTab) {
+            generalTabContent
+                .tabItem {
+                    Label(SettingsTab.general.rawValue, systemImage: SettingsTab.general.icon)
+                }
+                .tag(SettingsTab.general)
+
+            toolsTabContent
+                .tabItem {
+                    Label(SettingsTab.tools.rawValue, systemImage: SettingsTab.tools.icon)
+                }
+                .tag(SettingsTab.tools)
+
+            voiceTabContent
+                .tabItem {
+                    Label(SettingsTab.voice.rawValue, systemImage: SettingsTab.voice.icon)
+                }
+                .tag(SettingsTab.voice)
+
+            shortcutsTabContent
+                .tabItem {
+                    Label(SettingsTab.shortcuts.rawValue, systemImage: SettingsTab.shortcuts.icon)
+                }
+                .tag(SettingsTab.shortcuts)
+
+            aboutTabContent
+                .tabItem {
+                    Label(SettingsTab.about.rawValue, systemImage: SettingsTab.about.icon)
+                }
+                .tag(SettingsTab.about)
+        }
+        .frame(width: 500, height: 450)
+    }
+
+    private var generalTabContent: some View {
+        Form {
+            Section {
+                providerPicker
+            } header: {
+                Text("LLM Provider")
+            } footer: {
+                Text("Choose between on-device AI or cloud-based models.")
+            }
+
+            Section {
+                HStack {
+                    if showingApiKey {
+                        TextField("API Key", text: $openRouterApiKey)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                            .onChange(of: openRouterApiKey) { _, newValue in
+                                saveApiKey(newValue)
+                            }
+                    } else {
+                        SecureField("API Key", text: $openRouterApiKey)
+                            .onChange(of: openRouterApiKey) { _, newValue in
+                                saveApiKey(newValue)
+                            }
+                    }
+
+                    Button {
+                        showingApiKey.toggle()
+                    } label: {
+                        Image(systemName: showingApiKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Picker("Model", selection: $selectedModel) {
+                    ForEach(availableModels, id: \.self) { model in
+                        Text(formatModelName(model))
+                            .tag(model)
+                    }
+                }
+
+                Link("Get API Key", destination: URL(string: "https://openrouter.ai/keys")!)
+                    .foregroundStyle(ClarissaTheme.cyan)
+            } header: {
+                Text("OpenRouter (Cloud)")
+            } footer: {
+                Text("API key is stored securely in the Keychain.")
+            }
+
+            Section {
+                NavigationLink {
+                    MemoryListView(memories: $memories)
+                } label: {
+                    HStack {
+                        Image(systemName: "brain.head.profile")
+                            .foregroundStyle(ClarissaTheme.purple)
+                        Text("Memories")
+                        Spacer()
+                        Text("\(memories.count)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button(role: .destructive) {
+                    showingClearMemoriesConfirmation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("Clear All Memories")
+                    }
+                }
+                .confirmationDialog(
+                    "Clear All Memories?",
+                    isPresented: $showingClearMemoriesConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Clear All", role: .destructive) {
+                        HapticManager.shared.warning()
+                        Task {
+                            await MemoryManager.shared.clear()
+                            memories = []
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This will permanently delete all saved memories. This action cannot be undone.")
+                }
+            } header: {
+                Text("Long-term Memory")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var toolsTabContent: some View {
+        ToolSettingsView()
+            .environmentObject(appState)
+    }
+
+    private var voiceTabContent: some View {
+        Form {
+            Section {
+                Toggle(isOn: $voiceOutputEnabled) {
+                    HStack {
+                        Image(systemName: "speaker.wave.2")
+                            .foregroundStyle(ClarissaTheme.cyan)
+                        Text("Voice Output")
+                    }
+                }
+
+                if voiceOutputEnabled {
+                    Picker("Voice", selection: $selectedVoiceIdentifier) {
+                        Text("System Default").tag("")
+                        ForEach(availableVoices, id: \.identifier) { voice in
+                            Text(voiceDisplayName(for: voice))
+                                .tag(voice.identifier)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Speech Rate")
+                            Spacer()
+                            Text(speechRateLabel)
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $speechRate, in: 0.0...1.0, step: 0.1)
+                            .tint(ClarissaTheme.purple)
+                    }
+
+                    Button {
+                        testVoice()
+                    } label: {
+                        HStack {
+                            if isTestingVoice {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "play.circle")
+                                    .foregroundStyle(ClarissaTheme.purple)
+                            }
+                            Text(isTestingVoice ? "Playing..." : "Test Voice")
+                        }
+                    }
+                    .disabled(isTestingVoice)
+                }
+            } header: {
+                Text("Voice Output")
+            } footer: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("When enabled, Clarissa will speak responses aloud in voice mode.")
+                    if voiceOutputEnabled && availableVoices.isEmpty {
+                        Text("No high-quality voices found. Download Siri voices in System Settings -> Accessibility -> Spoken Content -> System Voices.")
+                            .foregroundStyle(.orange)
+                    } else if voiceOutputEnabled {
+                        Text("Premium voices are marked with a star. Download more voices in System Settings -> Accessibility -> Spoken Content -> System Voices.")
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var shortcutsTabContent: some View {
+        Form {
+            Section {
+                shortcutRow("New Conversation", shortcut: "Command+N")
+                shortcutRow("Clear Conversation", shortcut: "Shift+Command+Delete")
+                shortcutRow("Cancel Generation", shortcut: "Escape")
+                shortcutRow("Settings", shortcut: "Command+,")
+            } header: {
+                Text("General")
+            }
+
+            Section {
+                shortcutRow("Start Voice Input", shortcut: "Command+D")
+                shortcutRow("Read Last Response", shortcut: "Shift+Command+R")
+                shortcutRow("Stop Speaking", shortcut: "Command+.")
+            } header: {
+                Text("Voice")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func shortcutRow(_ action: String, shortcut: String) -> some View {
+        HStack {
+            Text(action)
+            Spacer()
+            Text(shortcut)
+                .foregroundStyle(.secondary)
+                .font(.system(.body, design: .monospaced))
+        }
+    }
+
+    private var aboutTabContent: some View {
+        Form {
+            Section {
+                Button {
+                    appState.resetOnboarding()
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "book.pages")
+                            .foregroundStyle(ClarissaTheme.purple)
+                        Text("View Tutorial")
+                    }
+                }
+            } header: {
+                Text("Help")
+            }
+
+            Section {
+                HStack {
+                    Text("Version")
+                    Spacer()
+                    Text(appVersion)
+                        .foregroundStyle(.secondary)
+                }
+
+                Link(destination: URL(string: "https://rye.dev")!) {
+                    HStack {
+                        Text("Made with \u{2764}\u{FE0F} by Cameron Rye")
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .foregroundStyle(.primary)
+            } header: {
+                Text("About")
+            }
+        }
+        .formStyle(.grouped)
+    }
+    #endif
+
+    // MARK: - iOS Scrolling Settings
+
+    #if os(iOS)
+    private var iOSSettingsView: some View {
         NavigationStack {
             Form {
                 Section {
@@ -55,9 +383,7 @@ public struct SettingsView: View {
                             TextField("API Key", text: $openRouterApiKey)
                                 .textContentType(.password)
                                 .autocorrectionDisabled()
-                                #if os(iOS)
                                 .textInputAutocapitalization(.never)
-                                #endif
                                 .onChange(of: openRouterApiKey) { _, newValue in
                                     saveApiKey(newValue)
                                 }
@@ -135,6 +461,26 @@ public struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        ToolSettingsView()
+                            .environmentObject(appState)
+                    } label: {
+                        HStack {
+                            Image(systemName: "wrench.and.screwdriver")
+                                .foregroundStyle(ClarissaTheme.purple)
+                            Text("Configure Tools")
+                            Spacer()
+                            Text("\(ToolSettings.shared.enabledCount) enabled")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Tools")
+                } footer: {
+                    Text("Configure which tools are available to the assistant.")
+                }
+
+                Section {
                     Toggle(isOn: $voiceOutputEnabled) {
                         HStack {
                             Image(systemName: "speaker.wave.2")
@@ -185,88 +531,13 @@ public struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("When enabled, Clarissa will speak responses aloud in voice mode.")
                         if voiceOutputEnabled && availableVoices.isEmpty {
-                            #if os(macOS)
-                            Text("No high-quality voices found. Download Siri voices in System Settings → Accessibility → Spoken Content → System Voices.")
+                            Text("No high-quality voices found. Download Siri voices in Settings -> Accessibility -> Spoken Content -> Voices.")
                                 .foregroundStyle(.orange)
-                            #else
-                            Text("No high-quality voices found. Download Siri voices in Settings → Accessibility → Spoken Content → Voices.")
-                                .foregroundStyle(.orange)
-                            #endif
                         } else if voiceOutputEnabled {
-                            #if os(macOS)
-                            Text("★ = Premium quality. Download more voices in System Settings → Accessibility → Spoken Content → System Voices.")
-                            #else
-                            Text("★ = Premium quality. Download more voices in Settings → Accessibility → Spoken Content → Voices.")
-                            #endif
+                            Text("Premium voices are marked with a star. Download more voices in Settings -> Accessibility -> Spoken Content -> Voices.")
                         }
                     }
                 }
-
-                #if os(macOS)
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("New Conversation")
-                            Spacer()
-                            Text("⌘N")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        HStack {
-                            Text("Clear Conversation")
-                            Spacer()
-                            Text("⇧⌘⌫")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        HStack {
-                            Text("Cancel Generation")
-                            Spacer()
-                            Text("Esc")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        HStack {
-                            Text("Settings")
-                            Spacer()
-                            Text("⌘,")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-
-                        Divider()
-
-                        HStack {
-                            Text("Start Voice Input")
-                            Spacer()
-                            Text("⌘D")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        HStack {
-                            Text("Read Last Response")
-                            Spacer()
-                            Text("⇧⌘R")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        HStack {
-                            Text("Stop Speaking")
-                            Spacer()
-                            Text("⌘.")
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                    }
-                    .font(.subheadline)
-                } header: {
-                    HStack {
-                        Image(systemName: "keyboard")
-                            .foregroundStyle(ClarissaTheme.cyan)
-                        Text("Keyboard Shortcuts")
-                    }
-                }
-                #endif
 
                 Section {
                     Button {
@@ -305,23 +576,10 @@ public struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if os(macOS)
-            .formStyle(.grouped)
-            .frame(minWidth: 500, idealWidth: 600, maxWidth: 800)
-            #endif
-        }
-        .tint(ClarissaTheme.purple)
-        .task {
-            memories = await MemoryManager.shared.getAll()
-            // Load API key from Keychain
-            openRouterApiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
-            // Load available voices
-            loadAvailableVoices()
         }
     }
+    #endif
 
     // MARK: - Version Helpers
 
@@ -467,6 +725,7 @@ public struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
+                .buttonStyle(.plain)
                 .glassEffect(
                     appState.selectedProvider == provider
                         ? (reduceMotion ? .regular.tint(ClarissaTheme.purple.opacity(0.3)) : .regular.tint(ClarissaTheme.purple.opacity(0.3)).interactive())

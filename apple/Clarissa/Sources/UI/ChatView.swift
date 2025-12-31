@@ -43,11 +43,14 @@ struct ChatView: View {
                 }
                 Spacer()
             } else if viewModel.messages.isEmpty && viewModel.streamingContent.isEmpty && !viewModel.isLoading {
-                // Empty state with suggestions
-                EmptyStateView(onSuggestionTap: { suggestion in
-                    viewModel.inputText = suggestion
-                    viewModel.sendMessage()
-                })
+                // Empty state with suggestions - wrapped in ScrollView for keyboard avoidance
+                ScrollView {
+                    EmptyStateView(onSuggestionTap: { suggestion in
+                        viewModel.inputText = suggestion
+                        viewModel.sendMessage()
+                    })
+                }
+                .scrollDismissesKeyboard(.interactively)
 
                 Divider()
 
@@ -319,6 +322,7 @@ struct ChatView: View {
                 .frame(width: 44, height: 44)
                 .symbolEffect(.variableColor.iterative, options: .repeating, isActive: viewModel.isRecording)
         }
+        .buttonStyle(.plain)
         .glassEffect(
             reduceMotion
                 ? Glass.regular.tint(viewModel.isRecording ? ClarissaTheme.errorTint : nil)
@@ -343,6 +347,7 @@ struct ChatView: View {
                 .frame(width: 44, height: 44)
                 .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
         }
+        .buttonStyle(.plain)
         .glassEffect(
             reduceMotion
                 ? Glass.regular.tint(viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil)
@@ -368,6 +373,7 @@ struct ChatView: View {
                 .font(.title2)
                 .frame(width: 44, height: 44)
         }
+        .buttonStyle(.plain)
         .glassEffect(
             reduceMotion
                 ? Glass.regular
@@ -980,65 +986,170 @@ struct SessionHistoryView: View {
     @State private var sessions: [Session] = []
     @State private var currentSessionId: UUID?
     @State private var isLoading: Bool = true
+    @State private var sessionToDelete: Session?
+    @State private var showDeleteAlert: Bool = false
+    #if os(iOS)
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedSessions: Set<UUID> = []
+    @State private var showDeleteConfirmation: Bool = false
+    #endif
+
+    private var isEditing: Bool {
+        #if os(iOS)
+        return editMode == .active
+        #else
+        return false
+        #endif
+    }
 
     var body: some View {
         NavigationStack {
-            List {
-                if isLoading {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .tint(ClarissaTheme.purple)
-                        Spacer()
-                    }
-                    .listRowBackground(Color.clear)
-                } else if sessions.isEmpty {
-                    ContentUnavailableView(
-                        "No History",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Your conversations will appear here.")
-                    )
-                } else {
-                    ForEach(sessions) { session in
-                        SessionRowView(
-                            session: session,
-                            isCurrentSession: session.id == currentSessionId,
-                            onTap: {
-                                Task {
-                                    await viewModel.switchToSession(id: session.id)
-                                    onDismiss()
-                                }
-                            }
-                        )
-                    }
-                    .onDelete(perform: deleteSessions)
-                }
-            }
-            .navigationTitle("History")
-            .refreshable {
-                await loadData()
-            }
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    historyDoneButton
-                }
-            }
-            #else
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    historyDoneButton
-                }
-            }
-            #endif
+            sessionHistoryList
         }
         .tint(ClarissaTheme.purple)
         .task {
             await loadData()
             isLoading = false
         }
+        .alert("Delete Conversation", isPresented: $showDeleteAlert, presenting: sessionToDelete) { session in
+            Button("Delete", role: .destructive) {
+                Task {
+                    await viewModel.deleteSession(id: session.id)
+                    sessions.removeAll { $0.id == session.id }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Are you sure you want to delete this conversation? This action cannot be undone.")
+        }
+        #if os(iOS)
+        .onChange(of: editMode) { _, newMode in
+            if newMode == .inactive {
+                selectedSessions.removeAll()
+            }
+        }
+        .confirmationDialog(
+            "Delete \(selectedSessions.count) Conversation\(selectedSessions.count == 1 ? "" : "s")?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                deleteSelectedSessions()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        #endif
     }
+
+    @ViewBuilder
+    private var sessionHistoryList: some View {
+        #if os(iOS)
+        List(selection: $selectedSessions) {
+            sessionHistoryListContent
+        }
+        .environment(\.editMode, $editMode)
+        .navigationTitle("History")
+        .refreshable {
+            await loadData()
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if !sessions.isEmpty && !isLoading {
+                    editButton
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if isEditing && !selectedSessions.isEmpty {
+                    deleteSelectedButton
+                } else {
+                    historyDoneButton
+                }
+            }
+        }
+        #else
+        List {
+            sessionHistoryListContent
+        }
+        .navigationTitle("History")
+        .refreshable {
+            await loadData()
+        }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                historyDoneButton
+            }
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var sessionHistoryListContent: some View {
+        if isLoading {
+            HStack {
+                Spacer()
+                ProgressView()
+                    .tint(ClarissaTheme.purple)
+                Spacer()
+            }
+            .listRowBackground(Color.clear)
+        } else if sessions.isEmpty {
+            ContentUnavailableView(
+                "No History",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("Your conversations will appear here.")
+            )
+        } else {
+            ForEach(sessions) { session in
+                SessionRowView(
+                    session: session,
+                    isCurrentSession: session.id == currentSessionId,
+                    isEditing: isEditing,
+                    onTap: {
+                        Task {
+                            await viewModel.switchToSession(id: session.id)
+                            onDismiss()
+                        }
+                    },
+                    onDelete: {
+                        sessionToDelete = session
+                        showDeleteAlert = true
+                    }
+                )
+                .tag(session.id)
+            }
+            #if os(iOS)
+            .onDelete(perform: deleteSessions)
+            #endif
+        }
+    }
+
+    #if os(iOS)
+    @ViewBuilder
+    private var editButton: some View {
+        Button {
+            HapticManager.shared.lightTap()
+            withAnimation {
+                editMode = isEditing ? .inactive : .active
+            }
+        } label: {
+            Text(isEditing ? "Done" : "Select")
+        }
+        .foregroundStyle(ClarissaTheme.purple)
+    }
+
+    @ViewBuilder
+    private var deleteSelectedButton: some View {
+        Button(role: .destructive) {
+            HapticManager.shared.warning()
+            showDeleteConfirmation = true
+        } label: {
+            Text("Delete (\(selectedSessions.count))")
+        }
+    }
+    #endif
 
     @ViewBuilder
     private var historyDoneButton: some View {
@@ -1061,30 +1172,42 @@ struct SessionHistoryView: View {
         currentSessionId = await viewModel.getCurrentSessionId()
     }
 
+    #if os(iOS)
     private func deleteSessions(at offsets: IndexSet) {
-        // Provide haptic feedback for deletion
         HapticManager.shared.warning()
-
-        // Collect sessions to delete first
         let sessionsToDelete = offsets.map { sessions[$0] }
-
-        // Remove from local array immediately for responsive UI
         sessions.remove(atOffsets: offsets)
-
-        // Delete from persistence in background
         Task {
             for session in sessionsToDelete {
                 await viewModel.deleteSession(id: session.id)
             }
         }
     }
+
+    private func deleteSelectedSessions() {
+        HapticManager.shared.warning()
+        let idsToDelete = selectedSessions
+        sessions.removeAll { idsToDelete.contains($0.id) }
+        selectedSessions.removeAll()
+        withAnimation {
+            editMode = .inactive
+        }
+        Task {
+            for id in idsToDelete {
+                await viewModel.deleteSession(id: id)
+            }
+        }
+    }
+    #endif
 }
 
 /// Row view for a single session in history
 struct SessionRowView: View {
     let session: Session
     let isCurrentSession: Bool
+    var isEditing: Bool = false
     let onTap: () -> Void
+    var onDelete: (() -> Void)? = nil
 
     /// Get a preview of the last user message
     private var messagePreview: String? {
@@ -1134,12 +1257,26 @@ struct SessionRowView: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                if !isEditing {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
             .padding(.vertical, 4)
         }
+        .disabled(isEditing)
+        #if os(macOS)
+        .contextMenu {
+            if let onDelete = onDelete {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        #endif
     }
 
     /// Badge indicating current session - uses solid background per Liquid Glass guide
@@ -1213,6 +1350,7 @@ struct VoiceModeIndicator: View {
                         .font(.title3)
                         .frame(width: 36, height: 36)
                 }
+                .buttonStyle(.plain)
                 .glassEffect(reduceMotion ? .regular : .regular.interactive())
                 .glassEffectID("exit", in: voiceModeNamespace)
                 .accessibilityLabel("Exit voice mode")

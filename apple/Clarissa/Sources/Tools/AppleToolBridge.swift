@@ -97,6 +97,38 @@ private func getUserFriendlyError(_ error: Error) -> String {
     return "Unable to complete request: \(error.localizedDescription)"
 }
 
+// MARK: - Native Tool Usage Tracker
+
+/// Tracks tool usage for Foundation Models native tool calls
+/// Since Foundation Models handles tools opaquely, we track usage here
+/// to report accurate context stats in the UI
+@MainActor
+final class NativeToolUsageTracker {
+    static let shared = NativeToolUsageTracker()
+
+    private(set) var totalToolTokens: Int = 0
+    private(set) var toolCallCount: Int = 0
+
+    private init() {}
+
+    /// Record a tool call with its arguments and result
+    func recordToolCall(name: String, arguments: String, result: String) {
+        toolCallCount += 1
+        // Estimate tokens: tool name + arguments + result
+        // Using similar estimation as TokenBudget.estimate
+        let argTokens = max(1, arguments.count / 4)
+        let resultTokens = max(1, result.count / 4)
+        let nameTokens = max(1, name.count / 4)
+        totalToolTokens += argTokens + resultTokens + nameTokens
+    }
+
+    /// Reset tracking (call when starting a new conversation)
+    func reset() {
+        totalToolTokens = 0
+        toolCallCount = 0
+    }
+}
+
 /// Log tool call for debugging
 @inline(__always)
 private func logToolCall(_ name: String, _ arguments: Any) {
@@ -105,13 +137,18 @@ private func logToolCall(_ name: String, _ arguments: Any) {
     #endif
 }
 
-/// Log tool result for debugging
+/// Log tool result for debugging and track usage
 @inline(__always)
-private func logToolResult(_ name: String, _ result: String) {
+private func logToolResult(_ name: String, arguments: String, _ result: String) {
     #if DEBUG
     let truncated = result.count > 200 ? String(result.prefix(200)) + "..." : result
     toolLogger.debug("Tool '\(name)' returned: \(truncated)")
     #endif
+
+    // Track tool usage for context stats (on MainActor)
+    Task { @MainActor in
+        NativeToolUsageTracker.shared.recordToolCall(name: name, arguments: arguments, result: result)
+    }
 }
 
 // MARK: - Weather Tool
@@ -160,13 +197,13 @@ struct AppleWeatherTool: Tool {
             longitude: arguments.longitude,
             forecast: arguments.forecast
         )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -200,13 +237,13 @@ struct AppleCalculatorTool: Tool {
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
         let typedArgs = CalculatorToolArgs(expression: arguments.expression)
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -277,13 +314,13 @@ struct AppleCalendarTool: Tool {
             daysAhead: arguments.daysAhead,
             query: arguments.query
         )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -334,13 +371,13 @@ struct AppleContactsTool: Tool {
             contactId: arguments.contactId,
             limit: arguments.limit
         )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -407,13 +444,13 @@ struct AppleRemindersTool: Tool {
             reminderId: arguments.reminderId,
             listName: arguments.listName
         )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -447,13 +484,13 @@ struct AppleLocationTool: Tool {
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
         let typedArgs = LocationToolArgs(includeAddress: arguments.includeAddress)
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -499,13 +536,13 @@ struct AppleWebFetchTool: Tool {
             format: arguments.format,
             maxLength: arguments.maxLength
         )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -539,13 +576,13 @@ struct AppleRememberTool: Tool {
     func call(arguments: Arguments) async throws -> String {
         logToolCall(name, arguments)
         let typedArgs = RememberToolArgs(content: arguments.content)
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
         let tool = underlyingTool
         let result = await safeToolExecution(name) {
-            let jsonData = try JSONEncoder().encode(typedArgs)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, result)
+        logToolResult(name, arguments: jsonString, result)
         return result
     }
 }

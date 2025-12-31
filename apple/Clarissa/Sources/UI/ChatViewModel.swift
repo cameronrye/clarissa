@@ -397,12 +397,20 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         let session = await SessionManager.shared.getCurrentSession()
         let savedMessages = session.messages
 
+        ClarissaLogger.ui.info(
+            "Loading current session '\(session.title, privacy: .public)' with \(savedMessages.count) messages"
+        )
+
         // Convert saved messages to ChatMessages for display
+        var loadedCount = 0
         for message in savedMessages {
             if message.role == .user || message.role == .assistant {
                 messages.append(ChatMessage(role: message.role, content: message.content))
+                loadedCount += 1
             }
         }
+
+        ClarissaLogger.ui.info("Loaded \(loadedCount) UI messages on startup")
 
         // Load into agent
         agent.loadMessages(savedMessages)
@@ -469,20 +477,33 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Save current session before switching
         await saveCurrentSession()
 
-        if let session = await SessionManager.shared.switchToSession(id: id) {
-            messages.removeAll()
-            // Reset provider session to clear cached context from previous conversation
-            await agent.resetForNewConversation()
-
-            // Load messages from session
-            for message in session.messages {
-                if message.role == .user || message.role == .assistant {
-                    messages.append(ChatMessage(role: message.role, content: message.content))
-                }
-            }
-            agent.loadMessages(session.messages)
-            updateContextStats()
+        guard let session = await SessionManager.shared.switchToSession(id: id) else {
+            ClarissaLogger.ui.error("Failed to switch to session: \(id.uuidString, privacy: .public)")
+            return
         }
+
+        ClarissaLogger.ui.info("Switching to session: \(session.title, privacy: .public) with \(session.messages.count) messages")
+
+        // Clear UI messages first
+        messages.removeAll()
+
+        // Reset provider session to clear cached context from previous conversation
+        await agent.resetForNewConversation()
+
+        // Load messages from session into UI
+        var loadedCount = 0
+        for message in session.messages {
+            if message.role == .user || message.role == .assistant {
+                messages.append(ChatMessage(role: message.role, content: message.content))
+                loadedCount += 1
+            }
+        }
+
+        ClarissaLogger.ui.info("Loaded \(loadedCount) UI messages from session")
+
+        // Load into agent for context
+        agent.loadMessages(session.messages)
+        updateContextStats()
     }
 
     /// Get all sessions for history display

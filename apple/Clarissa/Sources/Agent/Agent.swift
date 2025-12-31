@@ -451,6 +451,8 @@ final class Agent: ObservableObject {
         let systemMessage = messages.first { $0.role == .system }
         messages = systemMessage.map { [$0] } ?? []
         trimmedCount = 0
+        // Reset native tool usage tracking
+        NativeToolUsageTracker.shared.reset()
     }
 
     /// Reset for a completely new conversation
@@ -460,6 +462,8 @@ final class Agent: ObservableObject {
         reset()
         // Also reset the provider session to clear any cached transcript
         await provider?.resetSession()
+        // Reset native tool usage tracking for accurate context stats
+        NativeToolUsageTracker.shared.reset()
         ClarissaLogger.agent.info("Agent reset for new conversation (including provider session)")
     }
     
@@ -500,6 +504,10 @@ final class Agent: ObservableObject {
                 toolTokens += tokens
             }
         }
+
+        // Include tool tokens from native Foundation Models tool calls
+        // These are tracked separately since FM handles tools opaquely
+        toolTokens += NativeToolUsageTracker.shared.totalToolTokens
 
         let historyTokens = userTokens + assistantTokens + toolTokens
         let usagePercent = Double(historyTokens) / Double(TokenBudget.maxHistoryTokens)

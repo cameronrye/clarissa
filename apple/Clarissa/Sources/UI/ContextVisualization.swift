@@ -34,9 +34,11 @@ struct ContextIndicatorView: View {
     private var glassIndicator: some View {
         Button(action: onTap) {
             gaugeContent
-                .padding(4)
+                .frame(width: 36, height: 36)
+                .contentShape(Circle())
         }
-        .glassEffect(.regular.tint(glassTint), in: .circle)
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(glassTint).interactive(), in: .circle)
         .accessibilityIdentifier("ContextIndicator")
         .accessibilityLabel("Context usage: \(Int(stats.usagePercent * 100)) percent")
         .accessibilityHint("Tap for context details")
