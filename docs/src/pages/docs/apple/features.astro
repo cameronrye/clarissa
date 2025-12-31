@@ -67,16 +67,21 @@ const base = import.meta.env.BASE_URL;
 
   <h2>Native Tools</h2>
   <p>
-    The Apple version includes tools optimized for the platform:
+    The Apple version includes tools deeply integrated with iOS and macOS frameworks:
   </p>
   <ul>
-    <li><strong>Web Fetch</strong> — Retrieve and summarize web content</li>
-    <li><strong>Date/Time</strong> — Get current date and time information</li>
+    <li><strong>Calendar</strong> — Create, list, and search calendar events (EventKit)</li>
+    <li><strong>Contacts</strong> — Search and view contact information</li>
+    <li><strong>Reminders</strong> — Create, list, and complete reminders (EventKit)</li>
+    <li><strong>Weather</strong> — Current conditions and 5-day forecast (WeatherKit)</li>
+    <li><strong>Location</strong> — Get current position with reverse geocoding (CoreLocation)</li>
+    <li><strong>Web Fetch</strong> — Retrieve and parse web content</li>
     <li><strong>Calculator</strong> — Perform mathematical calculations</li>
+    <li><strong>Remember</strong> — Store information for future conversations</li>
   </ul>
   <p>
-    <em>Note:</em> Apple Foundation Models support a maximum of 5 tools per session. 
-    The most commonly used tools are automatically prioritized.
+    <em>Note:</em> Apple Foundation Models work best with 4 or fewer tools active per session.
+    Configure which tools are enabled in Settings to optimize for your workflow.
   </p>
 
   <h2>Session Management</h2>

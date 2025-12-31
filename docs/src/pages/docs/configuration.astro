@@ -240,7 +240,7 @@ export ANTHROPIC_API_KEY=your_anthropic_key</code></pre>
   </table>
 
   <h2>CLI Commands</h2>
-  <p>Clarissa also provides standalone commands:</p>
+  <p>Clarissa provides standalone commands for setup and management:</p>
   <table>
     <thead>
       <tr>
@@ -251,14 +251,18 @@ export ANTHROPIC_API_KEY=your_anthropic_key</code></pre>
     <tbody>
       <tr>
         <td><code>clarissa init</code></td>
-        <td>Set up Clarissa with your API key</td>
+        <td>Set up Clarissa with your API keys interactively</td>
       </tr>
       <tr>
         <td><code>clarissa upgrade</code></td>
         <td>Upgrade to the latest version</td>
       </tr>
       <tr>
-        <td><code>clarissa download</code></td>
+        <td><code>clarissa providers [NAME]</code></td>
+        <td>List available providers or switch to one</td>
+      </tr>
+      <tr>
+        <td><code>clarissa download [ID]</code></td>
         <td>Download GGUF models for local inference</td>
       </tr>
       <tr>
@@ -266,12 +270,20 @@ export ANTHROPIC_API_KEY=your_anthropic_key</code></pre>
         <td>List downloaded local models</td>
       </tr>
       <tr>
+        <td><code>clarissa use &lt;FILE&gt;</code></td>
+        <td>Set a downloaded model as active for local-llama provider</td>
+      </tr>
+      <tr>
         <td><code>clarissa config</code></td>
-        <td>View current configuration</td>
+        <td>View current configuration (with masked API keys)</td>
       </tr>
       <tr>
         <td><code>clarissa history</code></td>
         <td>Show one-shot query history</td>
+      </tr>
+      <tr>
+        <td><code>clarissa app "&lt;message&gt;"</code></td>
+        <td>Open the native macOS app with an optional question (Apple Intelligence)</td>
       </tr>
     </tbody>
   </table>

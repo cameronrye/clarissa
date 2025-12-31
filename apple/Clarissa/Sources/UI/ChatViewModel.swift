@@ -19,6 +19,7 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     // MARK: - Enhancement Properties
     @Published var isEnhancing: Bool = false
+    @Published var enhancementFailed: Bool = false
 
     // MARK: - Voice Properties
     @Published var isRecording: Bool = false
@@ -651,8 +652,14 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             HapticManager.shared.success()
         } catch {
             ClarissaLogger.agent.error("Prompt enhancement failed: \(error.localizedDescription, privacy: .public)")
-            errorMessage = "Enhancement failed: \(error.localizedDescription)"
+            // Show subtle failure indicator instead of intrusive alert
+            enhancementFailed = true
             HapticManager.shared.error()
+            // Auto-dismiss after a brief moment
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                enhancementFailed = false
+            }
         }
 
         isEnhancing = false

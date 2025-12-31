@@ -5,15 +5,23 @@ import Docs from '../../layouts/Docs.astro';
 <Docs title="Installation" description="How to install Clarissa - via npm, from source, or as a standalone binary">
   <h1>Installation</h1>
   <p>
-    Clarissa can be installed in several ways depending on your preferences and setup. 
-    All methods require <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a> v1.0 or later 
-    and an <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter API key</a>.
+    Clarissa can be installed in several ways depending on your preferences and setup.
+    It supports multiple LLM providers including cloud APIs and local inference.
   </p>
 
   <h2>Requirements</h2>
   <ul>
     <li><a href="https://bun.sh" target="_blank" rel="noopener">Bun</a> v1.0 or later (for running from source or npm install)</li>
-    <li>An <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter API key</a></li>
+    <li>At least one LLM provider:
+      <ul>
+        <li><a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter API key</a> (100+ models)</li>
+        <li><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI API key</a> (GPT models)</li>
+        <li><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic API key</a> (Claude models)</li>
+        <li>Apple Intelligence (macOS 26+ with Apple Silicon)</li>
+        <li><a href="https://lmstudio.ai" target="_blank" rel="noopener">LM Studio</a> (local server)</li>
+        <li>Local GGUF model (via <code>clarissa download</code>)</li>
+      </ul>
+    </li>
   </ul>
 
   <h2>From npm (Recommended)</h2>
@@ -81,9 +89,19 @@ mv clarissa-macos-arm64 /usr/local/bin/clarissa</code></pre>
   <pre><code>clarissa --help</code></pre>
 
   <h2>Quick Setup</h2>
-  <p>Run the setup command to configure your API key:</p>
+  <p>Run the setup command to configure your API keys:</p>
   <pre><code>clarissa init</code></pre>
-  <p>This will prompt for your OpenRouter API key and create the config file automatically.</p>
+  <p>
+    This will prompt for API keys for OpenRouter, OpenAI, and Anthropic.
+    You can skip any provider you don't want to use. Clarissa will automatically
+    use the best available provider based on your configuration.
+  </p>
+
+  <h2>Local Models (Optional)</h2>
+  <p>For offline or privacy-sensitive use, download a local GGUF model:</p>
+  <pre><code>clarissa download</code></pre>
+  <p>Then set it as the active model:</p>
+  <pre><code>clarissa use Qwen2.5-7B.gguf</code></pre>
 
   <h2>Next Steps</h2>
   <p>

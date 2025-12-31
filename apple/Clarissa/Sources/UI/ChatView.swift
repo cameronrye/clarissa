@@ -269,19 +269,33 @@ struct ChatView: View {
                 Button {
                     Task { await viewModel.enhanceCurrentPrompt() }
                 } label: {
-                    Image(systemName: "wand.and.stars")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .fill(enhanceDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.cyan)
-                        )
-                        .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
+                    ZStack {
+                        Image(systemName: "wand.and.stars")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle()
+                                    .fill(viewModel.enhancementFailed ? Color.red.opacity(0.6) : (enhanceDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.cyan))
+                            )
+                            .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
+
+                        // Subtle failure indicator - small "x" badge
+                        if viewModel.enhancementFailed {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 14, height: 14)
+                                .background(Circle().fill(Color.red.opacity(0.9)))
+                                .offset(x: 12, y: -12)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
                 }
                 .disabled(enhanceDisabled)
-                .accessibilityLabel("Enhance prompt")
-                .accessibilityHint(enhanceDisabled ? "Type a message first to enable prompt enhancement" : "Double-tap to improve your prompt")
+                .animation(.easeInOut(duration: 0.2), value: viewModel.enhancementFailed)
+                .accessibilityLabel(viewModel.enhancementFailed ? "Enhancement unavailable" : "Enhance prompt")
+                .accessibilityHint(viewModel.enhancementFailed ? "Enhancement couldn't complete. Try again." : (enhanceDisabled ? "Type a message first to enable prompt enhancement" : "Double-tap to improve your prompt"))
                 .transition(.scale.combined(with: .opacity))
             }
 
@@ -338,27 +352,42 @@ struct ChatView: View {
     @available(iOS 26.0, macOS 26.0, *)
     private var enhanceButton: some View {
         let isDisabled = viewModel.isLoading || viewModel.isEnhancing
+        let failedTint = Color.red.opacity(0.6)
 
         return Button {
             Task { await viewModel.enhanceCurrentPrompt() }
         } label: {
-            Image(systemName: "wand.and.stars")
-                .font(.title2)
-                .frame(width: 44, height: 44)
-                .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
+            ZStack {
+                Image(systemName: "wand.and.stars")
+                    .font(.title2)
+                    .frame(width: 44, height: 44)
+                    .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
+
+                // Subtle failure indicator - small "x" badge
+                if viewModel.enhancementFailed {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(Color.red.opacity(0.8)))
+                        .offset(x: 14, y: -14)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
         }
         .buttonStyle(.plain)
         .glassEffect(
             reduceMotion
-                ? Glass.regular.tint(viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil)
-                : Glass.regular.interactive().tint(viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil),
+                ? Glass.regular.tint(viewModel.enhancementFailed ? failedTint : (viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil))
+                : Glass.regular.interactive().tint(viewModel.enhancementFailed ? failedTint : (viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil)),
             in: .circle
         )
         .glassEffectID("enhance", in: inputNamespace)
         .animation(.bouncy, value: viewModel.isEnhancing)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.enhancementFailed)
         .disabled(isDisabled)
-        .accessibilityLabel("Enhance prompt")
-        .accessibilityHint(isDisabled ? "Processing..." : "Double-tap to improve your prompt")
+        .accessibilityLabel(viewModel.enhancementFailed ? "Enhancement unavailable" : "Enhance prompt")
+        .accessibilityHint(viewModel.enhancementFailed ? "Enhancement couldn't complete. Try again." : (isDisabled ? "Processing..." : "Double-tap to improve your prompt"))
     }
 
     @available(iOS 26.0, macOS 26.0, *)

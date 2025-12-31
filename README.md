@@ -25,11 +25,14 @@
 
 ---
 
-Clarissa is a command-line AI agent built with [Bun](https://bun.sh) and [Ink](https://github.com/vadimdemedes/ink). It provides a conversational interface powered by [OpenRouter](https://openrouter.ai), enabling access to various LLMs like Claude, GPT-4, Gemini, and more. The agent can execute tools, manage files, run shell commands, and integrate with external services via the Model Context Protocol (MCP).
+Clarissa is a command-line AI agent built with [Bun](https://bun.sh) and [Ink](https://github.com/vadimdemedes/ink). It supports multiple LLM providers including cloud services (OpenRouter, OpenAI, Anthropic) and local models (Apple Intelligence, LM Studio, GGUF via node-llama-cpp). The agent can execute tools, manage files, run shell commands, and integrate with external services via the Model Context Protocol (MCP).
 
 ## Features
 
-- **Multi-model support** - Switch between Claude, GPT-4, Gemini, Llama, DeepSeek, and other models via OpenRouter
+- **Multi-provider support** - Cloud (OpenRouter, OpenAI, Anthropic) and local (Apple Intelligence, LM Studio, GGUF) providers
+- **Multi-model support** - Switch between Claude, GPT-4, Gemini, Llama, DeepSeek, and 100+ models
+- **Apple Intelligence** - On-device AI with Apple Foundation Models on macOS 26+ with full tool calling
+- **Local model inference** - Download and run GGUF models directly via node-llama-cpp
 - **Streaming responses** - Real-time token streaming for responsive conversations
 - **Built-in tools** - File operations, Git integration, shell commands, web fetching, and more
 - **MCP integration** - Connect to external MCP servers to extend functionality
@@ -39,6 +42,7 @@ Clarissa is a command-line AI agent built with [Bun](https://bun.sh) and [Ink](h
 - **Tool confirmation** - Approve or reject potentially dangerous operations
 - **One-shot mode** - Run single commands directly from your shell
 - **Piped input** - Pipe content from other commands for processing
+- **Auto-update** - Check for and install updates with `clarissa upgrade`
 
 ## How It Works
 
@@ -58,11 +62,23 @@ flowchart LR
         D[LLM Client]
         E[Tool Registry]
         F[Context Manager]
+        G[Provider Registry]
+    end
+
+    subgraph Cloud Providers
+        H[OpenRouter]
+        I[OpenAI]
+        J[Anthropic]
+    end
+
+    subgraph Local Providers
+        K[Apple Intelligence]
+        L[LM Studio]
+        M[Local GGUF]
     end
 
     subgraph External
-        G[OpenRouter API]
-        H[MCP Servers]
+        N[MCP Servers]
     end
 
     A --> C
@@ -71,10 +87,16 @@ flowchart LR
     C <--> E
     C <--> F
     D <--> G
-    E <-.-> H
+    G <--> H
+    G <--> I
+    G <--> J
+    G <--> K
+    G <--> L
+    G <--> M
+    E <-.-> N
 ```
 
-The system connects your terminal to various LLMs through OpenRouter. When you ask Clarissa to perform a task, it:
+The system connects your terminal to various LLM providers. When you ask Clarissa to perform a task, it:
 
 1. Sends your message to the LLM along with available tool definitions
 2. Receives a response that may include tool calls (e.g., read a file, run a command)
@@ -111,7 +133,13 @@ For detailed architecture documentation, see the [Architecture Guide](https://ca
 ## Requirements
 
 - [Bun](https://bun.sh) v1.0 or later (for running from source or npm install)
-- An [OpenRouter API key](https://openrouter.ai/keys)
+- At least one LLM provider:
+  - [OpenRouter API key](https://openrouter.ai/keys) (100+ models)
+  - [OpenAI API key](https://platform.openai.com/api-keys) (GPT models)
+  - [Anthropic API key](https://console.anthropic.com/settings/keys) (Claude models)
+  - Apple Intelligence (macOS 26+ with Apple Silicon)
+  - [LM Studio](https://lmstudio.ai) (local server)
+  - Local GGUF model (via `clarissa download`)
 
 ## Installation
 
@@ -146,28 +174,71 @@ mv clarissa-macos-arm64 /usr/local/bin/clarissa
 
 ## Configuration
 
+### Quick Setup
+
+Run the interactive setup to configure your API keys:
+
+```bash
+clarissa init
+```
+
+This will prompt you for API keys for OpenRouter, OpenAI, and Anthropic. You can skip any provider you don't want to use.
+
+### Manual Configuration
+
 Create a config file at `~/.clarissa/config.json`:
 
-```bash
-mkdir -p ~/.clarissa
-echo '{"apiKey": "your_api_key_here"}' > ~/.clarissa/config.json
+```json
+{
+  "openrouterApiKey": "sk-or-...",
+  "openaiApiKey": "sk-...",
+  "anthropicApiKey": "sk-ant-...",
+  "provider": "openrouter",
+  "model": "anthropic/claude-sonnet-4"
+}
 ```
 
-Or set your OpenRouter API key as an environment variable:
+Or set API keys as environment variables:
 
 ```bash
-export OPENROUTER_API_KEY=your_api_key_here
+export OPENROUTER_API_KEY=sk-or-...
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Optional settings (in config.json or as environment variables):
+### Configuration Options
 
-| Config Key | Env Variable | Default | Description |
-|------------|--------------|---------|-------------|
-| `apiKey` | `OPENROUTER_API_KEY` | (required) | Your OpenRouter API key |
-| `model` | `OPENROUTER_MODEL` | `anthropic/claude-sonnet-4` | Default model to use |
-| `maxIterations` | `MAX_ITERATIONS` | `10` | Maximum tool execution iterations |
-| `debug` | `DEBUG` | `false` | Enable debug logging |
-| `mcpServers` | - | `{}` | MCP servers to auto-load (see below) |
+| Config Key | Env Variable | Description |
+|------------|--------------|-------------|
+| `openrouterApiKey` | `OPENROUTER_API_KEY` | OpenRouter API key (100+ models) |
+| `openaiApiKey` | `OPENAI_API_KEY` | OpenAI API key (GPT models) |
+| `anthropicApiKey` | `ANTHROPIC_API_KEY` | Anthropic API key (Claude models) |
+| `provider` | - | Preferred provider (auto-detected if not set) |
+| `model` | `OPENROUTER_MODEL` | Default model to use |
+| `localModelPath` | - | Path to local GGUF model file |
+| `maxIterations` | `MAX_ITERATIONS` | Maximum tool iterations (default: 10) |
+| `debug` | `DEBUG` | Enable debug logging |
+| `mcpServers` | - | MCP servers to auto-load |
+
+### Providers
+
+Clarissa automatically selects the best available provider based on your configuration:
+
+| Provider | Type | Requirements |
+|----------|------|--------------|
+| `openrouter` | Cloud | API key |
+| `openai` | Cloud | API key |
+| `anthropic` | Cloud | API key |
+| `apple-ai` | Local | macOS 26+, Apple Silicon |
+| `lmstudio` | Local | LM Studio running on localhost:1234 |
+| `local-llama` | Local | Downloaded GGUF model |
+
+Switch providers with:
+
+```bash
+clarissa providers anthropic    # CLI
+/provider anthropic             # Interactive
+```
 
 ### MCP Server Configuration
 
@@ -219,22 +290,41 @@ cat error.log | clarissa "Explain this error"
 git diff | clarissa "Write a commit message for these changes"
 ```
 
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `clarissa` | Start interactive mode |
+| `clarissa "<message>"` | One-shot query mode |
+| `clarissa init` | Set up API keys interactively |
+| `clarissa upgrade` | Upgrade to the latest version |
+| `clarissa config` | View current configuration |
+| `clarissa history` | Show one-shot query history |
+| `clarissa providers [NAME]` | List providers or switch to one |
+| `clarissa download [ID]` | Download a local GGUF model |
+| `clarissa models` | List downloaded models |
+| `clarissa use <FILE>` | Set a downloaded model as active |
+| `clarissa app "<message>"` | Open macOS app with optional question |
+
 ### CLI Options
 
 | Option | Description |
 |--------|-------------|
+| `-c, --continue` | Continue the last session |
 | `-m, --model MODEL` | Use a specific model |
 | `--list-models` | List available models |
+| `--check-update` | Check for available updates |
 | `--debug` | Enable debug output |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
-### Commands
+### Interactive Commands
 
 | Command | Description |
 |---------|-------------|
 | `/help` | Show available commands |
-| `/clear` | Clear conversation history |
+| `/new` | Start a new conversation |
+| `/last` | Load the most recent session |
 | `/save [NAME]` | Save current session |
 | `/sessions` | List saved sessions |
 | `/load ID` | Load a saved session |
@@ -243,10 +333,13 @@ git diff | clarissa "Write a commit message for these changes"
 | `/memories` | List saved memories |
 | `/forget <#\|ID>` | Forget a memory |
 | `/model [NAME]` | Show or switch the current model |
+| `/provider [NAME]` | Show or switch the LLM provider |
 | `/mcp CMD ARGS` | Connect to an MCP server |
 | `/tools` | List available tools |
-| `/context` | Show context window usage and breakdown |
-| `/yolo` | Toggle auto-approve mode (skip tool confirmations) |
+| `/context` | Show context window usage |
+| `/yolo` | Toggle auto-approve mode |
+| `/version` | Show version info |
+| `/upgrade` | Upgrade to latest version |
 | `/exit` | Exit Clarissa |
 
 ### Keyboard Shortcuts
@@ -329,11 +422,17 @@ npm publish
 
 ```
 src/
-  index.tsx        # Entry point
+  index.tsx        # CLI entry point
   agent.ts         # ReAct agent loop implementation
+  update.ts        # Auto-update functionality
   config/          # Environment configuration
+  history/         # One-shot query history
   llm/             # LLM client and context management
+    providers/     # Multi-provider abstraction (OpenRouter, OpenAI, Anthropic, Apple, etc.)
   mcp/             # MCP client integration
+  memory/          # Long-term memory persistence
+  models/          # Local model download and management
+  preferences/     # User preferences persistence
   session/         # Session persistence
   tools/           # Tool definitions
   ui/              # Ink UI components

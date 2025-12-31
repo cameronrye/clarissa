@@ -250,9 +250,25 @@ Approve? (y/n)</code></pre>
   <pre><code>clarissa download</code></pre>
   <p>List downloaded models:</p>
   <pre><code>clarissa models</code></pre>
+  <p>Set a downloaded model as active:</p>
+  <pre><code>clarissa use Qwen2.5-7B.gguf</code></pre>
   <p>
+    This automatically sets the provider to <code>local-llama</code> and configures the model path.
     Local models run entirely on your machine using node-llama-cpp, with no API calls required.
     This is useful for privacy-sensitive work or offline usage.
+  </p>
+
+  <h2>Apple Intelligence (macOS)</h2>
+  <p>
+    On macOS 26+ with Apple Silicon, Clarissa supports on-device AI using Apple Foundation Models
+    with full tool calling support. Switch to the Apple provider:
+  </p>
+  <pre><code>/provider apple-ai</code></pre>
+  <p>Or use the native macOS app directly from the CLI:</p>
+  <pre><code>clarissa app "What's the weather today?"</code></pre>
+  <p>
+    The <code>app</code> command opens the native Clarissa macOS app with your question,
+    leveraging Apple Intelligence for private, on-device processing.
   </p>
 
   <h2>Auto-Approve Mode</h2>
