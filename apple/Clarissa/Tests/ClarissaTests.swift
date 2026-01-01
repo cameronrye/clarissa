@@ -2085,3 +2085,207 @@ struct MessageRoleTests {
         #expect(MessageRole.tool != MessageRole.system)
     }
 }
+
+// MARK: - ImagePreProcessor Tests
+
+@Suite("ImagePreProcessor Tests")
+struct ImagePreProcessorTests {
+
+    /// Create a simple test image with text
+    private func createTestImageData(withText text: String = "Hello World") -> Data? {
+        let width = 200
+        let height = 100
+
+        #if canImport(UIKit)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+        let image = renderer.image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 24),
+                .foregroundColor: UIColor.black
+            ]
+            let textSize = text.size(withAttributes: attributes)
+            let textRect = CGRect(
+                x: (CGFloat(width) - textSize.width) / 2,
+                y: (CGFloat(height) - textSize.height) / 2,
+                width: textSize.width,
+                height: textSize.height
+            )
+            text.draw(in: textRect, withAttributes: attributes)
+        }
+        return image.pngData()
+        #elseif canImport(AppKit)
+        let image = NSImage(size: NSSize(width: width, height: height))
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(x: 0, y: 0, width: width, height: height).fill()
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 24),
+            .foregroundColor: NSColor.black
+        ]
+        let textSize = text.size(withAttributes: attributes)
+        let textRect = CGRect(
+            x: (CGFloat(width) - textSize.width) / 2,
+            y: (CGFloat(height) - textSize.height) / 2,
+            width: textSize.width,
+            height: textSize.height
+        )
+        text.draw(in: textRect, withAttributes: attributes)
+        image.unlockFocus()
+
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+        #endif
+    }
+
+    @Test("ProcessingResult contextString with error")
+    func testProcessingResultWithError() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "",
+            classifications: [],
+            faceCount: 0,
+            hasDocument: false,
+            pageCount: 0,
+            error: "Test error message"
+        )
+        #expect(result.contextString.contains("error"))
+        #expect(result.contextString.contains("Test error message"))
+    }
+
+    @Test("ProcessingResult contextString with extracted text")
+    func testProcessingResultWithText() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "Hello World",
+            classifications: [],
+            faceCount: 0,
+            hasDocument: false,
+            pageCount: 0,
+            error: nil
+        )
+        #expect(result.contextString.contains("Hello World"))
+        #expect(result.contextString.contains("Text content"))
+    }
+
+    @Test("ProcessingResult contextString with classifications")
+    func testProcessingResultWithClassifications() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "",
+            classifications: ["outdoor", "nature", "sky"],
+            faceCount: 0,
+            hasDocument: false,
+            pageCount: 0,
+            error: nil
+        )
+        #expect(result.contextString.contains("outdoor"))
+        #expect(result.contextString.contains("nature"))
+        #expect(result.contextString.contains("sky"))
+    }
+
+    @Test("ProcessingResult contextString with faces")
+    func testProcessingResultWithFaces() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "",
+            classifications: [],
+            faceCount: 3,
+            hasDocument: false,
+            pageCount: 0,
+            error: nil
+        )
+        #expect(result.contextString.contains("Faces detected: 3"))
+    }
+
+    @Test("ProcessingResult contextString with document")
+    func testProcessingResultWithDocument() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "",
+            classifications: [],
+            faceCount: 0,
+            hasDocument: true,
+            pageCount: 0,
+            error: nil
+        )
+        #expect(result.contextString.contains("Document detected"))
+    }
+
+    @Test("ProcessingResult contextString with PDF")
+    func testProcessingResultWithPDF() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "PDF text content",
+            classifications: [],
+            faceCount: 0,
+            hasDocument: true,
+            pageCount: 5,
+            error: nil
+        )
+        #expect(result.contextString.contains("PDF with 5 pages"))
+        #expect(result.contextString.contains("PDF text content"))
+    }
+
+    @Test("ProcessingResult contextString empty content")
+    func testProcessingResultEmpty() {
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: "",
+            classifications: [],
+            faceCount: 0,
+            hasDocument: false,
+            pageCount: 0,
+            error: nil
+        )
+        #expect(result.contextString.contains("no text or notable content"))
+    }
+
+    @Test("ProcessingResult truncates long text")
+    func testProcessingResultTruncatesText() {
+        let longText = String(repeating: "a", count: 2000)
+        let result = ImagePreProcessor.ProcessingResult(
+            extractedText: longText,
+            classifications: [],
+            faceCount: 0,
+            hasDocument: false,
+            pageCount: 0,
+            error: nil
+        )
+        // Should be truncated to ~1500 chars + "..."
+        #expect(result.contextString.contains("..."))
+        #expect(result.contextString.count < 2000)
+    }
+
+    @Test("ImagePreProcessor handles invalid image data")
+    func testPreProcessorInvalidData() async {
+        let processor = ImagePreProcessor()
+        let invalidData = "not an image".data(using: .utf8)!
+
+        let result = await processor.process(imageData: invalidData)
+        #expect(result.error != nil)
+        #expect(result.error?.contains("decode") == true)
+    }
+
+    @Test("ImagePreProcessor handles valid image data")
+    func testPreProcessorValidImage() async {
+        let processor = ImagePreProcessor()
+
+        guard let imageData = createTestImageData() else {
+            Issue.record("Failed to create test image")
+            return
+        }
+
+        let result = await processor.process(imageData: imageData)
+        #expect(result.error == nil)
+        // The result should have some content (OCR, classification, etc.)
+        #expect(!result.contextString.isEmpty)
+    }
+
+    @Test("ImagePreProcessor PDF handles invalid data")
+    func testPreProcessorInvalidPDF() async {
+        let processor = ImagePreProcessor()
+        let invalidData = "not a pdf".data(using: .utf8)!
+
+        let result = await processor.process(pdfData: invalidData)
+        #expect(result.error != nil)
+        #expect(result.error?.contains("decode") == true)
+    }
+}

@@ -310,14 +310,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         attachedImageData = nil
         attachedImagePreview = nil
 
-        // Build message content
-        var messageContent = text
+        // Build message content for display
+        var displayContent = text
         if hasImage && text.isEmpty {
-            messageContent = "Analyze this image"
+            displayContent = "Analyze this image"
+        } else if hasImage {
+            displayContent = text + " [with image]"
         }
 
         // Add user message with optional image preview
-        var userMessage = ChatMessage(role: .user, content: messageContent)
+        var userMessage = ChatMessage(role: .user, content: displayContent)
         userMessage.imageData = imagePreview
         messages.append(userMessage)
 
@@ -329,17 +331,22 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             do {
                 try Task.checkCancellation()
 
-                // If we have an image, include it in the message for analysis
-                var promptText = messageContent
+                // Build prompt for the agent
+                var promptText = text.isEmpty ? "Analyze this image" : text
+
+                // Pre-process image BEFORE involving the LLM
+                // This is critical for Apple Foundation Models (4,096 token limit)
+                // Instead of passing base64 (~100KB = 25,000+ tokens), we pass
+                // extracted text/metadata (~500 chars = ~150 tokens)
                 if let imageData = imageData {
-                    let base64 = imageData.base64EncodedString()
-                    // Append instruction to use the image_analysis tool
+                    let processor = ImagePreProcessor()
+                    let result = await processor.process(imageData: imageData)
+
+                    // Add extracted content to the prompt
                     promptText = """
-                    \(messageContent)
+                    \(promptText)
 
-                    [Attached image data (base64): \(base64.prefix(100))...]
-
-                    Use the image_analysis tool with this base64 image data to analyze it. The full base64 is: \(base64)
+                    \(result.contextString)
                     """
                 }
 
@@ -876,7 +883,9 @@ struct ChatMessage: Identifiable {
     func toMarkdown() -> String {
         switch role {
         case .user:
-            let imageNote = imageData != nil ? " [with image]" : ""
+            // Only add image note if not already in content and we have image data
+            let hasImageNote = content.contains("[with image]")
+            let imageNote = (imageData != nil && !hasImageNote) ? " [with image]" : ""
             return "**You:** \(content)\(imageNote)"
         case .assistant:
             return "**Clarissa:** \(content)"

@@ -98,12 +98,26 @@ final class WebFetchTool: ClarissaTool, @unchecked Sendable {
             }
         }
         
+        // Track original length before truncation
+        let originalLength = content.count
+        let truncated = content.count > maxLength
+
         // Truncate if too long
-        if content.count > maxLength {
-            content = String(content.prefix(maxLength)) + "\n\n[Truncated - \(content.count) total characters]"
+        if truncated {
+            content = String(content.prefix(maxLength))
         }
-        
-        return content
+
+        // Return structured JSON for rich UI display
+        let result: [String: Any] = [
+            "url": urlString,
+            "format": format,
+            "content": content,
+            "truncated": truncated,
+            "characterCount": originalLength
+        ]
+
+        let resultData = try JSONSerialization.data(withJSONObject: result)
+        return String(data: resultData, encoding: .utf8) ?? content
     }
     
     private func stripHTML(_ html: String) -> String {

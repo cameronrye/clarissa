@@ -727,42 +727,533 @@ struct LocationResultView: View {
     }
 }
 
-// MARK: - Tool Result Parser
+// MARK: - Remember Result
+
+struct RememberResult: ToolResultDisplayable {
+    static let toolName = "remember"
+
+    let success: Bool
+    let content: String
+    let message: String
+
+    init?(jsonResult: String) {
+        guard let data = jsonResult.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        if json["error"] as? Bool == true {
+            return nil
+        }
+
+        guard let success = json["success"] as? Bool,
+              let content = json["content"] as? String else {
+            return nil
+        }
+
+        self.success = success
+        self.content = content
+        self.message = json["message"] as? String ?? "Memory stored"
+    }
+
+    @MainActor
+    func makeResultView() -> some View {
+        RememberResultView(result: self)
+    }
+}
+
+struct RememberResultView: View {
+    let result: RememberResult
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Image(systemName: "brain.fill")
+                    .font(.title3)
+                    .foregroundStyle(ClarissaTheme.gradient)
+
+                if result.success {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .offset(x: 10, y: 10)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Memory Saved")
+                    .font(.subheadline.weight(.medium))
+
+                Text(result.content)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Memory saved: \(result.content)")
+    }
+}
+
+// MARK: - Web Fetch Result
+
+struct WebFetchResult: ToolResultDisplayable {
+    static let toolName = "web_fetch"
+
+    let url: String
+    let format: String
+    let content: String
+    let truncated: Bool
+    let characterCount: Int
+
+    /// Extract display-friendly host from URL
+    private var displayHost: String {
+        if let url = URL(string: url), let host = url.host {
+            return host
+        }
+        return url
+    }
+
+    init?(jsonResult: String) {
+        guard let data = jsonResult.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        if json["error"] as? Bool == true {
+            return nil
+        }
+
+        guard let url = json["url"] as? String,
+              let content = json["content"] as? String else {
+            return nil
+        }
+
+        self.url = url
+        self.content = content
+        self.format = json["format"] as? String ?? "text"
+        self.truncated = json["truncated"] as? Bool ?? false
+        self.characterCount = json["characterCount"] as? Int ?? content.count
+    }
+
+    @MainActor
+    func makeResultView() -> some View {
+        WebFetchResultView(result: self)
+    }
+}
+
+struct WebFetchResultView: View {
+    let result: WebFetchResult
+
+    private var formatIcon: String {
+        switch result.format {
+        case "json": return "curlybraces"
+        case "html": return "chevron.left.forwardslash.chevron.right"
+        default: return "doc.text"
+        }
+    }
+
+    private var displayHost: String {
+        if let url = URL(string: result.url), let host = url.host {
+            return host
+        }
+        return result.url
+    }
+
+    private var formattedCharCount: String {
+        if result.characterCount >= 1000 {
+            return String(format: "%.1fK", Double(result.characterCount) / 1000)
+        }
+        return "\(result.characterCount)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "globe")
+                    .font(.title3)
+                    .foregroundStyle(ClarissaTheme.gradient)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayHost)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+
+                    HStack(spacing: 8) {
+                        Label(result.format.uppercased(), systemImage: formatIcon)
+                        Text("\(formattedCharCount) chars")
+                        if result.truncated {
+                            Text("(truncated)")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            // Content preview
+            Text(result.content.prefix(200).trimmingCharacters(in: .whitespacesAndNewlines))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .padding(.leading, 32)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Web content from \(displayHost), \(result.characterCount) characters")
+    }
+}
+
+// MARK: - Image Analysis Result
+
+struct ImageAnalysisResult: ToolResultDisplayable {
+    static let toolName = "image_analysis"
+
+    enum ResultType {
+        case ocr(text: String, lineCount: Int)
+        case classify(classifications: [(label: String, confidence: Double)])
+        case detectFaces(faceCount: Int)
+        case detectDocument(detected: Bool, confidence: Double)
+        case pdfExtract(text: String, pageCount: Int, pagesExtracted: Int, truncated: Bool)
+        case pdfOCR(text: String, pageCount: Int, pagesProcessed: Int, truncated: Bool)
+        case pdfPageCount(pageCount: Int)
+    }
+
+    let resultType: ResultType
+
+    init?(jsonResult: String) {
+        guard let data = jsonResult.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        if json["error"] as? Bool == true {
+            return nil
+        }
+
+        // Detect result type from JSON structure
+        if let text = json["text"] as? String, let lineCount = json["lineCount"] as? Int {
+            // OCR result
+            self.resultType = .ocr(text: text, lineCount: lineCount)
+        } else if let classifications = json["classifications"] as? [[String: Any]] {
+            // Classification result
+            let items = classifications.compactMap { item -> (String, Double)? in
+                guard let label = item["label"] as? String,
+                      let confidence = item["confidence"] as? Double else {
+                    return nil
+                }
+                return (label, confidence)
+            }
+            self.resultType = .classify(classifications: items)
+        } else if let faceCount = json["faceCount"] as? Int {
+            // Face detection result
+            self.resultType = .detectFaces(faceCount: faceCount)
+        } else if let detected = json["documentDetected"] as? Bool {
+            // Document detection result
+            let confidence = json["confidence"] as? Double ?? 0
+            self.resultType = .detectDocument(detected: detected, confidence: confidence)
+        } else if let pageCount = json["pageCount"] as? Int {
+            // PDF results
+            if let text = json["text"] as? String {
+                let truncated = json["truncated"] as? Bool ?? false
+                if let pagesProcessed = json["pagesProcessed"] as? Int {
+                    // PDF OCR
+                    self.resultType = .pdfOCR(text: text, pageCount: pageCount, pagesProcessed: pagesProcessed, truncated: truncated)
+                } else if let pagesExtracted = json["pagesExtracted"] as? Int {
+                    // PDF text extraction
+                    self.resultType = .pdfExtract(text: text, pageCount: pageCount, pagesExtracted: pagesExtracted, truncated: truncated)
+                } else {
+                    return nil
+                }
+            } else {
+                // Just page count
+                self.resultType = .pdfPageCount(pageCount: pageCount)
+            }
+        } else {
+            return nil
+        }
+    }
+
+    @MainActor
+    func makeResultView() -> some View {
+        ImageAnalysisResultView(result: self)
+    }
+}
+
+struct ImageAnalysisResultView: View {
+    let result: ImageAnalysisResult
+
+    var body: some View {
+        switch result.resultType {
+        case .ocr(let text, let lineCount):
+            ocrView(text: text, lineCount: lineCount)
+        case .classify(let classifications):
+            classificationView(classifications: classifications)
+        case .detectFaces(let faceCount):
+            faceDetectionView(faceCount: faceCount)
+        case .detectDocument(let detected, let confidence):
+            documentDetectionView(detected: detected, confidence: confidence)
+        case .pdfExtract(let text, let pageCount, let pagesExtracted, let truncated):
+            pdfTextView(text: text, pageCount: pageCount, pagesProcessed: pagesExtracted, truncated: truncated, isOCR: false)
+        case .pdfOCR(let text, let pageCount, let pagesProcessed, let truncated):
+            pdfTextView(text: text, pageCount: pageCount, pagesProcessed: pagesProcessed, truncated: truncated, isOCR: true)
+        case .pdfPageCount(let pageCount):
+            pdfPageCountView(pageCount: pageCount)
+        }
+    }
+
+    @ViewBuilder
+    private func ocrView(text: String, lineCount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.title3)
+                    .foregroundStyle(ClarissaTheme.gradient)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Text Recognition")
+                        .font(.subheadline.weight(.medium))
+                    Text("\(lineCount) lines extracted")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !text.isEmpty {
+                Text(text.prefix(150).trimmingCharacters(in: .whitespacesAndNewlines))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .padding(.leading, 32)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Text recognition: \(lineCount) lines extracted")
+    }
+
+    @ViewBuilder
+    private func classificationView(classifications: [(label: String, confidence: Double)]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "eye")
+                    .font(.title3)
+                    .foregroundStyle(ClarissaTheme.gradient)
+
+                Text("Image Classification")
+                    .font(.subheadline.weight(.medium))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(classifications.prefix(3), id: \.label) { item in
+                    HStack {
+                        Text(item.label.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.caption)
+                            .frame(width: 80, alignment: .leading)
+
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.secondary.opacity(0.2))
+                                    .frame(height: 8)
+
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(ClarissaTheme.gradient)
+                                    .frame(width: geometry.size.width * item.confidence, height: 8)
+                            }
+                        }
+                        .frame(height: 8)
+
+                        Text("\(Int(item.confidence * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                }
+            }
+            .padding(.leading, 32)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Image classification: \(classifications.first?.label ?? "unknown")")
+    }
+
+    @ViewBuilder
+    private func faceDetectionView(faceCount: Int) -> some View {
+        HStack {
+            Image(systemName: faceCount > 0 ? "face.smiling" : "face.dashed")
+                .font(.title3)
+                .foregroundStyle(ClarissaTheme.gradient)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Face Detection")
+                    .font(.subheadline.weight(.medium))
+                Text(faceCount == 0 ? "No faces detected" : "\(faceCount) face\(faceCount == 1 ? "" : "s") detected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Face detection: \(faceCount) faces found")
+    }
+
+    @ViewBuilder
+    private func documentDetectionView(detected: Bool, confidence: Double) -> some View {
+        HStack {
+            Image(systemName: detected ? "doc.viewfinder.fill" : "doc.viewfinder")
+                .font(.title3)
+                .foregroundStyle(ClarissaTheme.gradient)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Document Detection")
+                    .font(.subheadline.weight(.medium))
+                if detected {
+                    Text("Document found (\(Int(confidence * 100))% confidence)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No document detected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Document detection: \(detected ? "found" : "not found")")
+    }
+
+    @ViewBuilder
+    private func pdfTextView(text: String, pageCount: Int, pagesProcessed: Int, truncated: Bool, isOCR: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "doc.richtext")
+                    .font(.title3)
+                    .foregroundStyle(ClarissaTheme.gradient)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isOCR ? "PDF OCR" : "PDF Text Extract")
+                        .font(.subheadline.weight(.medium))
+
+                    HStack(spacing: 8) {
+                        Text("\(pagesProcessed) of \(pageCount) pages")
+                        if truncated {
+                            Text("(truncated)")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            if !text.isEmpty {
+                Text(text.prefix(150).trimmingCharacters(in: .whitespacesAndNewlines))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .padding(.leading, 32)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(isOCR ? "PDF OCR" : "PDF text"): \(pagesProcessed) pages processed")
+    }
+
+    @ViewBuilder
+    private func pdfPageCountView(pageCount: Int) -> some View {
+        HStack {
+            Image(systemName: "doc.on.doc")
+                .font(.title3)
+                .foregroundStyle(ClarissaTheme.gradient)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PDF Info")
+                    .font(.subheadline.weight(.medium))
+                Text("\(pageCount) page\(pageCount == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("PDF has \(pageCount) pages")
+    }
+}
+
+// MARK: - Tool Result View Registry
+
+/// Registry for tool result view types
+/// Allows tools to register their custom result display views
+/// New tools automatically get rich UI by registering their result type
+@MainActor
+final class ToolResultViewRegistry {
+    /// Shared singleton instance
+    static let shared = ToolResultViewRegistry()
+
+    /// Registered parsers keyed by tool name
+    /// Since this class is @MainActor, closures don't need @Sendable
+    private var parsers: [String: (String) -> AnyToolResult?] = [:]
+
+    private init() {
+        // Register built-in result types
+        registerBuiltInTypes()
+    }
+
+    /// Register a ToolResultDisplayable type for automatic parsing
+    /// Call this at app startup to register custom tool result views
+    ///
+    /// Example:
+    /// ```swift
+    /// ToolResultViewRegistry.shared.register(WeatherResult.self)
+    /// ```
+    func register<T: ToolResultDisplayable>(_ type: T.Type) {
+        let toolName = T.toolName
+        parsers[toolName] = { jsonResult in
+            guard let result = T(jsonResult: jsonResult) else {
+                return nil
+            }
+            return AnyToolResult(result)
+        }
+    }
+
+    /// Parse a tool result into a displayable result
+    /// Returns nil if no parser is registered or parsing fails
+    func parse(toolName: String, jsonResult: String) -> AnyToolResult? {
+        guard let parser = parsers[toolName] else {
+            return nil
+        }
+        return parser(jsonResult)
+    }
+
+    /// Check if a tool has a registered result view
+    func hasRegisteredView(for toolName: String) -> Bool {
+        parsers[toolName] != nil
+    }
+
+    /// Get all registered tool names
+    var registeredToolNames: [String] {
+        Array(parsers.keys).sorted()
+    }
+
+    /// Register all built-in tool result types
+    private func registerBuiltInTypes() {
+        register(WeatherResult.self)
+        register(CalendarEventsResult.self)
+        register(RemindersResult.self)
+        register(CalculatorResult.self)
+        register(ContactsResult.self)
+        register(LocationResult.self)
+        register(RememberResult.self)
+        register(WebFetchResult.self)
+        register(ImageAnalysisResult.self)
+    }
+}
+
+// MARK: - Tool Result Parser (Legacy API)
 
 /// Parses tool results and returns the appropriate displayable result
+/// This is a convenience wrapper around ToolResultViewRegistry
 @MainActor
 enum ToolResultParser {
     /// Parse a tool result into a displayable result
     static func parse(toolName: String, jsonResult: String) -> AnyToolResult? {
-        switch toolName {
-        case "weather":
-            if let result = WeatherResult(jsonResult: jsonResult) {
-                return AnyToolResult(result)
-            }
-        case "calendar":
-            if let result = CalendarEventsResult(jsonResult: jsonResult) {
-                return AnyToolResult(result)
-            }
-        case "reminders":
-            if let result = RemindersResult(jsonResult: jsonResult) {
-                return AnyToolResult(result)
-            }
-        case "calculator":
-            if let result = CalculatorResult(jsonResult: jsonResult) {
-                return AnyToolResult(result)
-            }
-        case "contacts":
-            if let result = ContactsResult(jsonResult: jsonResult) {
-                return AnyToolResult(result)
-            }
-        case "location":
-            if let result = LocationResult(jsonResult: jsonResult) {
-                return AnyToolResult(result)
-            }
-        default:
-            break
-        }
-        return nil
+        ToolResultViewRegistry.shared.parse(toolName: toolName, jsonResult: jsonResult)
     }
 }
 

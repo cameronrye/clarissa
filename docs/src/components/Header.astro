@@ -8,9 +8,7 @@ const navItems = [
   { href: `${base}`, label: 'Home' },
   { href: `${base}download/`, label: 'Download' },
   { href: `${base}apple/`, label: 'Apple Apps' },
-  { href: `${base}docs/installation/`, label: 'Installation' },
-  { href: `${base}docs/configuration/`, label: 'Configuration' },
-  { href: `${base}docs/tools/`, label: 'Tools' },
+  { href: `${base}docs/installation/`, label: 'Docs' },
 ];
 ---
 
@@ -20,36 +18,59 @@ const navItems = [
       <img src={`${base}logo.svg`} alt="Clarissa" width="32" height="32" />
       <span class="gradient-text">Clarissa</span>
     </a>
-    <nav class="nav">
+    <nav class="nav" id="main-nav">
       {navItems.map(item => (
-        <a 
-          href={item.href} 
-          class:list={['nav-link', { active: currentPath === item.href || currentPath === item.href.slice(0, -1) }]}
+        <a
+          href={item.href}
+          class:list={['nav-link', { active: currentPath === item.href || currentPath === item.href.slice(0, -1) || (item.label === 'Docs' && currentPath.includes('/docs/')) }]}
         >
           {item.label}
         </a>
       ))}
     </nav>
-    <div class="header-links">
-      <a href="https://www.npmjs.com/package/clarissa" class="header-icon-link" target="_blank" rel="noopener" aria-label="npm">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331zM10.665 10H12v2.667h-1.335V10z"/>
-        </svg>
-      </a>
-      <a href="https://github.com/cameronrye/clarissa" class="header-icon-link" target="_blank" rel="noopener" aria-label="GitHub">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-        </svg>
-      </a>
-      <ThemeToggle />
+    <div class="header-actions">
+      <div class="header-links">
+        <a href="https://www.npmjs.com/package/clarissa" class="header-icon-link" target="_blank" rel="noopener" aria-label="npm">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331zM10.665 10H12v2.667h-1.335V10z"/>
+          </svg>
+        </a>
+        <a href="https://github.com/cameronrye/clarissa" class="header-icon-link" target="_blank" rel="noopener" aria-label="GitHub">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
+        <ThemeToggle />
+      </div>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </div>
-    <button class="mobile-menu-btn" aria-label="Toggle menu">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
   </div>
+  <nav class="mobile-nav" id="mobile-nav">
+    {navItems.map(item => (
+      <a
+        href={item.href}
+        class:list={['mobile-nav-link', { active: currentPath === item.href || currentPath === item.href.slice(0, -1) || (item.label === 'Docs' && currentPath.includes('/docs/')) }]}
+      >
+        {item.label}
+      </a>
+    ))}
+  </nav>
 </header>
+
+<script>
+  const menuBtn = document.getElementById('mobile-menu-btn');
+  const mobileNav = document.getElementById('mobile-nav');
+
+  menuBtn?.addEventListener('click', () => {
+    const isOpen = mobileNav?.classList.toggle('open');
+    menuBtn.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+</script>
 
 <style>
   .header {
@@ -92,6 +113,12 @@ const navItems = [
     color: var(--color-text);
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
   .header-links {
     display: flex;
     align-items: center;
@@ -112,18 +139,65 @@ const navItems = [
   .mobile-menu-btn {
     display: none;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px;
+    padding: 8px;
+    margin-right: -8px;
   }
 
   .mobile-menu-btn span {
     width: 20px;
     height: 2px;
     background: var(--color-text);
-    transition: 0.2s;
+    transition: transform 0.2s, opacity 0.2s;
+    transform-origin: center;
+  }
+
+  .mobile-menu-btn.open span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+  }
+
+  .mobile-menu-btn.open span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .mobile-menu-btn.open span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+  }
+
+  .mobile-nav {
+    display: none;
+    flex-direction: column;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border);
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+  }
+
+  .mobile-nav.open {
+    max-height: 300px;
+    padding: 1rem 0;
+  }
+
+  .mobile-nav-link {
+    display: block;
+    padding: 0.75rem 1.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.9375rem;
+    transition: color 0.2s, background 0.2s;
+  }
+
+  .mobile-nav-link:hover {
+    color: var(--color-text);
+    background: var(--color-bg-tertiary);
+  }
+
+  .mobile-nav-link.active {
+    color: var(--color-cyan);
   }
 
   @media (max-width: 768px) {
@@ -132,6 +206,10 @@ const navItems = [
     }
 
     .mobile-menu-btn {
+      display: flex;
+    }
+
+    .mobile-nav {
       display: flex;
     }
   }

@@ -7,11 +7,14 @@ import UIKit
 import AppKit
 #endif
 
-/// Tool for analyzing images and PDFs using Apple's Vision and PDFKit frameworks
-/// Supports OCR, image classification, face detection, document detection, and PDF text extraction
+/// Tool for analyzing images and PDFs using Apple's Vision and PDFKit frameworks.
+/// NOTE: For user-attached images, pre-processing happens BEFORE the LLM call
+/// via ImagePreProcessor. This tool is for targeted follow-up operations on
+/// files referenced by URL (e.g., "get face coordinates" or "extract page 5").
+/// Only file:// URLs are supported to stay within context limits.
 final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
     let name = "image_analysis"
-    let description = "Analyze images or PDFs for text (OCR), objects, faces, or documents. For PDFs: extract text or OCR scanned pages. Provide data as base64 or file URL."
+    let description = "Perform targeted analysis on images or PDFs via file URL. Actions: 'ocr' (text), 'classify' (objects), 'detect_faces', 'detect_document', 'pdf_extract_text', 'pdf_ocr', 'pdf_page_count'. Only file:// URLs supported."
     let priority = ToolPriority.extended
 
     /// Maximum characters to return from PDF text extraction
@@ -29,21 +32,13 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
                     "enum": ["ocr", "classify", "detect_faces", "detect_document", "pdf_extract_text", "pdf_ocr", "pdf_page_count"],
                     "description": "Analysis type: 'ocr' for image text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count"
                 ],
-                "imageBase64": [
-                    "type": "string",
-                    "description": "Base64-encoded image data"
-                ],
                 "imageURL": [
                     "type": "string",
-                    "description": "File URL to the image (file:// scheme)"
-                ],
-                "pdfBase64": [
-                    "type": "string",
-                    "description": "Base64-encoded PDF data"
+                    "description": "File URL to the image (file:// scheme only)"
                 ],
                 "pdfURL": [
                     "type": "string",
-                    "description": "File URL to the PDF (file:// scheme)"
+                    "description": "File URL to the PDF (file:// scheme only)"
                 ],
                 "pageRange": [
                     "type": "string",
@@ -63,17 +58,13 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
 
         let pageRange = args["pageRange"] as? String
 
-        // Handle PDF actions
+        // Handle PDF actions (file URLs only)
         if action.hasPrefix("pdf_") {
-            let pdfDocument: PDFDocument
-            if let base64 = args["pdfBase64"] as? String {
-                pdfDocument = try pdfFromBase64(base64)
-            } else if let urlString = args["pdfURL"] as? String,
-                      let url = URL(string: urlString) {
-                pdfDocument = try pdfFromURL(url)
-            } else {
-                throw ToolError.invalidArguments("PDF actions require 'pdfBase64' or 'pdfURL'")
+            guard let urlString = args["pdfURL"] as? String,
+                  let url = URL(string: urlString) else {
+                throw ToolError.invalidArguments("PDF actions require 'pdfURL' (file:// URL)")
             }
+            let pdfDocument = try pdfFromURL(url)
 
             switch action {
             case "pdf_extract_text":
@@ -87,16 +78,12 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
             }
         }
 
-        // Handle image actions
-        let cgImage: CGImage
-        if let base64 = args["imageBase64"] as? String {
-            cgImage = try imageFromBase64(base64)
-        } else if let urlString = args["imageURL"] as? String,
-                  let url = URL(string: urlString) {
-            cgImage = try imageFromURL(url)
-        } else {
-            throw ToolError.invalidArguments("Image actions require 'imageBase64' or 'imageURL'")
+        // Handle image actions (file URLs only)
+        guard let urlString = args["imageURL"] as? String,
+              let url = URL(string: urlString) else {
+            throw ToolError.invalidArguments("Image actions require 'imageURL' (file:// URL)")
         }
+        let cgImage = try imageFromURL(url)
 
         switch action {
         case "ocr":
@@ -113,21 +100,6 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
     }
 
     // MARK: - Image Loading
-
-    private func imageFromBase64(_ base64: String) throws -> CGImage {
-        // Remove data URL prefix if present
-        let cleanBase64 = base64.replacingOccurrences(
-            of: "^data:image/[^;]+;base64,",
-            with: "",
-            options: .regularExpression
-        )
-
-        guard let imageData = Data(base64Encoded: cleanBase64, options: .ignoreUnknownCharacters) else {
-            throw ToolError.invalidArguments("Invalid base64 image data")
-        }
-
-        return try cgImageFromData(imageData)
-    }
 
     private func imageFromURL(_ url: URL) throws -> CGImage {
         guard url.isFileURL else {
@@ -250,21 +222,6 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
     }
 
     // MARK: - PDF Loading
-
-    private func pdfFromBase64(_ base64: String) throws -> PDFDocument {
-        // Remove data URL prefix if present
-        let cleanBase64 = base64.replacingOccurrences(
-            of: "^data:application/pdf;base64,",
-            with: "",
-            options: .regularExpression
-        )
-
-        guard let pdfData = Data(base64Encoded: cleanBase64, options: .ignoreUnknownCharacters),
-              let document = PDFDocument(data: pdfData) else {
-            throw ToolError.invalidArguments("Invalid base64 PDF data")
-        }
-        return document
-    }
 
     private func pdfFromURL(_ url: URL) throws -> PDFDocument {
         guard url.isFileURL else {

@@ -78,10 +78,28 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Web Fetch</strong> — Retrieve and parse web content</li>
     <li><strong>Calculator</strong> — Perform mathematical calculations</li>
     <li><strong>Remember</strong> — Store information for future conversations</li>
+    <li><strong>Image Analysis</strong> — OCR, object detection, and face detection (Vision)</li>
+    <li><strong>PDF Analysis</strong> — Text extraction and OCR for scanned documents (PDFKit + Vision)</li>
   </ul>
   <p>
     <em>Note:</em> Apple Foundation Models work best with 4 or fewer tools active per session.
     Configure which tools are enabled in Settings to optimize for your workflow.
+  </p>
+
+  <h2>Image and Document Analysis</h2>
+  <p>
+    Clarissa can analyze images and PDF documents using Apple's Vision framework:
+  </p>
+  <ul>
+    <li><strong>Text Recognition (OCR)</strong> — Extract text from photos, screenshots, and scanned documents</li>
+    <li><strong>Image Classification</strong> — Identify objects, scenes, and content in photos</li>
+    <li><strong>Face Detection</strong> — Detect and count faces in images</li>
+    <li><strong>Document Detection</strong> — Identify documents in photos for enhanced text extraction</li>
+    <li><strong>PDF Text Extraction</strong> — Extract text from PDF files, including OCR for scanned pages</li>
+  </ul>
+  <p>
+    To use image analysis, tap the <strong>attachment button</strong> to select an image or PDF from
+    your photo library. Clarissa will automatically analyze the content and include it in the conversation.
   </p>
 
   <h2>Session Management</h2>

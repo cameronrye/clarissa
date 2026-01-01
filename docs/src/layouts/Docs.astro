@@ -42,12 +42,20 @@ const sidebar = [
     ]
   }
 ];
+
+const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathname.includes(item.href.replace(base, '')))?.label || 'Menu';
 ---
 
 <Base title={title} description={description}>
   <Header />
   <div class="docs-layout container">
-    <aside class="sidebar">
+    <button class="mobile-sidebar-toggle" id="sidebar-toggle" aria-expanded="false">
+      <span class="toggle-label">{currentLabel}</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
+    <aside class="sidebar" id="sidebar">
       <nav class="sidebar-nav">
         {sidebar.map(section => (
           <div class="sidebar-section">
@@ -70,26 +78,77 @@ const sidebar = [
   <Footer />
 </Base>
 
+<script>
+  const toggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+
+  toggle?.addEventListener('click', () => {
+    const isOpen = sidebar?.classList.toggle('open');
+    toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(isOpen));
+  });
+</script>
+
 <style>
   .docs-layout {
     display: grid;
     gap: 2rem;
-    padding-top: 2rem;
+    padding-top: 1rem;
     padding-bottom: 4rem;
     min-height: calc(100vh - 64px - 300px);
   }
 
+  .mobile-sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .mobile-sidebar-toggle:hover {
+    border-color: var(--color-purple);
+  }
+
+  .mobile-sidebar-toggle svg {
+    transition: transform 0.2s;
+  }
+
+  .mobile-sidebar-toggle.open svg {
+    transform: rotate(180deg);
+  }
+
   .sidebar {
     display: none;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: -1rem;
+  }
+
+  .sidebar.open {
+    display: block;
   }
 
   .sidebar-nav {
-    position: sticky;
-    top: 80px;
+    position: static;
   }
 
   .sidebar-section {
     margin-bottom: 1.5rem;
+  }
+
+  .sidebar-section:last-child {
+    margin-bottom: 0;
   }
 
   .sidebar-section h3 {
@@ -122,17 +181,23 @@ const sidebar = [
 
   .docs-content {
     max-width: 800px;
+    min-width: 0;
   }
 
   .prose h1 {
-    font-size: 2.25rem;
+    font-size: 1.75rem;
     margin-bottom: 1.5rem;
   }
 
   .prose h2 {
-    margin-top: 3rem;
+    margin-top: 2.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid var(--color-border);
+    font-size: 1.375rem;
+  }
+
+  .prose h3 {
+    font-size: 1.125rem;
   }
 
   .prose ul, .prose ol {
@@ -163,13 +228,16 @@ const sidebar = [
     width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
+    display: block;
+    overflow-x: auto;
   }
 
   .prose th, .prose td {
-    padding: 0.75rem;
+    padding: 0.5rem 0.75rem;
     text-align: left;
     border: 1px solid var(--color-border);
+    white-space: nowrap;
   }
 
   .prose th {
@@ -180,10 +248,44 @@ const sidebar = [
   @media (min-width: 1024px) {
     .docs-layout {
       grid-template-columns: 220px 1fr;
+      padding-top: 2rem;
+    }
+
+    .mobile-sidebar-toggle {
+      display: none;
     }
 
     .sidebar {
       display: block;
+      background: none;
+      border: none;
+      padding: 0;
+      margin-top: 0;
+    }
+
+    .sidebar-nav {
+      position: sticky;
+      top: 80px;
+    }
+
+    .prose h1 {
+      font-size: 2.25rem;
+    }
+
+    .prose h2 {
+      font-size: 1.75rem;
+    }
+
+    .prose h3 {
+      font-size: 1.25rem;
+    }
+
+    .prose table {
+      display: table;
+    }
+
+    .prose th, .prose td {
+      white-space: normal;
     }
   }
 </style>

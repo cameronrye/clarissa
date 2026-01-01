@@ -249,104 +249,173 @@ struct ChatView: View {
     }
 
     private var legacyInputArea: some View {
-        HStack(spacing: 12) {
-            // Voice input button - hidden when voice mode is active
-            if !viewModel.isVoiceModeActive {
-                Button {
-                    HapticManager.shared.mediumTap()
-                    Task { await viewModel.toggleVoiceInput() }
-                } label: {
-                    ZStack {
-                        if viewModel.isRecording {
-                            Circle()
-                                .fill(Color.red.opacity(0.2))
-                                .frame(width: 36, height: 36)
-                            Image(systemName: "waveform")
-                                .font(.title3)
-                                .foregroundStyle(.red)
-                                .symbolEffect(.variableColor.iterative, options: .repeating)
-                        } else {
-                            Image(systemName: "mic.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(ClarissaTheme.gradient)
-                        }
-                    }
-                }
-                .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
-                .accessibilityHint(viewModel.isRecording ? "Double-tap to stop recording and send transcribed text" : "Double-tap to speak your message instead of typing")
+        VStack(spacing: 8) {
+            // Image preview if attached
+            if let imageData = viewModel.attachedImagePreview {
+                legacyImagePreviewView(data: imageData)
+                    .transition(.scale.combined(with: .opacity))
             }
 
-            TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...5)
-                .focused($isInputFocused)
-                .onSubmit {
+            HStack(spacing: 12) {
+                // Voice input button - hidden when voice mode is active
+                if !viewModel.isVoiceModeActive {
+                    Button {
+                        HapticManager.shared.mediumTap()
+                        Task { await viewModel.toggleVoiceInput() }
+                    } label: {
+                        ZStack {
+                            if viewModel.isRecording {
+                                Circle()
+                                    .fill(Color.red.opacity(0.2))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "waveform")
+                                    .font(.title3)
+                                    .foregroundStyle(.red)
+                                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                            } else {
+                                Image(systemName: "mic.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(ClarissaTheme.gradient)
+                            }
+                        }
+                    }
+                    .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
+                    .accessibilityHint(viewModel.isRecording ? "Double-tap to stop recording and send transcribed text" : "Double-tap to speak your message instead of typing")
+                }
+
+                // Image picker button
+                legacyImagePickerButton
+
+                TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...5)
+                    .focused($isInputFocused)
+                    .onSubmit {
+                        HapticManager.shared.mediumTap()
+                        viewModel.sendMessage()
+                    }
+                    .accessibilityLabel("Message input")
+                    .accessibilityHint("Type your message to Clarissa. Press return to send.")
+
+                let hasContent = hasInputText || viewModel.attachedImageData != nil
+                let sendDisabled = !hasContent || viewModel.isLoading
+                let enhanceDisabled = !hasInputText || viewModel.isLoading || viewModel.isEnhancing
+
+                // Enhance prompt button - only shown when there's text
+                if hasInputText {
+                    Button {
+                        Task { await viewModel.enhanceCurrentPrompt() }
+                    } label: {
+                        ZStack {
+                            Image(systemName: "wand.and.stars")
+                                .font(.title2)
+                                .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    Circle()
+                                        .fill(viewModel.enhancementFailed ? Color.red.opacity(0.6) : (enhanceDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.cyan))
+                                )
+                                .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
+
+                            // Subtle failure indicator - small "x" badge
+                            if viewModel.enhancementFailed {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 14, height: 14)
+                                    .background(Circle().fill(Color.red.opacity(0.9)))
+                                    .offset(x: 12, y: -12)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                    }
+                    .disabled(enhanceDisabled)
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.enhancementFailed)
+                    .accessibilityLabel(viewModel.enhancementFailed ? "Enhancement unavailable" : "Enhance prompt")
+                    .accessibilityHint(viewModel.enhancementFailed ? "Enhancement couldn't complete. Try again." : (enhanceDisabled ? "Type a message first to enable prompt enhancement" : "Double-tap to improve your prompt"))
+                    .transition(.scale.combined(with: .opacity))
+                }
+
+                // Send button
+                Button {
                     HapticManager.shared.mediumTap()
                     viewModel.sendMessage()
-                }
-                .accessibilityLabel("Message input")
-                .accessibilityHint("Type your message to Clarissa. Press return to send.")
-
-            let sendDisabled = !hasInputText || viewModel.isLoading
-            let enhanceDisabled = !hasInputText || viewModel.isLoading || viewModel.isEnhancing
-
-            // Enhance prompt button - only shown when there's text
-            if hasInputText {
-                Button {
-                    Task { await viewModel.enhanceCurrentPrompt() }
                 } label: {
-                    ZStack {
-                        Image(systemName: "wand.and.stars")
-                            .font(.title2)
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .fill(viewModel.enhancementFailed ? Color.red.opacity(0.6) : (enhanceDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.cyan))
-                            )
-                            .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
-
-                        // Subtle failure indicator - small "x" badge
-                        if viewModel.enhancementFailed {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 14, height: 14)
-                                .background(Circle().fill(Color.red.opacity(0.9)))
-                                .offset(x: 12, y: -12)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                    }
+                    Image(systemName: "arrow.up")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(sendDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.purple)
+                        )
                 }
-                .disabled(enhanceDisabled)
-                .animation(.easeInOut(duration: 0.2), value: viewModel.enhancementFailed)
-                .accessibilityLabel(viewModel.enhancementFailed ? "Enhancement unavailable" : "Enhance prompt")
-                .accessibilityHint(viewModel.enhancementFailed ? "Enhancement couldn't complete. Try again." : (enhanceDisabled ? "Type a message first to enable prompt enhancement" : "Double-tap to improve your prompt"))
-                .transition(.scale.combined(with: .opacity))
+                .disabled(sendDisabled)
+                .accessibilityLabel("Send message")
+                .accessibilityHint(sendDisabled ? "Type a message or attach an image first" : "Double-tap to send your message to Clarissa")
             }
-
-            // Send button
-            Button {
-                HapticManager.shared.mediumTap()
-                viewModel.sendMessage()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(sendDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.purple)
-                    )
-            }
-            .disabled(sendDisabled)
-            .accessibilityLabel("Send message")
-            .accessibilityHint(sendDisabled ? "Type a message first, then double-tap to send" : "Double-tap to send your message to Clarissa")
         }
         .animation(.easeInOut(duration: 0.2), value: hasInputText)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.attachedImagePreview != nil)
         .padding()
         .background(.bar)
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                    viewModel.attachImage(data)
+                }
+                selectedPhotoItem = nil
+            }
+        }
+    }
+
+    // MARK: - Legacy Image Picker Components
+
+    private var legacyImagePickerButton: some View {
+        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+            Image(systemName: "photo.circle.fill")
+                .font(.title2)
+                .foregroundStyle(ClarissaTheme.gradient)
+        }
+        .accessibilityLabel("Attach image")
+        .accessibilityHint("Double-tap to select an image for analysis")
+    }
+
+    private func legacyImagePreviewView(data: Data) -> some View {
+        HStack {
+            #if canImport(UIKit)
+            if let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            #elseif canImport(AppKit)
+            if let nsImage = NSImage(data: data) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            #endif
+
+            Button {
+                viewModel.removeAttachedImage()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove image")
+            .accessibilityHint("Double-tap to remove the attached image")
+
+            Spacer()
+        }
+        .padding(.horizontal, 8)
     }
 
     // MARK: - Glass Input Components
