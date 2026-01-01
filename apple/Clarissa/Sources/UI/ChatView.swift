@@ -1,11 +1,17 @@
 import SwiftUI
+import PhotosUI
 #if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
 #endif
 
 struct ChatView: View {
     @ObservedObject var viewModel: ChatViewModel
     @FocusState private var isInputFocused: Bool
+
+    // Photo picker state
+    @State private var selectedPhotoItem: PhotosPickerItem?
 
     // Namespace for glass morphing transitions
     @Namespace private var inputNamespace
@@ -180,40 +186,60 @@ struct ChatView: View {
     @available(iOS 26.0, macOS 26.0, *)
     private var glassInputArea: some View {
         GlassEffectContainer(spacing: 20) {
-            HStack(spacing: 12) {
-                // Voice input button with glass (speech recognition / listening)
-                // Hidden when voice mode is active since VoiceModeIndicator handles voice
-                if !viewModel.isVoiceModeActive {
-                    voiceInputButton
-                }
-
-                // Text input field
-                TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($isInputFocused)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.clear)
-                    .contentShape(Rectangle())
-                    .onSubmit {
-                        HapticManager.shared.mediumTap()
-                        viewModel.sendMessage()
-                    }
-                    .accessibilityLabel("Message input")
-                    .accessibilityHint("Type your message to Clarissa. Press return to send.")
-
-                // Enhance prompt button - only shown when there's text
-                if hasInputText {
-                    enhanceButton
+            VStack(spacing: 8) {
+                // Image preview if attached
+                if let imageData = viewModel.attachedImagePreview {
+                    imagePreviewView(data: imageData)
                         .transition(.scale.combined(with: .opacity))
                 }
 
-                // Send button
-                sendButton
+                HStack(spacing: 12) {
+                    // Voice input button with glass (speech recognition / listening)
+                    // Hidden when voice mode is active since VoiceModeIndicator handles voice
+                    if !viewModel.isVoiceModeActive {
+                        voiceInputButton
+                    }
+
+                    // Image picker button
+                    imagePickerButton
+
+                    // Text input field
+                    TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...5)
+                        .focused($isInputFocused)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.clear)
+                        .contentShape(Rectangle())
+                        .onSubmit {
+                            HapticManager.shared.mediumTap()
+                            viewModel.sendMessage()
+                        }
+                        .accessibilityLabel("Message input")
+                        .accessibilityHint("Type your message to Clarissa. Press return to send.")
+
+                    // Enhance prompt button - only shown when there's text
+                    if hasInputText {
+                        enhanceButton
+                            .transition(.scale.combined(with: .opacity))
+                    }
+
+                    // Send button
+                    sendButton
+                }
             }
             .animation(.easeInOut(duration: 0.2), value: hasInputText)
+            .animation(.easeInOut(duration: 0.2), value: viewModel.attachedImagePreview != nil)
             .padding()
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                    viewModel.attachImage(data)
+                }
+                selectedPhotoItem = nil
+            }
         }
     }
 
@@ -392,7 +418,8 @@ struct ChatView: View {
 
     @available(iOS 26.0, macOS 26.0, *)
     private var sendButton: some View {
-        let isDisabled = !hasInputText || viewModel.isLoading
+        let hasContent = hasInputText || viewModel.attachedImageData != nil
+        let isDisabled = !hasContent || viewModel.isLoading
 
         return Button {
             HapticManager.shared.mediumTap()
@@ -412,7 +439,65 @@ struct ChatView: View {
         .glassEffectID("send", in: inputNamespace)
         .disabled(isDisabled)
         .accessibilityLabel("Send message")
-        .accessibilityHint(isDisabled ? "Type a message first, then double-tap to send" : "Double-tap to send your message to Clarissa")
+        .accessibilityHint(isDisabled ? "Type a message or attach an image first" : "Double-tap to send your message to Clarissa")
+    }
+
+    // MARK: - Image Picker Components
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var imagePickerButton: some View {
+        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+            Image(systemName: "photo")
+                .font(.title2)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(
+            reduceMotion
+                ? Glass.regular
+                : Glass.regular.interactive(),
+            in: .circle
+        )
+        .glassEffectID("imagePicker", in: inputNamespace)
+        .accessibilityLabel("Attach image")
+        .accessibilityHint("Double-tap to select an image for analysis")
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private func imagePreviewView(data: Data) -> some View {
+        HStack {
+            #if canImport(UIKit)
+            if let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            #elseif canImport(AppKit)
+            if let nsImage = NSImage(data: data) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            #endif
+
+            Button {
+                viewModel.removeAttachedImage()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove image")
+            .accessibilityHint("Double-tap to remove the attached image")
+
+            Spacer()
+        }
+        .padding(.horizontal, 8)
     }
 }
 
@@ -592,8 +677,29 @@ struct MessageBubble: View {
             // Render Markdown for assistant messages
             Text(markdownAttributedString)
         } else {
-            // Plain text for user messages
-            Text(message.content)
+            // User messages with optional image
+            VStack(alignment: .trailing, spacing: 8) {
+                if let imageData = message.imageData {
+                    #if canImport(UIKit)
+                    if let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 200, maxHeight: 150)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    #elseif canImport(AppKit)
+                    if let nsImage = NSImage(data: imageData) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 200, maxHeight: 150)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    #endif
+                }
+                Text(message.content)
+            }
         }
     }
 

@@ -26,6 +26,9 @@ final class ToolRegistry {
         if #available(iOS 16.0, macOS 13.0, *) {
             register(WeatherTool())
         }
+
+        // Register image analysis tool (Vision framework)
+        register(ImageAnalysisTool())
     }
     
     /// Register a new tool
@@ -90,6 +93,8 @@ final class ToolRegistry {
                 capability = "get current location"
             case "web_fetch":
                 capability = "fetch web content"
+            case "image_analysis":
+                capability = "analyze images for text, objects, and faces"
             default:
                 capability = toolInfo.description.lowercased()
             }
@@ -169,6 +174,9 @@ final class ToolRegistry {
         case "remember":
             guard let rememberTool = tool as? RememberTool else { return nil }
             return AppleRememberTool(wrapping: rememberTool)
+        case "image_analysis":
+            guard let imageTool = tool as? ImageAnalysisTool else { return nil }
+            return AppleImageAnalysisTool(wrapping: imageTool)
         default:
             // Unknown tool - skip it
             return nil

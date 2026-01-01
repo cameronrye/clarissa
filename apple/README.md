@@ -38,6 +38,8 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 - **Web Fetch** - Fetch and parse web content
 - **Calculator** - Mathematical expression evaluation
 - **Remember** - Store long-term memories
+- **Image Analysis** - OCR, object detection, face detection (Vision framework)
+- **PDF Analysis** - Text extraction, OCR for scanned documents (PDFKit + Vision)
 
 ### User Interface
 
@@ -117,13 +119,14 @@ For cloud LLM fallback when on-device AI is unavailable:
 The app requests the following permissions as needed:
 
 | Permission | Purpose |
-|------------|---------|
+| ---------- | ------- |
 | **Calendar** | Create and manage calendar events |
 | **Contacts** | Search and view contacts |
 | **Reminders** | Create and complete reminders |
 | **Location** | Get current location for weather and context |
 | **Microphone** | Voice input for hands-free mode |
 | **Speech Recognition** | Transcribe voice to text |
+| **Photo Library** | Analyze images for text, objects, and faces |
 
 ## Architecture
 
@@ -154,7 +157,7 @@ The agent implements a ReAct (Reasoning + Acting) loop:
 Tools are registered with the `ToolRegistry` and implement the `ClarissaTool` protocol:
 
 | Tool | Description | Confirmation Required |
-|------|-------------|----------------------|
+| ---- | ----------- | -------------------- |
 | `calendar` | EventKit integration | Yes |
 | `contacts` | Contacts framework | No |
 | `reminders` | EventKit reminders | Yes |
@@ -163,6 +166,7 @@ Tools are registered with the `ToolRegistry` and implement the `ClarissaTool` pr
 | `web_fetch` | URLSession web fetching | No |
 | `calculator` | Math expression evaluation | No |
 | `remember` | Long-term memory storage | No |
+| `image_analysis` | Vision + PDFKit (OCR, classification, faces, PDF text) | No |
 
 ### Voice System
 

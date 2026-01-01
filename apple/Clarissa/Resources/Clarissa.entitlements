@@ -42,6 +42,10 @@
     <!-- Enabled for simulator testing - will need approval for device/distribution -->
     <key>com.apple.developer.carplay-assistant</key>
     <true/>
+
+    <!-- iCloud Key-Value Storage for memory sync across devices -->
+    <key>com.apple.developer.ubiquity-kvstore-identifier</key>
+    <string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
 </dict>
 </plist>
 

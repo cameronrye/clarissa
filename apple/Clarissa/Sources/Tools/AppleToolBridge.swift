@@ -587,6 +587,73 @@ struct AppleRememberTool: Tool {
     }
 }
 
+// MARK: - Image Analysis Tool
+
+/// Typed arguments for image analysis tool
+struct ImageAnalysisToolArgs: Codable, Sendable {
+    var action: String
+    var imageBase64: String?
+    var imageURL: String?
+    var pdfBase64: String?
+    var pdfURL: String?
+    var pageRange: String?
+}
+
+/// Apple Foundation Models Tool for image and PDF analysis using Vision and PDFKit frameworks
+@available(iOS 26.0, macOS 26.0, *)
+struct AppleImageAnalysisTool: Tool {
+    let name = "image_analysis"
+    // Enhanced description with specific triggers for images and PDFs
+    let description = "Analyze images or PDFs for text, objects, faces, or documents. TRIGGERS: 'read text from image', 'what's in this photo', 'OCR', 'scan', 'summarize PDF', 'read PDF', 'extract text from PDF'. Image actions: ocr, classify, detect_faces, detect_document. PDF actions: pdf_extract_text, pdf_ocr, pdf_page_count."
+
+    private let underlyingTool: ImageAnalysisTool
+
+    @Generable(description: "Image and PDF analysis parameters")
+    struct Arguments {
+        @Guide(description: "Analysis type: 'ocr' for image text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count")
+        var action: String
+
+        @Guide(description: "Base64-encoded image data (for image actions)")
+        var imageBase64: String?
+
+        @Guide(description: "File URL to the image (file:// scheme)")
+        var imageURL: String?
+
+        @Guide(description: "Base64-encoded PDF data (for pdf_ actions)")
+        var pdfBase64: String?
+
+        @Guide(description: "File URL to the PDF (file:// scheme)")
+        var pdfURL: String?
+
+        @Guide(description: "Page range for PDF operations, e.g., '1-5' or '1,3,5' (optional)")
+        var pageRange: String?
+    }
+
+    init(wrapping tool: ImageAnalysisTool) {
+        self.underlyingTool = tool
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        logToolCall(name, arguments)
+        let typedArgs = ImageAnalysisToolArgs(
+            action: arguments.action,
+            imageBase64: arguments.imageBase64,
+            imageURL: arguments.imageURL,
+            pdfBase64: arguments.pdfBase64,
+            pdfURL: arguments.pdfURL,
+            pageRange: arguments.pageRange
+        )
+        let jsonData = try JSONEncoder().encode(typedArgs)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        let tool = underlyingTool
+        let result = await safeToolExecution(name) {
+            return try await tool.execute(arguments: jsonString)
+        }
+        logToolResult(name, arguments: jsonString, result)
+        return result
+    }
+}
+
 // MARK: - Helper Extension
 
 /// Helper to convert dictionary to JSON string

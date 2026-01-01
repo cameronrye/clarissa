@@ -66,7 +66,7 @@
 - [ ] watchOS companion app
 - [ ] Widget for quick questions
 - [ ] Share extension for web pages
-- [ ] iCloud sync for sessions and memories
+- [x] iCloud sync for memories (NSUbiquitousKeyValueStore)
 - [ ] Multi-language voice support
 
 ### Medium Term

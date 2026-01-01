@@ -1,6 +1,11 @@
 import Foundation
 import SwiftUI
 import Combine
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// View model for the chat interface
 @MainActor
@@ -29,6 +34,10 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     // MARK: - Context Properties
     @Published var contextStats: ContextStats = .empty
+
+    // MARK: - Image Attachment Properties
+    @Published var attachedImageData: Data?
+    @Published var attachedImagePreview: Data?  // Thumbnail for display
 
     private var agent: Agent
     private var appState: AppState?
@@ -285,16 +294,31 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     
     func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let hasImage = attachedImageData != nil
+
+        // Allow sending if there's text OR an image
+        guard !text.isEmpty || hasImage else { return }
 
         // Cancel any existing task before starting a new one
         currentTask?.cancel()
         currentTask = nil
 
+        // Capture and clear input state
+        let imageData = attachedImageData
+        let imagePreview = attachedImagePreview
         inputText = ""
+        attachedImageData = nil
+        attachedImagePreview = nil
 
-        // Add user message
-        let userMessage = ChatMessage(role: .user, content: text)
+        // Build message content
+        var messageContent = text
+        if hasImage && text.isEmpty {
+            messageContent = "Analyze this image"
+        }
+
+        // Add user message with optional image preview
+        var userMessage = ChatMessage(role: .user, content: messageContent)
+        userMessage.imageData = imagePreview
         messages.append(userMessage)
 
         isLoading = true
@@ -304,7 +328,22 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         currentTask = Task {
             do {
                 try Task.checkCancellation()
-                _ = try await agent.run(text)
+
+                // If we have an image, include it in the message for analysis
+                var promptText = messageContent
+                if let imageData = imageData {
+                    let base64 = imageData.base64EncodedString()
+                    // Append instruction to use the image_analysis tool
+                    promptText = """
+                    \(messageContent)
+
+                    [Attached image data (base64): \(base64.prefix(100))...]
+
+                    Use the image_analysis tool with this base64 image data to analyze it. The full base64 is: \(base64)
+                    """
+                }
+
+                _ = try await agent.run(promptText)
                 // Save session after successful response
                 await saveCurrentSession()
             } catch is CancellationError {
@@ -319,6 +358,52 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             streamingContent = ""
             currentTask = nil
         }
+    }
+
+    /// Attach an image for analysis
+    func attachImage(_ data: Data) {
+        attachedImageData = data
+        // Create a smaller preview for display
+        attachedImagePreview = createImagePreview(from: data)
+        HapticManager.shared.lightTap()
+    }
+
+    /// Remove the attached image
+    func removeAttachedImage() {
+        attachedImageData = nil
+        attachedImagePreview = nil
+        HapticManager.shared.lightTap()
+    }
+
+    /// Create a thumbnail preview from image data
+    private func createImagePreview(from data: Data) -> Data? {
+        #if canImport(UIKit)
+        guard let image = UIImage(data: data) else { return nil }
+        let maxSize: CGFloat = 200
+        let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
+        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let resized = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        return resized?.jpegData(compressionQuality: 0.7)
+        #elseif canImport(AppKit)
+        guard let image = NSImage(data: data) else { return nil }
+        let maxSize: CGFloat = 200
+        let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
+        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        let resized = NSImage(size: newSize)
+        resized.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: newSize))
+        resized.unlockFocus()
+
+        guard let tiffData = resized.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
+        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+        #endif
     }
 
     /// Cancel the current generation
@@ -784,13 +869,15 @@ struct ChatMessage: Identifiable {
     var toolName: String?
     var toolStatus: ToolStatus?
     var toolResult: String?  // JSON result from tool execution
+    var imageData: Data?  // Optional attached image preview
     let timestamp = Date()
 
     /// Export message as markdown
     func toMarkdown() -> String {
         switch role {
         case .user:
-            return "**You:** \(content)"
+            let imageNote = imageData != nil ? " [with image]" : ""
+            return "**You:** \(content)\(imageNote)"
         case .assistant:
             return "**Clarissa:** \(content)"
         case .system:

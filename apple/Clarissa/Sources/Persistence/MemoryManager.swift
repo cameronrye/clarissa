@@ -4,8 +4,9 @@ import os.log
 private let logger = Logger(subsystem: "dev.rye.Clarissa", category: "MemoryManager")
 
 /// Manages long-term memories for the agent
-/// On macOS, syncs with CLI at ~/.clarissa/memories.json for cross-app memory sharing
-/// On iOS, uses Keychain for secure storage
+/// Syncs across devices via iCloud Key-Value Storage (NSUbiquitousKeyValueStore)
+/// On macOS, also syncs with CLI at ~/.clarissa/memories.json for cross-app memory sharing
+/// On iOS, uses Keychain as backup storage
 public actor MemoryManager {
     public static let shared = MemoryManager()
 
@@ -15,8 +16,14 @@ public actor MemoryManager {
     /// Keychain storage (injectable for testing)
     private let keychain: KeychainStorage
 
-    /// Keychain key for storing memories
+    /// iCloud Key-Value Store for cross-device sync
+    private let iCloudStore: NSUbiquitousKeyValueStore
+
+    /// Keychain key for storing memories (backup storage)
     private static let memoriesKeychainKey = "clarissa_memories"
+
+    /// iCloud key for storing memories
+    private static let iCloudMemoriesKey = "clarissa_memories"
 
     /// Legacy file URL for migration (can be removed after a few versions)
     private let legacyFileURL: URL
@@ -28,8 +35,13 @@ public actor MemoryManager {
     /// Maximum number of memories to store
     static let maxMemories = 100
 
+    /// Whether iCloud sync is enabled (can be disabled for testing)
+    private let iCloudEnabled: Bool
+
     private init() {
         self.keychain = KeychainManager.shared
+        self.iCloudStore = NSUbiquitousKeyValueStore.default
+        self.iCloudEnabled = true
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         self.legacyFileURL = documentsPath.appendingPathComponent("clarissa_memories.json")
 
@@ -44,11 +56,60 @@ public actor MemoryManager {
     }
 
     /// Creates a MemoryManager with a custom keychain storage (for testing)
-    init(keychain: KeychainStorage) {
+    init(keychain: KeychainStorage, iCloudEnabled: Bool = false) {
         self.keychain = keychain
+        self.iCloudStore = NSUbiquitousKeyValueStore.default
+        self.iCloudEnabled = iCloudEnabled
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         self.legacyFileURL = documentsPath.appendingPathComponent("clarissa_memories.json")
         self.sharedCLIMemoryURL = nil
+    }
+
+    /// Start observing iCloud changes - call this from app startup
+    public nonisolated func startObservingICloudChanges() {
+        let store = NSUbiquitousKeyValueStore.default
+
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: store,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+
+            // Extract values from notification before crossing actor boundary
+            let userInfo = notification.userInfo
+            let changeReason = userInfo?[NSUbiquitousKeyValueStoreChangeReasonKey] as? Int
+            let changedKeys = userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+
+            Task {
+                await self.handleICloudChange(reason: changeReason, changedKeys: changedKeys)
+            }
+        }
+
+        // Trigger initial sync
+        store.synchronize()
+        logger.info("Started observing iCloud Key-Value Store changes")
+    }
+
+    /// Handle external iCloud changes
+    private func handleICloudChange(reason: Int?, changedKeys: [String]) async {
+        guard let changeReason = reason else { return }
+
+        switch changeReason {
+        case NSUbiquitousKeyValueStoreServerChange,
+             NSUbiquitousKeyValueStoreInitialSyncChange:
+            if changedKeys.contains(Self.iCloudMemoriesKey) || changedKeys.isEmpty {
+                logger.info("iCloud memories changed externally, reloading")
+                await reload()
+            }
+        case NSUbiquitousKeyValueStoreQuotaViolationChange:
+            logger.warning("iCloud Key-Value Store quota exceeded")
+        case NSUbiquitousKeyValueStoreAccountChange:
+            logger.info("iCloud account changed, reloading memories")
+            await reload()
+        default:
+            break
+        }
     }
 
     /// Ensure data is loaded before accessing
@@ -166,9 +227,15 @@ public actor MemoryManager {
 
     private func load() async {
         var keychainMemories: [Memory] = []
+        var iCloudMemories: [Memory] = []
         var cliMemories: [Memory] = []
 
-        // Load from Keychain (iOS primary storage, macOS secondary)
+        // Load from iCloud Key-Value Store (cross-device sync)
+        if iCloudEnabled {
+            iCloudMemories = loadFromICloud()
+        }
+
+        // Load from Keychain (local backup storage)
         if let memoriesJson = keychain.get(key: Self.memoriesKeychainKey),
            let data = memoriesJson.data(using: .utf8) {
             do {
@@ -184,8 +251,9 @@ public actor MemoryManager {
         cliMemories = await loadFromSharedCLIFile()
         #endif
 
-        // Merge memories from both sources, preferring newer entries for duplicates
-        memories = mergeMemories(keychainMemories, cliMemories)
+        // Merge memories from all sources, preferring newer entries for duplicates
+        // Priority: iCloud (cross-device) > Keychain (local) > CLI (macOS only)
+        memories = mergeMemories(iCloudMemories, keychainMemories, cliMemories)
 
         // Fall back to legacy file storage and migrate if found
         if memories.isEmpty {
@@ -194,12 +262,29 @@ public actor MemoryManager {
 
         isLoaded = true
 
-        // On macOS, sync merged memories back to both stores
-        #if os(macOS)
-        if !cliMemories.isEmpty || !keychainMemories.isEmpty {
+        // Sync merged memories back to all stores
+        let hasAnyMemories = !iCloudMemories.isEmpty || !keychainMemories.isEmpty || !cliMemories.isEmpty
+        if hasAnyMemories {
             await save()
         }
-        #endif
+    }
+
+    /// Load memories from iCloud Key-Value Store
+    private func loadFromICloud() -> [Memory] {
+        guard let memoriesJson = iCloudStore.string(forKey: Self.iCloudMemoriesKey),
+              let data = memoriesJson.data(using: .utf8) else {
+            logger.debug("No memories found in iCloud")
+            return []
+        }
+
+        do {
+            let memories = try JSONDecoder().decode([Memory].self, from: data)
+            logger.info("Loaded \(memories.count) memories from iCloud")
+            return memories
+        } catch {
+            logger.error("Failed to decode memories from iCloud: \(error.localizedDescription)")
+            return []
+        }
     }
 
     /// Load memories from the shared CLI file (~/.clarissa/memories.json)
@@ -287,7 +372,12 @@ public actor MemoryManager {
                 return
             }
 
-            // Save to Keychain (primary storage on iOS, backup on macOS)
+            // Save to iCloud Key-Value Store (cross-device sync)
+            if iCloudEnabled {
+                saveToICloud(jsonString)
+            }
+
+            // Save to Keychain (local backup storage)
             try keychain.set(jsonString, forKey: Self.memoriesKeychainKey)
             logger.debug("Saved \(self.memories.count) memories to Keychain")
 
@@ -298,6 +388,13 @@ public actor MemoryManager {
         } catch {
             logger.error("Failed to save memories to Keychain: \(error.localizedDescription)")
         }
+    }
+
+    /// Save memories to iCloud Key-Value Store
+    private func saveToICloud(_ jsonString: String) {
+        iCloudStore.set(jsonString, forKey: Self.iCloudMemoriesKey)
+        iCloudStore.synchronize()
+        logger.debug("Saved \(self.memories.count) memories to iCloud")
     }
 
     /// Save memories to the shared CLI file (~/.clarissa/memories.json)

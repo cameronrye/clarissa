@@ -25,6 +25,7 @@ private let defaultToolDefinitions: [ToolInfo] = [
     ToolInfo(id: "location", name: "Location", description: "Get current location", icon: "location", isEnabled: false),
     ToolInfo(id: "web_fetch", name: "Web Fetch", description: "Fetch web content", icon: "globe", isEnabled: false),
     ToolInfo(id: "remember", name: "Memory", description: "Remember information", icon: "brain", isEnabled: false),
+    ToolInfo(id: "image_analysis", name: "Image Analysis", description: "Analyze images for text and objects", icon: "eye", isEnabled: false),
 ]
 
 /// Manages tool configuration and persistence

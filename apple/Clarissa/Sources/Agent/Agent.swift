@@ -174,6 +174,8 @@ final class Agent: ObservableObject {
         - Where am I/my location/current location -> location tool
         - Remember that/remember I/my preference/I like -> remember tool
         - URL/webpage/fetch/read page/get content -> web_fetch tool
+        - Analyze image/read text in image/what's in this photo/OCR -> image_analysis tool
+        - Summarize PDF/read PDF/extract text from PDF/what's in this PDF -> image_analysis tool (pdf_extract_text or pdf_ocr)
 
         ANSWER DIRECTLY (no tools):
         - Date/time/day -> answer from your knowledge
@@ -191,6 +193,11 @@ final class Agent: ObservableObject {
         "Show my reminders" -> reminders(action=list)
         "What's John's phone number?" -> contacts(action=search, query="John")
         "Fetch example.com" -> web_fetch(url="https://example.com")
+        "What text is in this image?" -> image_analysis(action="ocr", imageBase64="...")
+        "What's in this photo?" -> image_analysis(action="classify", imageBase64="...")
+        "How many people are in this?" -> image_analysis(action="detect_faces", imageBase64="...")
+        "Summarize this PDF" -> image_analysis(action="pdf_extract_text", pdfBase64="...")
+        "Read this scanned document" -> image_analysis(action="pdf_ocr", pdfBase64="...")
 
         RESPONSE RULES:
         - Be brief (1-2 sentences)

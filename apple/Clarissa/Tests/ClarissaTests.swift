@@ -1,5 +1,12 @@
 import Foundation
 import Testing
+import CoreGraphics
+import CoreText
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 @testable import ClarissaKit
 
 // MARK: - Mock Keychain for Testing
@@ -1715,6 +1722,301 @@ struct ToolRegistryTests {
             #expect(definition.name.isEmpty == false)
             #expect(definition.description.isEmpty == false)
         }
+    }
+}
+
+// MARK: - Image Analysis Tool Tests
+
+@Suite("Image Analysis Tool Tests")
+struct ImageAnalysisToolTests {
+
+    @Test("Image analysis tool properties")
+    func testImageAnalysisToolProperties() {
+        let tool = ImageAnalysisTool()
+        #expect(tool.name == "image_analysis")
+        #expect(tool.priority == .extended)
+    }
+
+    @Test("Image analysis tool has correct actions in schema")
+    func testImageAnalysisToolSchema() {
+        let tool = ImageAnalysisTool()
+        let schema = tool.parametersSchema
+
+        guard let properties = schema["properties"] as? [String: Any],
+              let actionProp = properties["action"] as? [String: Any],
+              let enumValues = actionProp["enum"] as? [String] else {
+            Issue.record("Schema should have action property with enum")
+            return
+        }
+
+        // Image actions
+        #expect(enumValues.contains("ocr"))
+        #expect(enumValues.contains("classify"))
+        #expect(enumValues.contains("detect_faces"))
+        #expect(enumValues.contains("detect_document"))
+
+        // PDF actions
+        #expect(enumValues.contains("pdf_extract_text"))
+        #expect(enumValues.contains("pdf_ocr"))
+        #expect(enumValues.contains("pdf_page_count"))
+    }
+
+    @Test("Image analysis tool has PDF parameters in schema")
+    func testImageAnalysisToolPDFParameters() {
+        let tool = ImageAnalysisTool()
+        let schema = tool.parametersSchema
+
+        guard let properties = schema["properties"] as? [String: Any] else {
+            Issue.record("Schema should have properties")
+            return
+        }
+
+        #expect(properties["pdfBase64"] != nil)
+        #expect(properties["pdfURL"] != nil)
+        #expect(properties["pageRange"] != nil)
+    }
+
+    @Test("Image analysis tool missing action throws error")
+    func testImageAnalysisMissingAction() async {
+        let tool = ImageAnalysisTool()
+        await #expect(throws: ToolError.self) {
+            _ = try await tool.execute(arguments: "{}")
+        }
+    }
+
+    @Test("Image analysis tool missing image data throws error")
+    func testImageAnalysisMissingImageData() async {
+        let tool = ImageAnalysisTool()
+        await #expect(throws: ToolError.self) {
+            _ = try await tool.execute(arguments: "{\"action\": \"ocr\"}")
+        }
+    }
+
+    @Test("Image analysis tool missing PDF data throws error")
+    func testImageAnalysisMissingPDFData() async {
+        let tool = ImageAnalysisTool()
+        await #expect(throws: ToolError.self) {
+            _ = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\"}")
+        }
+    }
+
+    @Test("Image analysis tool unknown action throws error")
+    func testImageAnalysisUnknownAction() async {
+        let tool = ImageAnalysisTool()
+        // Provide valid image data to get past the image loading check
+        let testImageBase64 = createTestImageBase64()
+        await #expect(throws: ToolError.self) {
+            _ = try await tool.execute(arguments: "{\"action\": \"unknown\", \"imageBase64\": \"\(testImageBase64)\"}")
+        }
+    }
+
+    @Test("Image analysis tool invalid base64 throws error")
+    func testImageAnalysisInvalidBase64() async {
+        let tool = ImageAnalysisTool()
+        await #expect(throws: ToolError.self) {
+            _ = try await tool.execute(arguments: "{\"action\": \"ocr\", \"imageBase64\": \"not-valid-base64!!!\"}")
+        }
+    }
+
+    @Test("Image analysis tool OCR with valid image")
+    func testImageAnalysisOCR() async throws {
+        let tool = ImageAnalysisTool()
+        let testImageBase64 = createTestImageBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"ocr\", \"imageBase64\": \"\(testImageBase64)\"}")
+
+        // Result should be valid JSON with text and lineCount
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["text"] != nil)
+        #expect(json["lineCount"] != nil)
+    }
+
+    @Test("Image analysis tool classify with valid image")
+    func testImageAnalysisClassify() async throws {
+        let tool = ImageAnalysisTool()
+        let testImageBase64 = createTestImageBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"classify\", \"imageBase64\": \"\(testImageBase64)\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["classifications"] != nil)
+    }
+
+    @Test("Image analysis tool detect faces with valid image")
+    func testImageAnalysisDetectFaces() async throws {
+        let tool = ImageAnalysisTool()
+        let testImageBase64 = createTestImageBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"detect_faces\", \"imageBase64\": \"\(testImageBase64)\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["faceCount"] != nil)
+        #expect(json["faces"] != nil)
+    }
+
+    @Test("Image analysis tool detect document with valid image")
+    func testImageAnalysisDetectDocument() async throws {
+        let tool = ImageAnalysisTool()
+        let testImageBase64 = createTestImageBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"detect_document\", \"imageBase64\": \"\(testImageBase64)\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["documentDetected"] != nil)
+    }
+
+    @Test("PDF page count with valid PDF")
+    func testPDFPageCount() async throws {
+        let tool = ImageAnalysisTool()
+        let testPDFBase64 = createTestPDFBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_page_count\", \"pdfBase64\": \"\(testPDFBase64)\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["pageCount"] != nil)
+        #expect(json["pageCount"] as? Int == 1)
+    }
+
+    @Test("PDF extract text with valid PDF")
+    func testPDFExtractText() async throws {
+        let tool = ImageAnalysisTool()
+        let testPDFBase64 = createTestPDFBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\", \"pdfBase64\": \"\(testPDFBase64)\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["text"] != nil)
+        #expect(json["pageCount"] != nil)
+        #expect(json["pagesExtracted"] != nil)
+        #expect(json["truncated"] != nil)
+    }
+
+    @Test("PDF OCR with valid PDF")
+    func testPDFOCR() async throws {
+        let tool = ImageAnalysisTool()
+        let testPDFBase64 = createTestPDFBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_ocr\", \"pdfBase64\": \"\(testPDFBase64)\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["text"] != nil)
+        #expect(json["pageCount"] != nil)
+        #expect(json["pagesProcessed"] != nil)
+    }
+
+    @Test("PDF extract text with page range")
+    func testPDFExtractTextWithPageRange() async throws {
+        let tool = ImageAnalysisTool()
+        let testPDFBase64 = createTestPDFBase64()
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\", \"pdfBase64\": \"\(testPDFBase64)\", \"pageRange\": \"1\"}")
+
+        guard let data = result.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Result should be valid JSON")
+            return
+        }
+
+        #expect(json["pagesExtracted"] as? Int == 1)
+    }
+
+    @Test("Invalid PDF base64 throws error")
+    func testInvalidPDFBase64() async {
+        let tool = ImageAnalysisTool()
+        await #expect(throws: ToolError.self) {
+            _ = try await tool.execute(arguments: "{\"action\": \"pdf_page_count\", \"pdfBase64\": \"not-valid-pdf\"}")
+        }
+    }
+
+    // Helper to create a minimal valid PNG image as base64
+    private func createTestImageBase64() -> String {
+        #if canImport(UIKit)
+        let size = CGSize(width: 100, height: 100)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor.black.setFill()
+            let text = "Test"
+            let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 24)]
+            text.draw(at: CGPoint(x: 20, y: 40), withAttributes: attrs)
+        }
+        return image.pngData()?.base64EncodedString() ?? ""
+        #else
+        let size = NSSize(width: 100, height: 100)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: size).fill()
+        let text = "Test"
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 24)]
+        text.draw(at: NSPoint(x: 20, y: 40), withAttributes: attrs)
+        image.unlockFocus()
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return ""
+        }
+        return pngData.base64EncodedString()
+        #endif
+    }
+
+    // Helper to create a minimal valid PDF as base64
+    private func createTestPDFBase64() -> String {
+        let pdfData = NSMutableData()
+        #if canImport(UIKit)
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size
+        UIGraphicsBeginPDFContextToData(pdfData, pageRect, nil)
+        UIGraphicsBeginPDFPage()
+        let text = "Test PDF Content"
+        let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 24)]
+        text.draw(at: CGPoint(x: 72, y: 72), withAttributes: attrs)
+        UIGraphicsEndPDFContext()
+        #else
+        let pageRect = NSRect(x: 0, y: 0, width: 612, height: 792)
+        guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
+              let pdfContext = CGContext(consumer: consumer, mediaBox: nil, nil) else {
+            return ""
+        }
+        var mediaBox = pageRect
+        pdfContext.beginPage(mediaBox: &mediaBox)
+        let text = "Test PDF Content"
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 24)]
+        let attrString = NSAttributedString(string: text, attributes: attrs)
+        let line = CTLineCreateWithAttributedString(attrString)
+        pdfContext.textPosition = CGPoint(x: 72, y: 700)
+        CTLineDraw(line, pdfContext)
+        pdfContext.endPage()
+        pdfContext.closePDF()
+        #endif
+        return (pdfData as Data).base64EncodedString()
     }
 }
 

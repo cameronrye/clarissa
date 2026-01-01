@@ -106,7 +106,7 @@
 ### Near Term
 - [ ] HTTP/SSE MCP server transport
 - [ ] File context references
-- [ ] Image/vision analysis
+- [x] Image/vision analysis
 - [ ] Model delete command for local models
 
 ### Medium Term

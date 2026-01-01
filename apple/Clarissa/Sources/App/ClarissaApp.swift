@@ -114,6 +114,9 @@ struct ClarissaApp: App {
                 }
             }
             .task {
+                // Start observing iCloud changes for memory sync across devices
+                MemoryManager.shared.startObservingICloudChanges()
+
                 // Prewarm Foundation Models at launch for faster first response
                 // Community insight: "Call prewarm() when you're confident the user will use LLM features"
                 await Self.prewarmFoundationModels()
