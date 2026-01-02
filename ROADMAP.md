@@ -104,16 +104,16 @@
 ## Future Roadmap
 
 ### Near Term
-- [ ] HTTP/SSE MCP server transport
-- [ ] File context references
+- [x] HTTP/SSE MCP server transport
+- [x] File context references (@filename syntax)
 - [x] Image/vision analysis
-- [ ] Model delete command for local models
+- [x] Model delete command for local models
 
 ### Medium Term
-- [ ] Codebase indexing with embeddings
-- [ ] Semantic search across codebase
+- [x] Codebase indexing with embeddings
+- [x] Semantic search across codebase
 - [ ] Model comparison mode
-- [ ] Fallback model configuration
+- [x] Fallback model configuration
 - [ ] Provider-specific model recommendations
 
 ### Long Term

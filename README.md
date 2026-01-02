@@ -334,7 +334,8 @@ git diff | clarissa "Write a commit message for these changes"
 | `/forget <#\|ID>` | Forget a memory |
 | `/model [NAME]` | Show or switch the current model |
 | `/provider [NAME]` | Show or switch the LLM provider |
-| `/mcp CMD ARGS` | Connect to an MCP server |
+| `/mcp CMD ARGS` | Connect to a stdio MCP server |
+| `/mcp sse URL` | Connect to an HTTP/SSE MCP server |
 | `/tools` | List available tools |
 | `/context` | Show context window usage |
 | `/yolo` | Toggle auto-approve mode |
@@ -374,12 +375,26 @@ git diff | clarissa "Write a commit message for these changes"
 **Web**
 - `web_fetch` - Fetch and parse web pages
 
+### File Context References
+
+Reference files directly in your prompts using `@filename` syntax:
+
+```
+Explain what @src/index.ts does
+Review @package.json:1-20 for issues
+Compare @README.md with @CHANGELOG.md
+```
+
 ### MCP Integration
 
 Connect to Model Context Protocol servers to extend Clarissa with additional tools:
 
 ```bash
+# Stdio server (local process)
 /mcp npx -y @modelcontextprotocol/server-filesystem /path/to/directory
+
+# HTTP/SSE server (remote URL)
+/mcp sse https://mcp.example.com/api
 ```
 
 ## Development

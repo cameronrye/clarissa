@@ -3,6 +3,7 @@ import { toolRegistry } from "./tools/index.ts";
 import { agentConfig } from "./config/index.ts";
 import { contextManager } from "./llm/context.ts";
 import { memoryManager } from "./memory/index.ts";
+import { expandFileReferences } from "./context/index.ts";
 import type { Message, ToolResult } from "./llm/types.ts";
 
 export interface AgentCallbacks {
@@ -134,10 +135,25 @@ export class Agent {
     // Update system prompt with current memories and tool names
     await this.updateSystemPrompt(toolNames);
 
-    // Add user message
+    // Expand file references (@filename syntax) in the user message
+    const { expandedMessage, referencedFiles, failedFiles } = await expandFileReferences(userMessage);
+
+    // Log file reference results if any
+    if (referencedFiles.length > 0 || failedFiles.length > 0) {
+      if (process.env.DEBUG) {
+        console.log(`[File References] Loaded: ${referencedFiles.length}, Failed: ${failedFiles.length}`);
+        if (failedFiles.length > 0) {
+          for (const { path, error } of failedFiles) {
+            console.log(`  - ${path}: ${error}`);
+          }
+        }
+      }
+    }
+
+    // Add user message with expanded file contents
     this.messages.push({
       role: "user",
-      content: userMessage,
+      content: expandedMessage,
     });
 
     // Truncate context if needed

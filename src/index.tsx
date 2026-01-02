@@ -9,6 +9,7 @@ import { sessionManager } from "./session/index.ts";
 import { historyManager } from "./history/index.ts";
 import {
   RECOMMENDED_MODELS,
+  deleteModel,
   downloadModel,
   formatBytes,
   formatSpeed,
@@ -19,6 +20,7 @@ import {
 } from "./models/download.ts";
 import * as readline from "readline";
 import { existsSync } from "fs";
+import { CodebaseIndexer } from "./index/codebase-index.ts";
 
 const VERSION = CURRENT_VERSION;
 const NAME = PACKAGE_NAME;
@@ -43,7 +45,10 @@ Commands:
   providers [NAME]           List providers or switch to one
   download [MODEL_ID]        Download a local GGUF model
   models                     List downloaded models
+  delete <MODEL_FILE>        Delete a downloaded model
   use <MODEL_FILE>           Set a downloaded model as active
+  index [PATH]               Index codebase for semantic search
+  search <QUERY>             Search indexed codebase
 
 Options:
   -h, --help                 Show this help message
@@ -61,6 +66,7 @@ Examples:
   ${NAME} providers local-llama  Switch to local model
   ${NAME} download             Download a local model
   ${NAME} models               List downloaded models
+  ${NAME} delete Qwen2.5-7B.gguf  Delete a downloaded model
   ${NAME} use Qwen2.5-7B.gguf  Set model as active
   ${NAME} -c                   Continue last session
   ${NAME}                      Start interactive session
@@ -363,6 +369,40 @@ async function runModels() {
   }
 }
 
+async function runDeleteModel(modelFile: string) {
+  // Find the model in downloaded models
+  const models = await listDownloadedModels();
+  const match = models.find((m) => m === modelFile || m.toLowerCase().includes(modelFile.toLowerCase()));
+
+  if (!match) {
+    console.error(`Error: Model not found: ${modelFile}`);
+    console.log(`\nAvailable models:`);
+    for (const m of models) {
+      console.log(`  ${m}`);
+    }
+    if (models.length === 0) {
+      console.log("  (none - run 'clarissa download' first)");
+    }
+    process.exit(1);
+  }
+
+  const path = getModelPath(match);
+  const file = Bun.file(path);
+  const size = formatBytes(file.size);
+
+  console.log(`\nDeleting model: ${match}`);
+  console.log(`  Size: ${size}`);
+  console.log(`  Path: ${path}`);
+
+  const success = await deleteModel(match);
+  if (success) {
+    console.log(`\nModel deleted successfully.`);
+  } else {
+    console.error(`\nFailed to delete model.`);
+    process.exit(1);
+  }
+}
+
 async function runProviders(providerName?: string) {
   if (providerName) {
     // Switch to the specified provider
@@ -509,6 +549,106 @@ async function openNativeApp(question?: string) {
   }
 }
 
+async function runIndex(targetPath?: string) {
+  const rootPath = targetPath ? (targetPath.startsWith("/") ? targetPath : `${process.cwd()}/${targetPath}`) : process.cwd();
+
+  console.log(`Indexing codebase: ${rootPath}\n`);
+
+  // Get local-llama provider for embeddings
+  const provider = providerRegistry.getProvider("local-llama");
+  if (!provider) {
+    console.error("Error: local-llama provider not available.");
+    console.log("\nCodebase indexing requires a local model for embeddings.");
+    console.log("Run 'clarissa download' to download a model first.");
+    process.exit(1);
+  }
+
+  const status = await provider.checkAvailability();
+  if (!status.available) {
+    console.error(`Error: local-llama provider not available: ${status.reason}`);
+    console.log("\nRun 'clarissa download' to download a model first.");
+    process.exit(1);
+  }
+
+  await provider.initialize?.();
+
+  const indexer = new CodebaseIndexer(rootPath);
+  indexer.setEmbedder(provider);
+
+  // Try to load existing index
+  const loaded = await indexer.load();
+  if (loaded) {
+    const stats = indexer.getStats();
+    console.log(`Existing index found: ${stats?.fileCount} files, ${stats?.chunkCount} chunks`);
+    console.log("Updating index with changes...\n");
+  }
+
+  // Index with progress
+  let lastFile = "";
+  const result = await indexer.index((current, total, file) => {
+    if (file !== lastFile) {
+      lastFile = file;
+      process.stdout.write(`\r[${current}/${total}] ${file.slice(0, 60).padEnd(60)}   `);
+    }
+  });
+
+  console.log(`\n\nIndexing complete:`);
+  console.log(`  Indexed: ${result.indexed} files`);
+  console.log(`  Skipped: ${result.skipped} files (unchanged or too large)`);
+  if (result.errors > 0) console.log(`  Errors:  ${result.errors} files`);
+
+  const stats = indexer.getStats();
+  console.log(`\nTotal: ${stats?.fileCount} files, ${stats?.chunkCount} chunks`);
+  console.log(`\nRun 'clarissa search <query>' to search the codebase.`);
+}
+
+async function runSearch(query: string) {
+  const rootPath = process.cwd();
+
+  const indexer = new CodebaseIndexer(rootPath);
+  const loaded = await indexer.load();
+
+  if (!loaded || !indexer.isLoaded()) {
+    console.error("Error: No index found for this directory.");
+    console.log(`\nRun 'clarissa index' first to index the codebase.`);
+    process.exit(1);
+  }
+
+  // Get local-llama provider for query embedding
+  const provider = providerRegistry.getProvider("local-llama");
+  if (!provider) {
+    console.error("Error: local-llama provider not available.");
+    process.exit(1);
+  }
+
+  const status = await provider.checkAvailability();
+  if (!status.available) {
+    console.error(`Error: local-llama provider not available: ${status.reason}`);
+    process.exit(1);
+  }
+
+  await provider.initialize?.();
+  indexer.setEmbedder(provider);
+
+  console.log(`Searching for: "${query}"\n`);
+
+  const results = await indexer.search(query, 10, 0.3);
+
+  if (results.length === 0) {
+    console.log("No results found.");
+    return;
+  }
+
+  console.log(`Found ${results.length} results:\n`);
+
+  for (const result of results) {
+    const score = (result.score * 100).toFixed(1);
+    console.log(`${result.relativePath}:${result.startLine}-${result.endLine} (${score}%)`);
+    const preview = result.content.split("\n").slice(0, 3).join("\n");
+    console.log(`  ${preview.replace(/\n/g, "\n  ")}\n`);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -574,6 +714,18 @@ async function main() {
       process.exit(0);
     }
 
+    if (arg === "delete") {
+      const nextArg = args[i + 1];
+      if (!nextArg || nextArg.startsWith("-")) {
+        console.error("Error: 'delete' command requires a model filename");
+        console.log(`\nUsage: ${NAME} delete <model_file>`);
+        console.log(`\nRun '${NAME} models' to see downloaded models.`);
+        process.exit(1);
+      }
+      await runDeleteModel(nextArg);
+      process.exit(0);
+    }
+
     if (arg === "providers") {
       // Check if next arg is a provider name (not starting with -)
       const nextArg = args[i + 1];
@@ -591,6 +743,25 @@ async function main() {
         process.exit(1);
       }
       await runUseModel(nextArg);
+      process.exit(0);
+    }
+
+    if (arg === "index") {
+      const nextArg = args[i + 1];
+      const targetPath = nextArg && !nextArg.startsWith("-") ? nextArg : undefined;
+      await runIndex(targetPath);
+      process.exit(0);
+    }
+
+    if (arg === "search") {
+      const remainingArgs = args.slice(i + 1).filter((a) => !a.startsWith("-"));
+      const query = remainingArgs.join(" ");
+      if (!query) {
+        console.error("Error: 'search' command requires a query");
+        console.log(`\nUsage: ${NAME} search <query>`);
+        process.exit(1);
+      }
+      await runSearch(query);
       process.exit(0);
     }
 

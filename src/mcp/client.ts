@@ -1,5 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool } from "../tools/base.ts";
 import { z } from "zod";
 import { getMcpServers, type MCPServerFileConfig } from "../config/index.ts";
@@ -85,38 +88,74 @@ export function jsonSchemaToZod(schema: unknown): z.ZodType {
   return z.unknown();
 }
 
-export interface MCPServerConfig {
+/**
+ * Stdio server config (local process)
+ */
+export interface MCPServerStdioConfig {
   name: string;
+  transport?: "stdio";
   command: string;
   args?: string[];
   env?: Record<string, string>;
 }
 
+/**
+ * SSE/HTTP server config (remote URL)
+ */
+export interface MCPServerSseConfigInternal {
+  name: string;
+  transport: "sse";
+  url: string;
+  headers?: Record<string, string>;
+}
+
+export type MCPServerConfig = MCPServerStdioConfig | MCPServerSseConfigInternal;
+
 interface MCPConnection {
   client: Client;
-  transport: StdioClientTransport;
+  transport: Transport;
   tools: Tool[];
 }
 
 /**
  * MCP Client Manager - connects to MCP servers and exposes their tools
+ * Supports both stdio (local) and SSE/HTTP (remote) transports
  */
 class MCPClientManager {
   private connections: Map<string, MCPConnection> = new Map();
 
   /**
-   * Connect to an MCP server
+   * Connect to an MCP server (stdio or SSE transport)
    */
   async connect(config: MCPServerConfig): Promise<Tool[]> {
     if (this.connections.has(config.name)) {
       return this.connections.get(config.name)!.tools;
     }
 
-    const transport = new StdioClientTransport({
-      command: config.command,
-      args: config.args,
-      env: config.env,
-    });
+    let transport: Transport;
+
+    if (config.transport === "sse") {
+      // Remote HTTP/SSE server
+      // Try StreamableHTTPClientTransport first, fallback to SSEClientTransport for legacy servers
+      const url = new URL(config.url);
+      const requestInit: RequestInit = config.headers
+        ? { headers: config.headers }
+        : {};
+
+      try {
+        transport = new StreamableHTTPClientTransport(url, { requestInit });
+      } catch {
+        // Fallback to legacy SSE transport
+        transport = new SSEClientTransport(url, { requestInit });
+      }
+    } else {
+      // Local stdio process (default)
+      transport = new StdioClientTransport({
+        command: config.command,
+        args: config.args,
+        env: config.env,
+      });
+    }
 
     const client = new Client(
       { name: "clarissa", version: "1.0.0" },
@@ -172,6 +211,19 @@ class MCPClientManager {
         return JSON.stringify(result);
       },
     };
+  }
+
+  /**
+   * Connect to an SSE/HTTP MCP server by URL
+   * Convenience method for connecting to remote servers
+   */
+  async connectSse(name: string, url: string, headers?: Record<string, string>): Promise<Tool[]> {
+    return this.connect({
+      name,
+      transport: "sse",
+      url,
+      headers,
+    });
   }
 
   /**
@@ -238,12 +290,30 @@ class MCPClientManager {
 
     for (const [name, serverConfig] of Object.entries(servers)) {
       try {
-        const tools = await this.connect({
-          name,
-          command: serverConfig.command,
-          args: serverConfig.args,
-          env: serverConfig.env,
-        });
+        let config: MCPServerConfig;
+
+        // Check if it's an SSE/HTTP config (has 'url' property)
+        if ("url" in serverConfig && serverConfig.transport === "sse") {
+          config = {
+            name,
+            transport: "sse",
+            url: serverConfig.url,
+            headers: serverConfig.headers,
+          };
+        } else if ("command" in serverConfig) {
+          // Stdio config (default)
+          config = {
+            name,
+            transport: "stdio",
+            command: serverConfig.command,
+            args: serverConfig.args,
+            env: serverConfig.env,
+          };
+        } else {
+          throw new Error("Invalid server config: missing 'command' or 'url'");
+        }
+
+        const tools = await this.connect(config);
         results.push({ name, tools });
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Connection failed";

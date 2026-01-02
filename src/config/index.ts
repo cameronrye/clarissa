@@ -63,13 +63,27 @@ export function hasApiKey(): boolean {
 
 /**
  * MCP server configuration schema (standard MCP JSON format)
+ * Supports two transport types:
+ * - stdio: Local process with command/args
+ * - sse: Remote HTTP/SSE server with URL
  */
-const mcpServerSchema = z.object({
+const mcpServerStdioSchema = z.object({
+  transport: z.literal("stdio").optional(), // Default transport
   command: z.string(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
 });
 
+const mcpServerSseSchema = z.object({
+  transport: z.literal("sse"),
+  url: z.string().url(),
+  headers: z.record(z.string(), z.string()).optional(),
+});
+
+const mcpServerSchema = z.union([mcpServerStdioSchema, mcpServerSseSchema]);
+
+export type MCPServerStdioConfig = z.infer<typeof mcpServerStdioSchema>;
+export type MCPServerSseConfig = z.infer<typeof mcpServerSseSchema>;
 export type MCPServerFileConfig = z.infer<typeof mcpServerSchema>;
 
 /**
@@ -118,6 +132,33 @@ const providerModelsSchema = z.object({
 export type ProviderModelsConfig = z.infer<typeof providerModelsSchema>;
 
 /**
+ * Fallback model configuration
+ * Defines backup models to try when the primary model fails
+ */
+const fallbackConfigSchema = z.object({
+  /** Enable automatic fallback on errors */
+  enabled: z.boolean().default(true),
+  /** Maximum number of fallback attempts */
+  maxAttempts: z.number().int().min(1).max(5).default(2),
+  /** Ordered list of fallback models (provider/model format for cloud, or provider ID for local) */
+  models: z.array(z.string()).optional(),
+  /** Error types that trigger fallback (rate_limit, timeout, server_error, all) */
+  onErrors: z.array(z.enum(["rate_limit", "timeout", "server_error", "all"])).default(["rate_limit", "timeout"]),
+});
+
+export type FallbackConfig = z.infer<typeof fallbackConfigSchema>;
+
+// Store loaded fallback config
+let loadedFallbackConfig: FallbackConfig | undefined;
+
+/**
+ * Get fallback configuration
+ */
+export function getFallbackConfig(): FallbackConfig | undefined {
+  return loadedFallbackConfig;
+}
+
+/**
  * Config file schema
  */
 const configFileSchema = z.object({
@@ -136,6 +177,8 @@ const configFileSchema = z.object({
   localLlama: localLlamaConfigSchema.optional(),
   // Custom model lists per provider
   models: providerModelsSchema.optional(),
+  // Fallback model configuration
+  fallback: fallbackConfigSchema.optional(),
 });
 
 type ConfigFile = z.infer<typeof configFileSchema>;
@@ -251,6 +294,8 @@ function loadConfigFile(): ConfigFile | null {
       }
       // Store provider models for later access
       loadedProviderModels = result.data.models || {};
+      // Store fallback config for later access
+      loadedFallbackConfig = result.data.fallback;
       return result.data;
     }
     return null;

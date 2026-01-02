@@ -16,6 +16,7 @@ import {
   gitBranchTool,
 } from "./git.ts";
 import { webFetchTool } from "./web-fetch.ts";
+import { semanticSearchTool } from "./semantic-search.ts";
 import type { ToolDefinition, ToolResult } from "../llm/types.ts";
 
 /** Debug logging for tool execution (matches iOS pattern) */
@@ -74,6 +75,7 @@ class ToolRegistry {
     this.register({ ...gitCommitTool, priority: 3 as ToolPriority });
     this.register({ ...gitBranchTool, priority: 3 as ToolPriority });
     this.register({ ...webFetchTool, priority: 3 as ToolPriority });
+    this.register({ ...semanticSearchTool, priority: 2 as ToolPriority });
   }
 
   /**

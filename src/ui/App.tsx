@@ -326,12 +326,18 @@ export function App({ initialSession }: AppProps = {}) {
   /model [NAME]     - Show or switch model
   /provider [NAME]  - Show or switch LLM provider
   /mcp              - Show MCP server status
+  /mcp CMD ARGS     - Connect to stdio MCP server
+  /mcp sse URL      - Connect to HTTP/SSE MCP server
   /tools            - List available tools
   /context          - Show context window usage
   /yolo             - Toggle auto-approve mode
   /version          - Show version info
   /upgrade          - Upgrade to latest version
   /exit             - Exit Clarissa
+
+File References:
+  @path/to/file.ext     - Include file contents in your message
+  @file.txt:10-20       - Include lines 10-20 only
 
 Keyboard Shortcuts:
   Esc Esc           - Clear current input
@@ -638,38 +644,111 @@ Keyboard Shortcuts:
         return;
       }
 
-      if (value.toLowerCase() === "/mcp") {
-        // Show MCP status
-        const connectedServers = mcpClient.getServerInfo();
-        const configuredServers = mcpClient.getConfiguredServers();
-        const configuredNames = Object.keys(configuredServers);
+      if (value.toLowerCase() === "/mcp" || value.toLowerCase().startsWith("/mcp ")) {
+        const mcpArgs = value.slice(5).trim();
 
-        let content = "MCP Servers:\n";
+        // No args - show MCP status
+        if (!mcpArgs) {
+          const connectedServers = mcpClient.getServerInfo();
+          const configuredServers = mcpClient.getConfiguredServers();
+          const configuredNames = Object.keys(configuredServers);
 
-        if (connectedServers.length === 0 && configuredNames.length === 0) {
-          content += "  No MCP servers configured.\n\n";
-          content += "To add servers, edit ~/.clarissa/config.json:\n";
-          content += '  {"mcpServers": {"name": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]}}}';
-        } else {
-          if (connectedServers.length > 0) {
-            content += "\nConnected:\n";
-            for (const server of connectedServers) {
-              content += `  - ${server.name} (${server.toolCount} tools)\n`;
+          let content = "MCP Servers:\n";
+
+          if (connectedServers.length === 0 && configuredNames.length === 0) {
+            content += "  No MCP servers configured.\n\n";
+            content += "Usage:\n";
+            content += "  /mcp sse <URL>           Connect to HTTP/SSE server\n";
+            content += "  /mcp <CMD> [ARGS...]     Connect to stdio server\n\n";
+            content += "Examples:\n";
+            content += "  /mcp sse https://mcp.example.com/api\n";
+            content += "  /mcp npx -y @modelcontextprotocol/server-filesystem /path\n\n";
+            content += "Or add to ~/.clarissa/config.json:\n";
+            content += '  {"mcpServers": {"name": {"command": "npx", "args": [...]}}}';
+          } else {
+            if (connectedServers.length > 0) {
+              content += "\nConnected:\n";
+              for (const server of connectedServers) {
+                content += `  - ${server.name} (${server.toolCount} tools)\n`;
+              }
+            }
+
+            const disconnected = configuredNames.filter(n => !connectedServers.some(s => s.name === n));
+            if (disconnected.length > 0) {
+              content += "\nConfigured (not connected):\n";
+              for (const name of disconnected) {
+                const cfg = configuredServers[name];
+                if (cfg && "command" in cfg) {
+                  content += `  - ${name}: ${cfg.command} ${cfg.args?.join(" ") || ""}\n`;
+                } else if (cfg && "url" in cfg) {
+                  content += `  - ${name}: ${cfg.url} (SSE)\n`;
+                }
+              }
             }
           }
 
-          const disconnected = configuredNames.filter(n => !connectedServers.some(s => s.name === n));
-          if (disconnected.length > 0) {
-            content += "\nConfigured (not connected):\n";
-            for (const name of disconnected) {
-              const cfg = configuredServers[name];
-              content += `  - ${name}: ${cfg?.command} ${cfg?.args?.join(" ") || ""}\n`;
-            }
-          }
+          setMessages((prev) => [...prev, { role: "system", content }]);
+          clearInput();
+          return;
         }
 
-        setMessages((prev) => [...prev, { role: "system", content }]);
+        // Connect to an MCP server
+        setState("thinking");
+        setMessages((prev) => [...prev, { role: "user", content: value }]);
         clearInput();
+
+        try {
+          const parts = mcpArgs.split(/\s+/);
+
+          // Check for SSE transport: /mcp sse <URL>
+          if (parts[0]?.toLowerCase() === "sse" && parts[1]) {
+            const url = parts[1];
+            // Use URL hostname as server name
+            const serverName = new URL(url).hostname.replace(/\./g, "-");
+
+            setMessages((prev) => [...prev, { role: "system", content: `Connecting to SSE server: ${url}...` }]);
+
+            const tools = await mcpClient.connectSse(serverName, url);
+
+            // Register tools
+            for (const tool of tools) {
+              toolRegistry.register(tool);
+            }
+
+            setMessages((prev) => [...prev, {
+              role: "system",
+              content: `Connected to ${serverName} (SSE)\nRegistered ${tools.length} tool(s): ${tools.map(t => t.name).join(", ")}`
+            }]);
+          } else {
+            // Stdio transport: /mcp <command> [args...]
+            const command = parts[0]!;
+            const cmdArgs = parts.slice(1);
+            const serverName = command.replace(/[^a-zA-Z0-9]/g, "-");
+
+            setMessages((prev) => [...prev, { role: "system", content: `Connecting to: ${command} ${cmdArgs.join(" ")}...` }]);
+
+            const tools = await mcpClient.connect({
+              name: serverName,
+              command,
+              args: cmdArgs,
+            });
+
+            // Register tools
+            for (const tool of tools) {
+              toolRegistry.register(tool);
+            }
+
+            setMessages((prev) => [...prev, {
+              role: "system",
+              content: `Connected to ${serverName}\nRegistered ${tools.length} tool(s): ${tools.map(t => t.name).join(", ")}`
+            }]);
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "Connection failed";
+          setMessages((prev) => [...prev, { role: "error", content: `MCP connection failed: ${msg}` }]);
+        }
+
+        setState("idle");
         return;
       }
 
