@@ -8,16 +8,16 @@ import FoundationModels
 /// The @preconcurrency conformance allows the protocol methods to safely cross actor boundaries
 @available(iOS 26.0, macOS 26.0, *)
 @MainActor
-final class FoundationModelsProvider: @preconcurrency LLMProvider {
+public final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Provider name - nonisolated for Sendable protocol conformance
-    nonisolated let name = "Apple Intelligence"
+    public nonisolated let name = "Apple Intelligence"
 
     /// Maximum tools per session (Guide recommends 3-5 max) - nonisolated for Sendable
-    nonisolated let maxTools = maxToolsForFoundationModels
+    public nonisolated let maxTools = maxToolsForFoundationModels
 
     /// Foundation Models handles tools natively within the LanguageModelSession
     /// Tools are executed automatically and results are incorporated into the response
-    nonisolated let handlesToolsNatively = true
+    public nonisolated let handlesToolsNatively = true
 
     #if canImport(FoundationModels)
     private var session: LanguageModelSession?
@@ -35,11 +35,11 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Community insight: "Don't call respond(to:) on a session again before it returns - this causes a crash"
     private var isProcessing = false
 
-    init(toolRegistry: ToolRegistry = .shared) {
+    public init(toolRegistry: ToolRegistry = .shared) {
         self.toolRegistry = toolRegistry
     }
 
-    var isAvailable: Bool {
+    public var isAvailable: Bool {
         get async {
             #if canImport(FoundationModels)
             switch SystemLanguageModel.default.availability {
@@ -158,7 +158,7 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
 
     /// Stream completion - nonisolated to allow cross-actor calls from PromptEnhancer, etc.
     /// All MainActor work happens inside the Task, so this is safe to call from any context.
-    nonisolated func streamComplete(
+    public nonisolated func streamComplete(
         messages: [Message],
         tools: [ToolDefinition]
     ) -> AsyncThrowingStream<StreamChunk, Error> {
@@ -323,7 +323,7 @@ final class FoundationModelsProvider: @preconcurrency LLMProvider {
 
     /// Reset the session for a new conversation
     /// Clears the cached LanguageModelSession to prevent context bleeding between conversations
-    func resetSession() async {
+    public func resetSession() async {
         #if canImport(FoundationModels)
         session = nil
         currentInstructions = nil

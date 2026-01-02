@@ -186,28 +186,28 @@ public final class CarPlayViewModel: ObservableObject {
 // MARK: - AgentCallbacks
 
 extension CarPlayViewModel: AgentCallbacks {
-    func onThinking() {
+    public func onThinking() {
         isProcessing = true
     }
 
-    func onToolCall(name: String, arguments: String) {
+    public func onToolCall(name: String, arguments: String) {
         // Could show tool activity indicator
     }
 
-    func onToolResult(name: String, result: String, success: Bool) {
+    public func onToolResult(name: String, result: String, success: Bool) {
         // Tool completed
     }
 
-    func onStreamChunk(chunk: String) {
+    public func onStreamChunk(chunk: String) {
         // Streaming not shown in CarPlay for simplicity
     }
 
-    func onResponse(content: String) {
+    public func onResponse(content: String) {
         lastResponse = content
         isProcessing = false
     }
 
-    func onError(error: any Error) {
+    public func onError(error: any Error) {
         self.error = error.localizedDescription
         isProcessing = false
     }

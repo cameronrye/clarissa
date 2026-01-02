@@ -22,17 +22,17 @@ public protocol KeychainStorage: Sendable {
 /// - All Keychain operations use Security framework C APIs which are inherently thread-safe
 /// - The only mutable state is the singleton instance, which is set once during initialization
 /// - All operations are atomic at the Keychain API level
-final class KeychainManager: KeychainStorage, @unchecked Sendable {
-    static let shared = KeychainManager()
+public final class KeychainManager: KeychainStorage, @unchecked Sendable {
+    public static let shared = KeychainManager()
 
     private let service = "dev.rye.Clarissa"
 
     private init() {}
     
     // MARK: - Public API
-    
+
     /// Store a string value securely in the Keychain
-    func set(_ value: String, forKey key: String) throws {
+    public func set(_ value: String, forKey key: String) throws {
         guard let data = value.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
@@ -59,7 +59,7 @@ final class KeychainManager: KeychainStorage, @unchecked Sendable {
     }
     
     /// Retrieve a string value from the Keychain
-    func get(key: String) -> String? {
+    public func get(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -81,7 +81,7 @@ final class KeychainManager: KeychainStorage, @unchecked Sendable {
     }
     
     /// Delete a value from the Keychain
-    func delete(key: String) throws {
+    public func delete(key: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -97,12 +97,12 @@ final class KeychainManager: KeychainStorage, @unchecked Sendable {
     }
     
     /// Check if a key exists in the Keychain
-    func exists(key: String) -> Bool {
+    public func exists(key: String) -> Bool {
         get(key: key) != nil
     }
-    
+
     /// Clear all items for this service
-    func clearAll() throws {
+    public func clearAll() throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service
@@ -120,10 +120,10 @@ final class KeychainManager: KeychainStorage, @unchecked Sendable {
 
 // MARK: - Keychain Keys
 
-extension KeychainManager {
+public extension KeychainManager {
     enum Keys {
-        static let openRouterApiKey = "openRouterApiKey"
-        static let memories = "clarissa_memories"
+        public static let openRouterApiKey = "openRouterApiKey"
+        public static let memories = "clarissa_memories"
     }
 }
 

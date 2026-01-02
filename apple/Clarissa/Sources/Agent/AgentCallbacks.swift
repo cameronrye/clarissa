@@ -2,7 +2,7 @@ import Foundation
 
 /// Callbacks for agent events during execution
 @MainActor
-protocol AgentCallbacks: AnyObject {
+public protocol AgentCallbacks: AnyObject {
     /// Called when the agent starts thinking
     func onThinking()
 
@@ -27,7 +27,7 @@ protocol AgentCallbacks: AnyObject {
 }
 
 /// Default implementation that does nothing
-extension AgentCallbacks {
+public extension AgentCallbacks {
     func onThinking() {}
     func onToolCall(name: String, arguments: String) {}
     func onToolResult(name: String, result: String, success: Bool) {}

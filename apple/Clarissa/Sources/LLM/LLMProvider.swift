@@ -4,7 +4,7 @@ import Foundation
 
 /// A type-safe, Sendable representation of JSON values
 /// Used for tool parameters to ensure thread safety in Swift 6 concurrency
-enum JSONValue: Sendable, Equatable {
+public enum JSONValue: Sendable, Equatable {
     case null
     case bool(Bool)
     case int(Int)
@@ -14,7 +14,7 @@ enum JSONValue: Sendable, Equatable {
     case object([String: JSONValue])
 
     /// Convert to Any for JSON serialization
-    var toAny: Any {
+    public var toAny: Any {
         switch self {
         case .null: return NSNull()
         case .bool(let v): return v
@@ -27,7 +27,7 @@ enum JSONValue: Sendable, Equatable {
     }
 
     /// Create from Any (for interop with existing code)
-    static func from(_ value: Any) -> JSONValue {
+    public static func from(_ value: Any) -> JSONValue {
         switch value {
         case is NSNull:
             return .null
@@ -51,26 +51,26 @@ enum JSONValue: Sendable, Equatable {
 
 /// Definition of a tool that can be called by the LLM
 /// Now fully Sendable with type-safe JSON parameters
-struct ToolDefinition: Sendable {
-    let name: String
-    let description: String
-    let parameters: JSONValue
+public struct ToolDefinition: Sendable {
+    public let name: String
+    public let description: String
+    public let parameters: JSONValue
 
-    init(name: String, description: String, parameters: JSONValue) {
+    public init(name: String, description: String, parameters: JSONValue) {
         self.name = name
         self.description = description
         self.parameters = parameters
     }
 
     /// Convenience initializer for existing code using [String: Any]
-    init(name: String, description: String, parameters: [String: Any]) {
+    public init(name: String, description: String, parameters: [String: Any]) {
         self.name = name
         self.description = description
         self.parameters = JSONValue.from(parameters)
     }
 
     /// Get parameters as [String: Any] for serialization
-    var parametersAsDictionary: [String: Any] {
+    public var parametersAsDictionary: [String: Any] {
         if case .object(let dict) = parameters {
             return dict.mapValues { $0.toAny }
         }
@@ -79,7 +79,7 @@ struct ToolDefinition: Sendable {
 }
 
 /// Protocol for LLM providers
-protocol LLMProvider: Sendable {
+public protocol LLMProvider: Sendable {
     /// Provider name for display
     var name: String { get }
 
@@ -112,7 +112,7 @@ protocol LLMProvider: Sendable {
 }
 
 /// Default implementations
-extension LLMProvider {
+public extension LLMProvider {
     var handlesToolsNatively: Bool { false }
 
     /// Default implementation does nothing (stateless providers don't need reset)
@@ -120,11 +120,11 @@ extension LLMProvider {
 }
 
 /// Default implementation for non-streaming
-extension LLMProvider {
+public extension LLMProvider {
     func complete(messages: [Message], tools: [ToolDefinition]) async throws -> Message {
         var content = ""
         var toolCalls: [ToolCall] = []
-        
+
         for try await chunk in streamComplete(messages: messages, tools: tools) {
             if let c = chunk.content {
                 content += c
@@ -133,7 +133,7 @@ extension LLMProvider {
                 toolCalls = calls
             }
         }
-        
+
         return .assistant(content, toolCalls: toolCalls.isEmpty ? nil : toolCalls)
     }
 }

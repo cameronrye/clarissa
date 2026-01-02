@@ -1,10 +1,20 @@
 import Foundation
 
 /// Configuration for the agent
-struct AgentConfig {
-    var maxIterations: Int = ClarissaConstants.defaultMaxIterations
-    var maxRetries: Int = 3
-    var baseRetryDelay: TimeInterval = 1.0  // seconds
+public struct AgentConfig {
+    public var maxIterations: Int = ClarissaConstants.defaultMaxIterations
+    public var maxRetries: Int = 3
+    public var baseRetryDelay: TimeInterval = 1.0  // seconds
+
+    public init(
+        maxIterations: Int = ClarissaConstants.defaultMaxIterations,
+        maxRetries: Int = 3,
+        baseRetryDelay: TimeInterval = 1.0
+    ) {
+        self.maxIterations = maxIterations
+        self.maxRetries = maxRetries
+        self.baseRetryDelay = baseRetryDelay
+    }
 }
 
 // MARK: - Retry Helper
@@ -132,25 +142,25 @@ enum AgentError: LocalizedError {
 
 /// The Clarissa Agent - implements the ReAct loop pattern
 @MainActor
-final class Agent: ObservableObject {
+public final class Agent: ObservableObject {
     private var messages: [Message] = []
     private let config: AgentConfig
     private let toolRegistry: ToolRegistry
     private var provider: (any LLMProvider)?
     private var trimmedCount: Int = 0
 
-    weak var callbacks: AgentCallbacks?
+    public weak var callbacks: AgentCallbacks?
 
-    init(
+    public init(
         config: AgentConfig = AgentConfig(),
         toolRegistry: ToolRegistry = .shared
     ) {
         self.config = config
         self.toolRegistry = toolRegistry
     }
-    
+
     /// Set the LLM provider
-    func setProvider(_ provider: any LLMProvider) {
+    public func setProvider(_ provider: any LLMProvider) {
         self.provider = provider
     }
     
@@ -275,7 +285,7 @@ final class Agent: ObservableObject {
     /// - Parameters:
     ///   - userMessage: The text content of the user's message
     ///   - imageData: Optional thumbnail image data to persist with the message
-    func run(_ userMessage: String, imageData: Data? = nil) async throws -> String {
+    public func run(_ userMessage: String, imageData: Data? = nil) async throws -> String {
         ClarissaLogger.agent.info("Starting agent run with message: \(userMessage.prefix(50), privacy: .public)...")
 
         guard let provider = provider else {

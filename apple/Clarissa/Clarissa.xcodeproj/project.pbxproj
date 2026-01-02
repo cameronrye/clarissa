@@ -12,7 +12,7 @@
 		W0000010 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = W0000011 /* WidgetKit.framework */; };
 		W0000012 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = W0000013 /* SwiftUI.framework */; };
 		W0000020 /* ClarissaWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = W0000003 /* ClarissaWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		WA000001 /* ClarissaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = WA000002 /* ClarissaWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		WA000001 /* ClarissaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = WA000002 /* ClarissaWatch.app */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +108,11 @@
 			path = Sources/App;
 			sourceTree = "<group>";
 		};
+		WS000001 /* Sources/Watch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Sources/Watch;
+			sourceTree = "<group>";
+		};
 		A0000005 /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -174,6 +179,7 @@
 			isa = PBXGroup;
 			children = (
 				A0000004 /* Sources/App */,
+				WS000001 /* Sources/Watch */,
 				A0000005 /* Resources */,
 				W0000050 /* ClarissaWidgets */,
 				WA000050 /* ClarissaWatch */,
@@ -247,6 +253,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A0000004 /* Sources/App */,
+				WS000001 /* Sources/Watch */,
 				A0000005 /* Resources */,
 			);
 			name = Clarissa;
@@ -427,6 +434,9 @@
 		};
 		WA000011 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilters = (
+				ios,
+			);
 			target = WA000003 /* ClarissaWatch */;
 			targetProxy = WA000010 /* PBXContainerItemProxy */;
 		};
@@ -768,6 +778,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -797,6 +808,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 4;

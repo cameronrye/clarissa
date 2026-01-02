@@ -1,25 +1,25 @@
 import Foundation
 
 /// Provider using OpenRouter cloud API
-final class OpenRouterProvider: LLMProvider, @unchecked Sendable {
-    let name = "OpenRouter"
-    let maxTools = 50
+public final class OpenRouterProvider: LLMProvider, @unchecked Sendable {
+    public let name = "OpenRouter"
+    public let maxTools = 50
 
     private let apiKey: String
     private let model: String
     private let baseURL = URL(string: ClarissaConstants.openRouterBaseURL + ClarissaConstants.openRouterCompletionsPath)!
     private let timeout: TimeInterval = ClarissaConstants.llmApiTimeoutSeconds
 
-    var isAvailable: Bool {
+    public var isAvailable: Bool {
         get async { !apiKey.isEmpty }
     }
 
-    init(apiKey: String, model: String = "anthropic/claude-sonnet-4") {
+    public init(apiKey: String, model: String = "anthropic/claude-sonnet-4") {
         self.apiKey = apiKey
         self.model = model
     }
 
-    func streamComplete(
+    public func streamComplete(
         messages: [Message],
         tools: [ToolDefinition]
     ) -> AsyncThrowingStream<StreamChunk, Error> {

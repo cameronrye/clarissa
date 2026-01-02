@@ -1,3 +1,4 @@
+#if os(iOS) || os(watchOS)
 import Foundation
 
 /// Messages exchanged between iPhone and Apple Watch
@@ -123,4 +124,4 @@ enum WatchMessageError: LocalizedError {
         }
     }
 }
-
+#endif

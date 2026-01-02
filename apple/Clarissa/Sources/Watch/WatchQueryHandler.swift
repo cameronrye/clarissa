@@ -1,3 +1,5 @@
+#if os(iOS)
+import ClarissaKit
 import Foundation
 
 /// Handles queries from Apple Watch and relays them to the Agent
@@ -5,10 +7,11 @@ import Foundation
 @MainActor
 final class WatchQueryHandler: ObservableObject {
     static let shared = WatchQueryHandler()
-    
+
     private var agent: Agent?
+    private var currentCallbacks: WatchAgentCallbacks?
     private let connectivity = WatchConnectivityManager.shared
-    
+
     private init() {
         setupConnectivity()
     }
@@ -45,10 +48,13 @@ final class WatchQueryHandler: ObservableObject {
             agent.setProvider(provider)
             
             // Set up callbacks to relay status to Watch
-            agent.callbacks = WatchAgentCallbacks(
+            // Store in property to keep alive during query execution
+            let callbacks = WatchAgentCallbacks(
                 requestId: request.id,
                 connectivity: connectivity
             )
+            self.currentCallbacks = callbacks
+            agent.callbacks = callbacks
             
             // Run the query
             let response = try await agent.run(request.text)
@@ -70,12 +76,14 @@ final class WatchQueryHandler: ObservableObject {
     /// Create the appropriate LLM provider based on current settings
     private func createProvider() async -> any LLMProvider {
         let providerType = AppState.shared.selectedProvider
-        
+
         switch providerType {
         case .foundationModels:
             return FoundationModelsProvider()
         case .openRouter:
-            return OpenRouterProvider()
+            let apiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
+            let model = UserDefaults.standard.string(forKey: "selectedModel") ?? "anthropic/claude-sonnet-4"
+            return OpenRouterProvider(apiKey: apiKey, model: model)
         }
     }
 }
@@ -121,4 +129,4 @@ private final class WatchAgentCallbacks: AgentCallbacks {
         ))
     }
 }
-
+#endif

@@ -2,110 +2,94 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Clarissa</string>
-    <key>CFBundleDisplayName</key>
-    <string>Clarissa AI</string>
-    <key>CFBundleIdentifier</key>
-    <string>dev.rye.clarissa</string>
-    <key>CFBundleVersion</key>
-    <string>2</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
-    <key>CFBundleExecutable</key>
-    <string>Clarissa</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.productivity</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-    <key>UILaunchScreen</key>
-    <dict>
-        <key>UIColorName</key>
-        <string>LaunchScreenBackground</string>
-        <key>UIImageName</key>
-        <string>LaunchLogo</string>
-        <key>UIImageRespectsSafeAreaInsets</key>
-        <true/>
-    </dict>
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-    <key>UISupportedInterfaceOrientations~ipad</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationPortraitUpsideDown</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-
-    <!-- Privacy Permissions -->
-    <key>NSCalendarsUsageDescription</key>
-    <string>Clarissa needs access to your calendar to create, view, and manage events on your behalf.</string>
-    <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Clarissa needs full access to your calendar to create, view, and manage events on your behalf.</string>
-    <key>NSContactsUsageDescription</key>
-    <string>Clarissa needs access to your contacts to help you find and reference contact information.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Clarissa needs your location to provide weather information and location-based assistance.</string>
-    <key>NSRemindersUsageDescription</key>
-    <string>Clarissa needs access to your reminders to create and manage tasks on your behalf.</string>
-    <key>NSRemindersFullAccessUsageDescription</key>
-    <string>Clarissa needs full access to your reminders to create and manage tasks on your behalf.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Clarissa uses the microphone for voice input so you can speak your messages.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Clarissa uses speech recognition to convert your voice into text for the conversation.</string>
-    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-    <string>Clarissa needs to create calendar events on your behalf.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Clarissa needs access to your photos to analyze images you select for text recognition, object identification, and other visual analysis.</string>
-    <key>NSCameraUsageDescription</key>
-    <string>Clarissa uses the camera to capture photos and scan documents for text recognition, object identification, and other visual analysis.</string>
-
-    <!-- URL Schemes for Deep Linking -->
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>dev.rye.clarissa</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>clarissa</string>
-            </array>
-        </dict>
-    </array>
-
-    <!-- Background Modes -->
-    <key>UIBackgroundModes</key>
-    <array>
-        <!-- Required for voice mode to continue speaking when app is backgrounded -->
-        <string>audio</string>
-        <!-- Required for background memory sync -->
-        <string>processing</string>
-    </array>
-
-    <!-- Background Task Identifiers -->
-    <key>BGTaskSchedulerPermittedIdentifiers</key>
-    <array>
-        <string>dev.rye.Clarissa.memorySync</string>
-    </array>
-
-    <!-- Scene Configuration -->
-    <!-- Note: CarPlay support is implemented but disabled pending Apple approval -->
-    <!-- To enable CarPlay, add CPTemplateApplicationSceneSessionRoleApplication scene -->
-    <!-- and com.apple.developer.carplay-driving-task entitlement -->
-    <key>UIApplicationSceneManifest</key>
-    <dict>
-        <key>UIApplicationSupportsMultipleScenes</key>
-        <false/>
-    </dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dev.rye.Clarissa.memorySync</string>
+	</array>
+	<key>CFBundleDisplayName</key>
+	<string>Clarissa AI</string>
+	<key>CFBundleExecutable</key>
+	<string>Clarissa</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.rye.clarissa</string>
+	<key>CFBundleName</key>
+	<string>Clarissa</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.rye.clarissa</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>clarissa</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>15</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Clarissa needs full access to your calendar to create, view, and manage events on your behalf.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Clarissa needs access to your calendar to create, view, and manage events on your behalf.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Clarissa needs to create calendar events on your behalf.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Clarissa uses the camera to capture photos and scan documents for text recognition, object identification, and other visual analysis.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Clarissa needs access to your contacts to help you find and reference contact information.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Clarissa needs your location to provide weather information and location-based assistance.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Clarissa uses the microphone for voice input so you can speak your messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Clarissa needs access to your photos to analyze images you select for text recognition, object identification, and other visual analysis.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Clarissa needs full access to your reminders to create and manage tasks on your behalf.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Clarissa needs access to your reminders to create and manage tasks on your behalf.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Clarissa uses speech recognition to convert your voice into text for the conversation.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>processing</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchScreenBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchLogo</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>
-

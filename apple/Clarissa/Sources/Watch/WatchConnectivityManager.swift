@@ -1,5 +1,7 @@
+#if os(iOS)
+import ClarissaKit
 import Foundation
-import WatchConnectivity
+@preconcurrency import WatchConnectivity
 
 /// Manages WatchConnectivity between iPhone and Apple Watch
 /// This class runs on the iPhone and handles incoming requests from Watch
@@ -89,16 +91,24 @@ extension WatchConnectivityManager: WCSessionDelegate {
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {
+        // Extract values before crossing actor boundary
+        let isReachable = session.isReachable
+        let isPaired = session.isPaired
+        let isWatchAppInstalled = session.isWatchAppInstalled
+        let errorDescription = error?.localizedDescription
+
         Task { @MainActor in
-            if let error = error {
-                ClarissaLogger.agent.error("WatchConnectivity activation failed: \(error.localizedDescription)")
+            if let errorDescription = errorDescription {
+                ClarissaLogger.agent.error("WatchConnectivity activation failed: \(errorDescription)")
                 return
             }
-            
+
             switch activationState {
             case .activated:
                 ClarissaLogger.agent.info("WatchConnectivity activated")
-                updateSessionState(session)
+                self.isReachable = isReachable
+                self.isPaired = isPaired
+                self.isWatchAppInstalled = isWatchAppInstalled
             case .inactive:
                 ClarissaLogger.agent.info("WatchConnectivity inactive")
             case .notActivated:
@@ -108,30 +118,32 @@ extension WatchConnectivityManager: WCSessionDelegate {
             }
         }
     }
-    
+
     #if os(iOS)
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         ClarissaLogger.agent.info("WatchConnectivity session became inactive")
     }
-    
+
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
         ClarissaLogger.agent.info("WatchConnectivity session deactivated")
         // Reactivate for switching watches
         session.activate()
     }
     #endif
-    
+
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        // Extract value before crossing actor boundary
+        let reachable = session.isReachable
         Task { @MainActor in
-            isReachable = session.isReachable
-            ClarissaLogger.agent.info("Watch reachability changed: \(session.isReachable)")
+            isReachable = reachable
+            ClarissaLogger.agent.info("Watch reachability changed: \(reachable)")
         }
     }
-    
+
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         handleReceivedMessage(message)
     }
-    
+
     nonisolated func session(
         _ session: WCSession,
         didReceiveMessage message: [String: Any],
@@ -139,18 +151,22 @@ extension WatchConnectivityManager: WCSessionDelegate {
     ) {
         handleReceivedMessage(message, replyHandler: replyHandler)
     }
-    
+
     private nonisolated func handleReceivedMessage(
         _ message: [String: Any],
         replyHandler: (([String: Any]) -> Void)? = nil
     ) {
-        Task { @MainActor in
-            do {
-                let watchMessage = try WatchMessage.from(dictionary: message)
-                await processMessage(watchMessage, replyHandler: replyHandler)
-            } catch {
-                ClarissaLogger.agent.error("Failed to decode Watch message: \(error.localizedDescription)")
+        // Decode message in nonisolated context first
+        do {
+            let watchMessage = try WatchMessage.from(dictionary: message)
+            // Use nonisolated(unsafe) to bridge the non-Sendable closure
+            // This is safe because WCSession guarantees the reply handler is valid
+            nonisolated(unsafe) let unsafeReplyHandler = replyHandler
+            Task { @MainActor in
+                await processMessage(watchMessage, replyHandler: unsafeReplyHandler)
             }
+        } catch {
+            ClarissaLogger.agent.error("Failed to decode Watch message: \(error.localizedDescription)")
         }
     }
 
@@ -194,14 +210,5 @@ extension WatchConnectivityManager: WCSessionDelegate {
             break
         }
     }
-
-    @MainActor
-    private func updateSessionState(_ session: WCSession) {
-        isReachable = session.isReachable
-        #if os(iOS)
-        isPaired = session.isPaired
-        isWatchAppInstalled = session.isWatchAppInstalled
-        #endif
-    }
 }
-
+#endif

@@ -110,52 +110,63 @@ extension WatchConnectivityClient: WCSessionDelegate {
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {
+        // Capture values before entering MainActor context to avoid data races
+        let reachable = session.isReachable
+        #if os(watchOS)
+        let companionInstalled = session.isCompanionAppInstalled
+        #endif
+
         Task { @MainActor in
             if activationState == .activated {
-                isReachable = session.isReachable
+                isReachable = reachable
                 #if os(watchOS)
-                isCompanionAppInstalled = session.isCompanionAppInstalled
+                isCompanionAppInstalled = companionInstalled
                 #endif
             }
         }
     }
-    
+
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        // Capture value before entering MainActor context to avoid data races
+        let reachable = session.isReachable
+
         Task { @MainActor in
-            isReachable = session.isReachable
+            isReachable = reachable
         }
     }
-    
+
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        Task { @MainActor in
-            await handleReceivedMessage(message)
+        // Decode the message in the nonisolated context first
+        do {
+            let watchMessage = try WatchMessage.from(dictionary: message)
+            Task { @MainActor in
+                handleDecodedMessage(watchMessage)
+            }
+        } catch {
+            Task { @MainActor in
+                lastError = "Failed to decode message"
+            }
         }
     }
     
     @MainActor
-    private func handleReceivedMessage(_ message: [String: Any]) async {
-        do {
-            let watchMessage = try WatchMessage.from(dictionary: message)
-            
-            switch watchMessage {
-            case .response(let response):
-                pendingRequest = nil
-                onResponse?(response)
-                
-            case .status(let status):
-                onStatus?(status)
-                
-            case .error(let error):
-                pendingRequest = nil
-                lastError = error.message
-                onError?(error)
-                
-            case .query, .ping, .pong:
-                // These are sent from Watch, not received
-                break
-            }
-        } catch {
-            lastError = "Failed to decode message"
+    private func handleDecodedMessage(_ watchMessage: WatchMessage) {
+        switch watchMessage {
+        case .response(let response):
+            pendingRequest = nil
+            onResponse?(response)
+
+        case .status(let status):
+            onStatus?(status)
+
+        case .error(let error):
+            pendingRequest = nil
+            lastError = error.message
+            onError?(error)
+
+        case .query, .ping, .pong:
+            // These are sent from Watch, not received
+            break
         }
     }
 }

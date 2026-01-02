@@ -5,8 +5,8 @@ import FoundationModels
 
 /// Registry for all available tools
 @MainActor
-final class ToolRegistry {
-    static let shared = ToolRegistry()
+public final class ToolRegistry {
+    public static let shared = ToolRegistry()
 
     private var tools: [String: any ClarissaTool] = [:]
 
