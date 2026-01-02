@@ -29,8 +29,9 @@ struct Message: Identifiable, Codable, Sendable {
     let toolCalls: [ToolCall]?
     let toolCallId: String?
     let toolName: String?
+    let imageData: Data?  // Optional attached image (thumbnail for display)
     let createdAt: Date
-    
+
     init(
         id: UUID = UUID(),
         role: MessageRole,
@@ -38,6 +39,7 @@ struct Message: Identifiable, Codable, Sendable {
         toolCalls: [ToolCall]? = nil,
         toolCallId: String? = nil,
         toolName: String? = nil,
+        imageData: Data? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -46,21 +48,22 @@ struct Message: Identifiable, Codable, Sendable {
         self.toolCalls = toolCalls
         self.toolCallId = toolCallId
         self.toolName = toolName
+        self.imageData = imageData
         self.createdAt = createdAt
     }
-    
+
     static func system(_ content: String) -> Message {
         Message(role: .system, content: content)
     }
-    
-    static func user(_ content: String) -> Message {
-        Message(role: .user, content: content)
+
+    static func user(_ content: String, imageData: Data? = nil) -> Message {
+        Message(role: .user, content: content, imageData: imageData)
     }
-    
+
     static func assistant(_ content: String, toolCalls: [ToolCall]? = nil) -> Message {
         Message(role: .assistant, content: content, toolCalls: toolCalls)
     }
-    
+
     static func tool(callId: String, name: String, content: String) -> Message {
         Message(role: .tool, content: content, toolCallId: callId, toolName: name)
     }

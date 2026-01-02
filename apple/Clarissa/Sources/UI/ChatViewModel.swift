@@ -357,7 +357,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
                     """
                 }
 
-                _ = try await agent.run(promptText)
+                // Pass image preview for persistence (not the full image)
+                _ = try await agent.run(promptText, imageData: imagePreview)
                 // Save session after successful response
                 await saveCurrentSession()
             } catch is CancellationError {
@@ -521,7 +522,9 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         var loadedCount = 0
         for message in savedMessages {
             if message.role == .user || message.role == .assistant {
-                messages.append(ChatMessage(role: message.role, content: message.content))
+                var chatMessage = ChatMessage(role: message.role, content: message.content)
+                chatMessage.imageData = message.imageData
+                messages.append(chatMessage)
                 loadedCount += 1
             }
         }
@@ -612,7 +615,9 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         var loadedCount = 0
         for message in session.messages {
             if message.role == .user || message.role == .assistant {
-                messages.append(ChatMessage(role: message.role, content: message.content))
+                var chatMessage = ChatMessage(role: message.role, content: message.content)
+                chatMessage.imageData = message.imageData
+                messages.append(chatMessage)
                 loadedCount += 1
             }
         }
@@ -746,6 +751,14 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Update context stats
         updateContextStats()
+
+        // Update widget data with last conversation
+        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
+            WidgetDataManager.shared.updateLastConversation(
+                message: lastUserMessage.content,
+                response: content
+            )
+        }
 
         // Speak response in voice mode
         if isVoiceModeActive, let voiceManager = voiceManager {

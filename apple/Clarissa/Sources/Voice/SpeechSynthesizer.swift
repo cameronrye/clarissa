@@ -33,20 +33,23 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
         loadAvailableVoices()
     }
 
-    /// Load available high-quality voices
+    /// Load available voices with fallback
     private func loadAvailableVoices() {
-        // Only load Premium/Enhanced quality voices (high-quality Siri voices)
-        // These must be downloaded in Settings > Accessibility > Spoken Content > Voices
-        let preferredLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+        // Get preferred languages from system (more reliable than Locale.current)
+        let preferredLanguages = Locale.preferredLanguages
+        let primaryLanguage = preferredLanguages.first?.split(separator: "-").first.map(String.init) ?? "en"
 
-        availableVoices = AVSpeechSynthesisVoice.speechVoices()
+        let allVoices = AVSpeechSynthesisVoice.speechVoices()
+
+        // Filter voices matching user's language preference
+        let languageMatchedVoices = allVoices.filter { voice in
+            voice.language.hasPrefix(primaryLanguage)
+        }
+
+        // Try to get high-quality voices first (Premium/Enhanced)
+        let highQualityVoices = languageMatchedVoices
             .filter { voice in
-                // Only Premium or Enhanced quality
                 voice.quality == .premium || voice.quality == .enhanced
-            }
-            .filter { voice in
-                // Match user's language preference
-                voice.language.hasPrefix(preferredLanguage)
             }
             .sorted { voice1, voice2 in
                 // Sort: Premium first, then Enhanced, then alphabetically
@@ -55,6 +58,19 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
                 }
                 return voice1.name < voice2.name
             }
+
+        // Fallback: if no high-quality voices, show all voices for the language
+        // sorted by quality (best first)
+        if highQualityVoices.isEmpty {
+            availableVoices = languageMatchedVoices.sorted { voice1, voice2 in
+                if voice1.quality != voice2.quality {
+                    return voice1.quality.rawValue > voice2.quality.rawValue
+                }
+                return voice1.name < voice2.name
+            }
+        } else {
+            availableVoices = highQualityVoices
+        }
     }
 
     /// Get the voice identifier from UserDefaults (set by SettingsView)
@@ -147,12 +163,12 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
         }
     }
 
-    /// Get display name for a voice
+    /// Get display name for a voice with quality indicators
     func displayName(for voice: AVSpeechSynthesisVoice) -> String {
         let qualityIndicator: String
         switch voice.quality {
-        case .premium: qualityIndicator = " ★"
-        case .enhanced: qualityIndicator = ""
+        case .premium: qualityIndicator = " (Premium)"
+        case .enhanced: qualityIndicator = " (Enhanced)"
         default: qualityIndicator = ""
         }
         // Extract region from language code (e.g., "en-US" → "US")

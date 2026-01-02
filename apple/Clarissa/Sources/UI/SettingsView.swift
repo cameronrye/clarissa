@@ -277,11 +277,8 @@ public struct SettingsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("When enabled, Clarissa will speak responses aloud in voice mode.")
-                    if voiceOutputEnabled && availableVoices.isEmpty {
-                        Text("No high-quality voices found. Download Siri voices in System Settings -> Accessibility -> Spoken Content -> System Voices.")
-                            .foregroundStyle(.orange)
-                    } else if voiceOutputEnabled {
-                        Text("Premium voices are marked with a star. Download more voices in System Settings -> Accessibility -> Spoken Content -> System Voices.")
+                    if voiceOutputEnabled {
+                        Text("Premium and Enhanced voices provide the best quality. Download more in System Settings -> Accessibility -> Spoken Content -> System Voices.")
                     }
                 }
             }
@@ -530,11 +527,8 @@ public struct SettingsView: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("When enabled, Clarissa will speak responses aloud in voice mode.")
-                        if voiceOutputEnabled && availableVoices.isEmpty {
-                            Text("No high-quality voices found. Download Siri voices in Settings -> Accessibility -> Spoken Content -> Voices.")
-                                .foregroundStyle(.orange)
-                        } else if voiceOutputEnabled {
-                            Text("Premium voices are marked with a star. Download more voices in Settings -> Accessibility -> Spoken Content -> Voices.")
+                        if voiceOutputEnabled {
+                            Text("Premium and Enhanced voices provide the best quality. Download more in Settings -> Accessibility -> Spoken Content -> Voices.")
                         }
                     }
                 }
@@ -603,18 +597,21 @@ public struct SettingsView: View {
     // MARK: - Voice Helpers
 
     private func loadAvailableVoices() {
-        // Only load high-quality Siri voices (Premium/Enhanced)
-        // These must be downloaded in Settings > Accessibility > Spoken Content > Voices
-        let preferredLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+        // Get preferred languages from system (more reliable than Locale.current)
+        let preferredLanguages = Locale.preferredLanguages
+        let primaryLanguage = preferredLanguages.first?.split(separator: "-").first.map(String.init) ?? "en"
 
-        availableVoices = AVSpeechSynthesisVoice.speechVoices()
+        let allVoices = AVSpeechSynthesisVoice.speechVoices()
+
+        // Filter voices matching user's language preference
+        let languageMatchedVoices = allVoices.filter { voice in
+            voice.language.hasPrefix(primaryLanguage)
+        }
+
+        // Try to get high-quality voices first (Premium/Enhanced)
+        let highQualityVoices = languageMatchedVoices
             .filter { voice in
-                // Only Premium or Enhanced quality (high-quality Siri voices)
                 voice.quality == .premium || voice.quality == .enhanced
-            }
-            .filter { voice in
-                // Match user's language preference
-                voice.language.hasPrefix(preferredLanguage)
             }
             .sorted { voice1, voice2 in
                 // Sort: Premium first, then Enhanced, then alphabetically
@@ -623,13 +620,26 @@ public struct SettingsView: View {
                 }
                 return voice1.name < voice2.name
             }
+
+        // Fallback: if no high-quality voices, show all voices for the language
+        // sorted by quality (best first)
+        if highQualityVoices.isEmpty {
+            availableVoices = languageMatchedVoices.sorted { voice1, voice2 in
+                if voice1.quality != voice2.quality {
+                    return voice1.quality.rawValue > voice2.quality.rawValue
+                }
+                return voice1.name < voice2.name
+            }
+        } else {
+            availableVoices = highQualityVoices
+        }
     }
 
     private func voiceDisplayName(for voice: AVSpeechSynthesisVoice) -> String {
         let qualityIndicator: String
         switch voice.quality {
-        case .premium: qualityIndicator = " ★"
-        case .enhanced: qualityIndicator = ""
+        case .premium: qualityIndicator = " (Premium)"
+        case .enhanced: qualityIndicator = " (Enhanced)"
         default: qualityIndicator = ""
         }
         // Extract region from language code (e.g., "en-US" → "US")

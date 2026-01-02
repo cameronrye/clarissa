@@ -21,7 +21,7 @@ let package = Package(
             name: "ClarissaKit",
             dependencies: [],
             path: "Sources",
-            exclude: ["App"]
+            exclude: ["App", "Watch"]
         ),
         .testTarget(
             name: "ClarissaKitTests",

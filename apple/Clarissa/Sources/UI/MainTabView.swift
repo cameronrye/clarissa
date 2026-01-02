@@ -495,6 +495,26 @@ struct ChatTabContent: View {
             Text("The conversation has been copied to your clipboard.")
         }
         #endif
+        // Handle URL scheme requests from Control Center, Shortcuts, etc.
+        .onChange(of: appState.requestNewConversation) { _, newValue in
+            if newValue {
+                appState.requestNewConversation = false
+                Task { await viewModel.startNewSession() }
+            }
+        }
+        .onChange(of: appState.requestVoiceMode) { _, newValue in
+            if newValue {
+                appState.requestVoiceMode = false
+                Task { await viewModel.toggleVoiceMode() }
+            }
+        }
+        .onChange(of: appState.pendingShortcutQuestion) { _, newValue in
+            if let question = newValue, !question.isEmpty {
+                appState.pendingShortcutQuestion = nil
+                viewModel.inputText = question
+                viewModel.sendMessage()
+            }
+        }
     }
 
     private func exportConversation() {

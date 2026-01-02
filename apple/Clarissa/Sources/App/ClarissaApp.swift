@@ -120,6 +120,11 @@ struct ClarissaApp: App {
                 // Prewarm Foundation Models at launch for faster first response
                 // Community insight: "Call prewarm() when you're confident the user will use LLM features"
                 await Self.prewarmFoundationModels()
+
+                #if os(iOS)
+                // Start Watch connectivity handler for Apple Watch integration
+                WatchQueryHandler.shared.start()
+                #endif
             }
             .onOpenURL { url in
                 // Handle URL scheme for CLI integration

@@ -16,12 +16,11 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
     private var speechAnalyzer: SpeechAnalyzer?
     private var speechTranscriber: SpeechTranscriber?
     private var analysisTask: Task<Void, Never>?
-    private var inputBuilder: AsyncStream<AnalyzerInput>.Continuation?
     private var analyzerFormat: AVAudioFormat?
 
-    // Audio capture
-    private let audioEngine = AVAudioEngine()
-    private let audioQueue = DispatchQueue(label: "com.clarissa.speechanalyzer", qos: .userInitiated)
+    // Audio capture - use a helper class to handle audio on a dedicated queue
+    // This avoids @MainActor isolation issues with the audio tap callback
+    private let audioHandler = SpeechAnalyzerAudioHandler()
 
     /// Whether audio session is managed externally (e.g., by VoiceManager in voice mode)
     var useExternalAudioSession: Bool = false
@@ -36,12 +35,9 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
 
     /// Request authorization for speech recognition
     func requestAuthorization() async -> Bool {
-        // SpeechAnalyzer uses the same authorization as SFSpeechRecognizer
-        let status = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
-        }
+        // Use non-isolated helper to avoid dispatch queue assertion failures
+        // when the TCC callback runs on a background queue
+        let status = await requestSpeechAnalyzerAuthorizationStatus()
 
         switch status {
         case .authorized:
@@ -62,15 +58,6 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
         // Cancel any existing analysis
         stopRecordingInternal()
 
-        // Configure audio session (iOS only)
-        #if os(iOS)
-        if !useExternalAudioSession {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetoothHFP])
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        }
-        #endif
-
         // Create SpeechTranscriber module with volatile results for live feedback
         let transcriber = SpeechTranscriber(
             locale: locale,
@@ -89,37 +76,21 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
 
         // Create async stream for audio input
         let (inputSequence, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-        self.inputBuilder = continuation
-
-        // Set up audio engine input
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-
-        guard recordingFormat.sampleRate > 0 else {
-            throw SpeechError.requestCreationFailed
-        }
 
         isRecording = true
         transcript = ""
         error = nil
 
-        // Install tap to capture audio and feed to analyzer
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, _ in
-            guard let self, let builder = self.inputBuilder else { return }
-            // Convert buffer to analyzer format if needed and yield to stream
-            if let format = self.analyzerFormat, let converted = self.convertBuffer(buffer, to: format) {
-                let input = AnalyzerInput(buffer: converted)
-                builder.yield(input)
-            } else {
-                // Use original buffer if no conversion needed
-                let input = AnalyzerInput(buffer: buffer)
-                builder.yield(input)
-            }
+        // Start audio capture on dedicated queue to avoid @MainActor isolation crash
+        // The audio tap callback runs on a real-time audio thread
+        let format = self.analyzerFormat
+        try await audioHandler.start(
+            skipSessionConfig: useExternalAudioSession,
+            targetFormat: format
+        ) { buffer in
+            let input = AnalyzerInput(buffer: buffer)
+            continuation.yield(input)
         }
-
-        // Start the audio engine
-        audioEngine.prepare()
-        try audioEngine.start()
 
         // Start analysis task
         analysisTask = Task { @MainActor [weak self] in
@@ -147,50 +118,24 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
                 }
             }
 
+            // Signal end of audio input
+            continuation.finish()
             self.stopRecordingInternal()
         }
     }
 
-    /// Convert audio buffer to the target format
-    private func convertBuffer(_ buffer: AVAudioPCMBuffer, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        guard let converter = AVAudioConverter(from: buffer.format, to: format) else { return nil }
-        let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / buffer.format.sampleRate)
-        guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
-
-        var error: NSError?
-        let status = converter.convert(to: convertedBuffer, error: &error) { _, outStatus in
-            outStatus.pointee = .haveData
-            return buffer
-        }
-
-        return status == .haveData ? convertedBuffer : nil
-    }
-
     /// Stop recording and finalize transcription
     private func stopRecordingInternal() {
-        // Finish the input stream to signal end of audio
-        inputBuilder?.finish()
-        inputBuilder = nil
-
         analysisTask?.cancel()
         analysisTask = nil
 
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
+        // Stop audio capture on dedicated queue
+        audioHandler.stopSync(skipSessionDeactivation: useExternalAudioSession)
 
         speechAnalyzer = nil
         speechTranscriber = nil
         analyzerFormat = nil
         isRecording = false
-
-        // Deactivate audio session if we configured it
-        #if os(iOS)
-        if !useExternalAudioSession {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        }
-        #endif
     }
 
     /// Stop recording and finalize transcription
@@ -216,3 +161,110 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
     }
 }
 
+// MARK: - Audio Handler
+
+/// Handles AVAudioEngine operations on a dedicated queue to avoid @MainActor isolation crashes
+/// The audio tap callback runs on a real-time audio thread, which conflicts with Swift 6 strict concurrency
+@available(iOS 26.0, macOS 26.0, *)
+private final class SpeechAnalyzerAudioHandler: @unchecked Sendable {
+    private let audioEngine = AVAudioEngine()
+    private let queue = DispatchQueue(label: "com.clarissa.speechanalyzer.audio", qos: .userInitiated)
+    private var currentBufferHandler: (@Sendable (AVAudioPCMBuffer) -> Void)?
+
+    /// Start audio capture
+    /// - Parameters:
+    ///   - skipSessionConfig: If true, skips audio session configuration (use when VoiceManager manages the session)
+    ///   - targetFormat: Optional target format to convert audio buffers to
+    ///   - bufferHandler: Callback for audio buffers (called on audio thread)
+    func start(
+        skipSessionConfig: Bool = false,
+        targetFormat: AVAudioFormat? = nil,
+        bufferHandler: @escaping @Sendable (AVAudioPCMBuffer) -> Void
+    ) async throws {
+        currentBufferHandler = bufferHandler
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            queue.async { [self] in
+                do {
+                    #if os(iOS)
+                    if !skipSessionConfig {
+                        let audioSession = AVAudioSession.sharedInstance()
+                        try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetoothHFP])
+                        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+                    }
+                    #endif
+
+                    let inputNode = audioEngine.inputNode
+                    let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+                    guard recordingFormat.sampleRate > 0 else {
+                        throw SpeechError.requestCreationFailed
+                    }
+
+                    // Install tap to capture audio
+                    inputNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, _ in
+                        guard let handler = self?.currentBufferHandler else { return }
+
+                        // Convert buffer to target format if needed
+                        if let targetFormat, let converted = Self.convertBuffer(buffer, to: targetFormat) {
+                            handler(converted)
+                        } else {
+                            handler(buffer)
+                        }
+                    }
+
+                    audioEngine.prepare()
+                    try audioEngine.start()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Stop audio capture synchronously
+    func stopSync(skipSessionDeactivation: Bool = false) {
+        currentBufferHandler = nil
+        queue.sync { [self] in
+            if audioEngine.isRunning {
+                audioEngine.stop()
+            }
+            audioEngine.inputNode.removeTap(onBus: 0)
+
+            #if os(iOS)
+            if !skipSessionDeactivation {
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            }
+            #endif
+        }
+    }
+
+    /// Convert audio buffer to the target format
+    private static func convertBuffer(_ buffer: AVAudioPCMBuffer, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        guard let converter = AVAudioConverter(from: buffer.format, to: format) else { return nil }
+        let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / buffer.format.sampleRate)
+        guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
+
+        var error: NSError?
+        let status = converter.convert(to: convertedBuffer, error: &error) { _, outStatus in
+            outStatus.pointee = .haveData
+            return buffer
+        }
+
+        return status == .haveData ? convertedBuffer : nil
+    }
+}
+
+// MARK: - Authorization Helper
+
+/// Non-isolated helper to request speech authorization without actor isolation context
+/// This avoids dispatch queue assertion failures when the TCC callback runs on a background queue
+@available(iOS 26.0, macOS 26.0, *)
+private func requestSpeechAnalyzerAuthorizationStatus() async -> SFSpeechRecognizerAuthorizationStatus {
+    await withCheckedContinuation { continuation in
+        SFSpeechRecognizer.requestAuthorization { status in
+            continuation.resume(returning: status)
+        }
+    }
+}

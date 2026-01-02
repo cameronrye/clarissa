@@ -197,19 +197,10 @@ struct ChatView: View {
                 }
 
                 HStack(spacing: 12) {
-                    // Voice input button with glass (speech recognition / listening)
-                    // Hidden when voice mode is active since VoiceModeIndicator handles voice
+                    // Attachment menu button (+ button)
                     if !viewModel.isVoiceModeActive {
-                        voiceInputButton
+                        attachmentMenuButton
                     }
-
-                    // Image picker button
-                    imagePickerButton
-
-                    // Camera button (iOS only)
-                    #if os(iOS)
-                    cameraButton
-                    #endif
 
                     // Text input field
                     TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
@@ -227,13 +218,7 @@ struct ChatView: View {
                         .accessibilityLabel("Message input")
                         .accessibilityHint("Type your message to Clarissa. Press return to send.")
 
-                    // Enhance prompt button - only shown when there's text
-                    if hasInputText {
-                        enhanceButton
-                            .transition(.scale.combined(with: .opacity))
-                    }
-
-                    // Send button
+                    // Send/Mic button (contextual)
                     sendButton
                 }
             }
@@ -265,34 +250,10 @@ struct ChatView: View {
             }
 
             HStack(spacing: 12) {
-                // Voice input button - hidden when voice mode is active
+                // Attachment menu (+ button)
                 if !viewModel.isVoiceModeActive {
-                    Button {
-                        HapticManager.shared.mediumTap()
-                        Task { await viewModel.toggleVoiceInput() }
-                    } label: {
-                        ZStack {
-                            if viewModel.isRecording {
-                                Circle()
-                                    .fill(Color.red.opacity(0.2))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "waveform")
-                                    .font(.title3)
-                                    .foregroundStyle(.red)
-                                    .symbolEffect(.variableColor.iterative, options: .repeating)
-                            } else {
-                                Image(systemName: "mic.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(ClarissaTheme.gradient)
-                            }
-                        }
-                    }
-                    .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
-                    .accessibilityHint(viewModel.isRecording ? "Double-tap to stop recording and send transcribed text" : "Double-tap to speak your message instead of typing")
+                    legacyAttachmentMenuButton
                 }
-
-                // Image picker button
-                legacyImagePickerButton
 
                 TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -305,63 +266,8 @@ struct ChatView: View {
                     .accessibilityLabel("Message input")
                     .accessibilityHint("Type your message to Clarissa. Press return to send.")
 
-                let hasContent = hasInputText || viewModel.attachedImageData != nil
-                let sendDisabled = !hasContent || viewModel.isLoading
-                let enhanceDisabled = !hasInputText || viewModel.isLoading || viewModel.isEnhancing
-
-                // Enhance prompt button - only shown when there's text
-                if hasInputText {
-                    Button {
-                        Task { await viewModel.enhanceCurrentPrompt() }
-                    } label: {
-                        ZStack {
-                            Image(systemName: "wand.and.stars")
-                                .font(.title2)
-                                .foregroundStyle(.white)
-                                .frame(width: 36, height: 36)
-                                .background(
-                                    Circle()
-                                        .fill(viewModel.enhancementFailed ? Color.red.opacity(0.6) : (enhanceDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.cyan))
-                                )
-                                .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
-
-                            // Subtle failure indicator - small "x" badge
-                            if viewModel.enhancementFailed {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 14, height: 14)
-                                    .background(Circle().fill(Color.red.opacity(0.9)))
-                                    .offset(x: 12, y: -12)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                    }
-                    .disabled(enhanceDisabled)
-                    .animation(.easeInOut(duration: 0.2), value: viewModel.enhancementFailed)
-                    .accessibilityLabel(viewModel.enhancementFailed ? "Enhancement unavailable" : "Enhance prompt")
-                    .accessibilityHint(viewModel.enhancementFailed ? "Enhancement couldn't complete. Try again." : (enhanceDisabled ? "Type a message first to enable prompt enhancement" : "Double-tap to improve your prompt"))
-                    .transition(.scale.combined(with: .opacity))
-                }
-
-                // Send button
-                Button {
-                    HapticManager.shared.mediumTap()
-                    viewModel.sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .fill(sendDisabled ? Color.secondary.opacity(0.3) : ClarissaTheme.purple)
-                        )
-                }
-                .disabled(sendDisabled)
-                .accessibilityLabel("Send message")
-                .accessibilityHint(sendDisabled ? "Type a message or attach an image first" : "Double-tap to send your message to Clarissa")
+                // Contextual send/mic button
+                legacySendButton
             }
         }
         .animation(.easeInOut(duration: 0.2), value: hasInputText)
@@ -378,16 +284,84 @@ struct ChatView: View {
         }
     }
 
-    // MARK: - Legacy Image Picker Components
+    // MARK: - Legacy Input Components
 
-    private var legacyImagePickerButton: some View {
-        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-            Image(systemName: "photo.circle.fill")
+    private var legacyAttachmentMenuButton: some View {
+        Menu {
+            // Photo Library
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                Label("Photo Library", systemImage: "photo")
+            }
+
+            // Camera (iOS only)
+            #if os(iOS)
+            Button {
+                HapticManager.shared.lightTap()
+                viewModel.showCamera()
+            } label: {
+                Label("Take Photo", systemImage: "camera")
+            }
+            #endif
+        } label: {
+            Image(systemName: "plus.circle.fill")
                 .font(.title2)
                 .foregroundStyle(ClarissaTheme.gradient)
         }
-        .accessibilityLabel("Attach image")
-        .accessibilityHint("Double-tap to select an image for analysis")
+        .accessibilityLabel("Add attachment")
+        .accessibilityHint("Opens menu to attach photo or take a picture")
+    }
+
+    private var legacySendButton: some View {
+        let hasContent = hasInputText || viewModel.attachedImageData != nil
+        let isDisabled = viewModel.isLoading
+        let showMic = !hasContent && !viewModel.isRecording
+
+        return Button {
+            if showMic {
+                HapticManager.shared.mediumTap()
+                Task { await viewModel.toggleVoiceInput() }
+            } else if viewModel.isRecording {
+                HapticManager.shared.mediumTap()
+                Task { await viewModel.toggleVoiceInput() }
+            } else {
+                HapticManager.shared.mediumTap()
+                viewModel.sendMessage()
+            }
+        } label: {
+            ZStack {
+                if viewModel.isRecording {
+                    Circle()
+                        .fill(Color.red.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "stop.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+                } else if showMic || hasContent {
+                    Image(systemName: showMic ? "mic.circle.fill" : "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(ClarissaTheme.gradient)
+                } else {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 36, height: 36)
+        }
+        .disabled(isDisabled)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in
+                    if hasInputText && !viewModel.isLoading && !viewModel.isEnhancing {
+                        HapticManager.shared.heavyTap()
+                        Task {
+                            await viewModel.enhanceCurrentPrompt()
+                        }
+                    }
+                }
+        )
+        .accessibilityLabel(showMic ? "Start voice input" : (viewModel.isRecording ? "Stop recording" : "Send message"))
+        .accessibilityHint(showMic ? "Tap to speak your message" : (viewModel.isRecording ? "Tap to stop recording" : (hasContent ? "Tap to send, hold to enhance first" : "Type a message first")))
     }
 
     private func legacyImagePreviewView(data: Data) -> some View {
@@ -429,15 +403,64 @@ struct ChatView: View {
     // MARK: - Glass Input Components
 
     @available(iOS 26.0, macOS 26.0, *)
-    private var voiceInputButton: some View {
-        Button {
-            HapticManager.shared.mediumTap()
-            Task { await viewModel.toggleVoiceInput() }
+    private var attachmentMenuButton: some View {
+        Menu {
+            // Photo Library
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                Label("Photo Library", systemImage: "photo")
+            }
+
+            // Camera (iOS only)
+            #if os(iOS)
+            Button {
+                HapticManager.shared.lightTap()
+                viewModel.showCamera()
+            } label: {
+                Label("Take Photo", systemImage: "camera")
+            }
+            #endif
         } label: {
-            Image(systemName: viewModel.isRecording ? "waveform" : "mic")
+            Image(systemName: "plus")
                 .font(.title2)
                 .frame(width: 44, height: 44)
-                .symbolEffect(.variableColor.iterative, options: .repeating, isActive: viewModel.isRecording)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(
+            reduceMotion
+                ? Glass.regular
+                : Glass.regular.interactive(),
+            in: .circle
+        )
+        .glassEffectID("attachmentMenu", in: inputNamespace)
+        .accessibilityLabel("Add attachment")
+        .accessibilityHint("Opens menu to attach photo or take a picture")
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private var sendButton: some View {
+        let hasContent = hasInputText || viewModel.attachedImageData != nil
+        let isDisabled = viewModel.isLoading
+        let showMic = !hasContent && !viewModel.isRecording
+
+        return Button {
+            if showMic {
+                // Tap mic to start voice input
+                HapticManager.shared.mediumTap()
+                Task { await viewModel.toggleVoiceInput() }
+            } else if viewModel.isRecording {
+                // Tap to stop recording
+                HapticManager.shared.mediumTap()
+                Task { await viewModel.toggleVoiceInput() }
+            } else {
+                // Send message
+                HapticManager.shared.mediumTap()
+                viewModel.sendMessage()
+            }
+        } label: {
+            Image(systemName: showMic ? "mic" : (viewModel.isRecording ? "stop.fill" : "arrow.up"))
+                .font(.title2)
+                .frame(width: 44, height: 44)
+                .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
         .glassEffect(
@@ -446,123 +469,25 @@ struct ChatView: View {
                 : Glass.regular.interactive().tint(viewModel.isRecording ? ClarissaTheme.errorTint : nil),
             in: .circle
         )
-        .glassEffectID("voiceInput", in: inputNamespace)
-        .animation(.bouncy, value: viewModel.isRecording)
-        .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start voice input")
-        .accessibilityHint(viewModel.isRecording ? "Double-tap to stop recording and send transcribed text" : "Double-tap to speak your message instead of typing")
-    }
-
-    @available(iOS 26.0, macOS 26.0, *)
-    private var enhanceButton: some View {
-        let isDisabled = viewModel.isLoading || viewModel.isEnhancing
-        let failedTint = Color.red.opacity(0.6)
-
-        return Button {
-            Task { await viewModel.enhanceCurrentPrompt() }
-        } label: {
-            ZStack {
-                Image(systemName: "wand.and.stars")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .symbolEffect(.pulse, isActive: viewModel.isEnhancing)
-
-                // Subtle failure indicator - small "x" badge
-                if viewModel.enhancementFailed {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(Color.red.opacity(0.8)))
-                        .offset(x: 14, y: -14)
-                        .transition(.scale.combined(with: .opacity))
+        .glassEffectID("sendOrMic", in: inputNamespace)
+        .disabled(isDisabled)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in
+                    // Long press to enhance prompt before sending
+                    if hasInputText && !viewModel.isLoading && !viewModel.isEnhancing {
+                        HapticManager.shared.heavyTap()
+                        Task {
+                            await viewModel.enhanceCurrentPrompt()
+                        }
+                    }
                 }
-            }
-        }
-        .buttonStyle(.plain)
-        .glassEffect(
-            reduceMotion
-                ? Glass.regular.tint(viewModel.enhancementFailed ? failedTint : (viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil))
-                : Glass.regular.interactive().tint(viewModel.enhancementFailed ? failedTint : (viewModel.isEnhancing ? ClarissaTheme.enhanceTint : nil)),
-            in: .circle
         )
-        .glassEffectID("enhance", in: inputNamespace)
-        .animation(.bouncy, value: viewModel.isEnhancing)
-        .animation(.easeInOut(duration: 0.2), value: viewModel.enhancementFailed)
-        .disabled(isDisabled)
-        .accessibilityLabel(viewModel.enhancementFailed ? "Enhancement unavailable" : "Enhance prompt")
-        .accessibilityHint(viewModel.enhancementFailed ? "Enhancement couldn't complete. Try again." : (isDisabled ? "Processing..." : "Double-tap to improve your prompt"))
+        .accessibilityLabel(showMic ? "Start voice input" : (viewModel.isRecording ? "Stop recording" : "Send message"))
+        .accessibilityHint(showMic ? "Tap to speak your message" : (viewModel.isRecording ? "Tap to stop recording" : (hasContent ? "Tap to send, hold to enhance first" : "Type a message first")))
     }
 
-    @available(iOS 26.0, macOS 26.0, *)
-    private var sendButton: some View {
-        let hasContent = hasInputText || viewModel.attachedImageData != nil
-        let isDisabled = !hasContent || viewModel.isLoading
-
-        return Button {
-            HapticManager.shared.mediumTap()
-            viewModel.sendMessage()
-        } label: {
-            Image(systemName: "arrow.up")
-                .font(.title2)
-                .frame(width: 44, height: 44)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(
-            reduceMotion
-                ? Glass.regular
-                : Glass.regular.interactive(),
-            in: .circle
-        )
-        .glassEffectID("send", in: inputNamespace)
-        .disabled(isDisabled)
-        .accessibilityLabel("Send message")
-        .accessibilityHint(isDisabled ? "Type a message or attach an image first" : "Double-tap to send your message to Clarissa")
-    }
-
-    // MARK: - Image Picker Components
-
-    @available(iOS 26.0, macOS 26.0, *)
-    private var imagePickerButton: some View {
-        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-            Image(systemName: "photo")
-                .font(.title2)
-                .frame(width: 44, height: 44)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(
-            reduceMotion
-                ? Glass.regular
-                : Glass.regular.interactive(),
-            in: .circle
-        )
-        .glassEffectID("imagePicker", in: inputNamespace)
-        .accessibilityLabel("Attach image")
-        .accessibilityHint("Double-tap to select an image for analysis")
-    }
-
-    #if os(iOS)
-    @available(iOS 26.0, *)
-    private var cameraButton: some View {
-        Button {
-            HapticManager.shared.lightTap()
-            viewModel.showCamera()
-        } label: {
-            Image(systemName: "camera")
-                .font(.title2)
-                .frame(width: 44, height: 44)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(
-            reduceMotion
-                ? Glass.regular
-                : Glass.regular.interactive(),
-            in: .circle
-        )
-        .glassEffectID("camera", in: inputNamespace)
-        .accessibilityLabel("Take photo")
-        .accessibilityHint("Double-tap to open camera and capture an image for analysis")
-    }
-    #endif
+    // MARK: - Image Preview
 
     @available(iOS 26.0, macOS 26.0, *)
     private func imagePreviewView(data: Data) -> some View {

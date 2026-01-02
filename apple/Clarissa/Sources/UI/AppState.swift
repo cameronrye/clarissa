@@ -59,6 +59,7 @@ public final class AppState: ObservableObject {
     /// - clarissa://ask?q=<question> - Ask a question
     /// - clarissa://ask?q=<question>&new=true - Start new conversation and ask
     /// - clarissa://new - Start a new conversation
+    /// - clarissa://voice - Start voice mode
     /// - clarissa://memory?action=sync - Trigger memory sync from CLI
     public func handleURL(_ url: URL) {
         guard url.scheme == "clarissa" else { return }
@@ -83,6 +84,11 @@ public final class AppState: ObservableObject {
         case "new":
             // Handle new conversation: clarissa://new
             requestNewConversation = true
+            pendingQuestionSource = .urlScheme
+
+        case "voice":
+            // Handle voice mode: clarissa://voice
+            requestVoiceMode = true
             pendingQuestionSource = .urlScheme
 
         case "memory":

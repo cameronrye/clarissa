@@ -272,7 +272,10 @@ final class Agent: ObservableObject {
     }
 
     /// Run the agent with a user message
-    func run(_ userMessage: String) async throws -> String {
+    /// - Parameters:
+    ///   - userMessage: The text content of the user's message
+    ///   - imageData: Optional thumbnail image data to persist with the message
+    func run(_ userMessage: String, imageData: Data? = nil) async throws -> String {
         ClarissaLogger.agent.info("Starting agent run with message: \(userMessage.prefix(50), privacy: .public)...")
 
         guard let provider = provider else {
@@ -288,8 +291,8 @@ final class Agent: ObservableObject {
             messages[0] = .system(systemPrompt)
         }
 
-        // Add user message
-        messages.append(.user(userMessage))
+        // Add user message with optional image
+        messages.append(.user(userMessage, imageData: imageData))
 
         // Trim history to fit within Foundation Models context window
         trimHistoryIfNeeded()
