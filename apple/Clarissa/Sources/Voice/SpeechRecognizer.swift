@@ -2,8 +2,29 @@ import Foundation
 @preconcurrency import Speech
 @preconcurrency import AVFoundation
 
-/// Handles speech-to-text using Apple's Speech framework
-/// Supports both iOS and macOS platforms
+// MARK: - Speech Recognizer Protocol
+
+/// Protocol defining the interface for speech recognition
+/// Allows swapping between legacy SFSpeechRecognizer and new SpeechAnalyzer
+@MainActor
+protocol SpeechRecognizerProtocol: ObservableObject {
+    var transcript: String { get }
+    var isRecording: Bool { get }
+    var isAvailable: Bool { get }
+    var error: String? { get }
+    var useExternalAudioSession: Bool { get set }
+
+    func requestAuthorization() async -> Bool
+    func startRecording() async throws
+    func stopRecording()
+    func toggleRecording() async
+}
+
+// MARK: - Unified Speech Recognizer
+
+/// Unified speech recognizer that uses SpeechAnalyzer on iOS 26+ for better accuracy
+/// and falls back to legacy SFSpeechRecognizer on older versions.
+/// This provides significantly better accuracy on iOS 26+ (powers Notes and Voice Memos)
 @MainActor
 final class SpeechRecognizer: ObservableObject {
     @Published var transcript: String = ""
@@ -11,6 +32,14 @@ final class SpeechRecognizer: ObservableObject {
     @Published var isAvailable: Bool = false
     @Published var error: String?
 
+    /// Whether using the new SpeechAnalyzer API (iOS 26+)
+    private(set) var usingSpeechAnalyzer: Bool = false
+
+    // New SpeechAnalyzer implementation (iOS 26+)
+    @available(iOS 26.0, macOS 26.0, *)
+    private var speechAnalyzerRecognizer: SpeechAnalyzerRecognizer?
+
+    // Legacy implementation
     private let speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -21,18 +50,63 @@ final class SpeechRecognizer: ObservableObject {
     /// Whether audio session is managed externally (e.g., by VoiceManager in voice mode)
     /// When true, the recognizer won't configure or deactivate the audio session
     /// Note: Only applicable on iOS where AVAudioSession exists
-    var useExternalAudioSession: Bool = false
+    var useExternalAudioSession: Bool = false {
+        didSet {
+            if #available(iOS 26.0, macOS 26.0, *), usingSpeechAnalyzer {
+                speechAnalyzerRecognizer?.useExternalAudioSession = useExternalAudioSession
+            }
+        }
+    }
 
     init(locale: Locale = Locale(identifier: "en-US")) {
-        speechRecognizer = SFSpeechRecognizer(locale: locale)
-        isAvailable = speechRecognizer?.isAvailable ?? false
+        // Use SpeechAnalyzer on iOS 26+ for better accuracy
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let analyzer = SpeechAnalyzerRecognizer(locale: locale)
+            self.speechAnalyzerRecognizer = analyzer
+            self.usingSpeechAnalyzer = true
+            self.speechRecognizer = nil
+            self.isAvailable = true
+
+            // Observe SpeechAnalyzerRecognizer state
+            setupSpeechAnalyzerObservers(analyzer)
+        } else {
+            // Fall back to legacy SFSpeechRecognizer
+            self.speechRecognizer = SFSpeechRecognizer(locale: locale)
+            self.usingSpeechAnalyzer = false
+            self.isAvailable = speechRecognizer?.isAvailable ?? false
+        }
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    private func setupSpeechAnalyzerObservers(_ analyzer: SpeechAnalyzerRecognizer) {
+        // Use Combine to forward state from SpeechAnalyzerRecognizer
+        analyzer.$transcript
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$transcript)
+
+        analyzer.$isRecording
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isRecording)
+
+        analyzer.$isAvailable
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isAvailable)
+
+        analyzer.$error
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$error)
     }
 
     /// Request authorization for speech recognition
     func requestAuthorization() async -> Bool {
+        // Use SpeechAnalyzer on iOS 26+
+        if #available(iOS 26.0, macOS 26.0, *), usingSpeechAnalyzer, let analyzer = speechAnalyzerRecognizer {
+            return await analyzer.requestAuthorization()
+        }
+
+        // Legacy implementation
         let status = await requestSpeechAuthorizationStatus()
 
-        // Update state on MainActor (we're already on MainActor due to class annotation)
         switch status {
         case .authorized:
             isAvailable = true
@@ -49,6 +123,13 @@ final class SpeechRecognizer: ObservableObject {
 
     /// Start recording and transcribing speech
     func startRecording() async throws {
+        // Use SpeechAnalyzer on iOS 26+ for better accuracy
+        if #available(iOS 26.0, macOS 26.0, *), usingSpeechAnalyzer, let analyzer = speechAnalyzerRecognizer {
+            try await analyzer.startRecording()
+            return
+        }
+
+        // Legacy implementation using SFSpeechRecognizer
         guard let speechRecognizer, speechRecognizer.isAvailable else {
             throw SpeechError.recognizerUnavailable
         }
@@ -99,8 +180,9 @@ final class SpeechRecognizer: ObservableObject {
         }
     }
 
-    /// Stop recording and finalize transcription (internal implementation)
+    /// Stop recording and finalize transcription (internal implementation for legacy)
     private func stopRecordingInternal() {
+        // Legacy implementation only - SpeechAnalyzer handles its own state via observation
         let request = recognitionRequest
         let task = recognitionTask
 
@@ -118,11 +200,25 @@ final class SpeechRecognizer: ObservableObject {
 
     /// Stop recording and finalize transcription
     func stopRecording() {
+        // Use SpeechAnalyzer on iOS 26+
+        if #available(iOS 26.0, macOS 26.0, *), usingSpeechAnalyzer, let analyzer = speechAnalyzerRecognizer {
+            analyzer.stopRecording()
+            return
+        }
+
+        // Legacy implementation
         stopRecordingInternal()
     }
 
     /// Toggle recording state
     func toggleRecording() async {
+        // Use SpeechAnalyzer on iOS 26+
+        if #available(iOS 26.0, macOS 26.0, *), usingSpeechAnalyzer, let analyzer = speechAnalyzerRecognizer {
+            await analyzer.toggleRecording()
+            return
+        }
+
+        // Legacy implementation
         if isRecording {
             stopRecordingInternal()
         } else {

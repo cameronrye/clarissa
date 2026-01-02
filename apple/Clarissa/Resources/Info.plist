@@ -66,6 +66,8 @@
     <string>Clarissa needs to create calendar events on your behalf.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Clarissa needs access to your photos to analyze images you select for text recognition, object identification, and other visual analysis.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Clarissa uses the camera to capture photos and scan documents for text recognition, object identification, and other visual analysis.</string>
 
     <!-- URL Schemes for Deep Linking -->
     <key>CFBundleURLTypes</key>

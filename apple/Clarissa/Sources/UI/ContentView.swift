@@ -98,7 +98,9 @@ public struct ContentView: View {
             }
             Button("Start New", role: .destructive) {
                 HapticManager.shared.warning()
-                chatViewModel.startNewSession()
+                Task {
+                    await chatViewModel.startNewSession()
+                }
             }
         } message: {
             Text("Your current conversation will be saved to history.")

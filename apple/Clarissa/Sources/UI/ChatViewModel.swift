@@ -21,6 +21,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     @Published var showNewSessionConfirmation: Bool = false
     @Published var thinkingStatus: ThinkingStatus = .idle
     @Published var isSwitchingSession: Bool = false
+    /// Incremented when sessions are created, deleted, or modified to trigger history view refreshes
+    @Published var sessionVersion: Int = 0
 
     // MARK: - Enhancement Properties
     @Published var isEnhancing: Bool = false
@@ -38,6 +40,11 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     // MARK: - Image Attachment Properties
     @Published var attachedImageData: Data?
     @Published var attachedImagePreview: Data?  // Thumbnail for display
+
+    // MARK: - Camera Properties
+    #if os(iOS)
+    @Published var showCameraCapture: Bool = false
+    #endif
 
     private var agent: Agent
     private var appState: AppState?
@@ -382,6 +389,26 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         HapticManager.shared.lightTap()
     }
 
+    // MARK: - Camera Methods
+
+    #if os(iOS)
+    /// Show the camera capture interface
+    func showCamera() {
+        showCameraCapture = true
+    }
+
+    /// Handle captured image from camera
+    func handleCameraCapture(_ capturedImage: CapturedImage) {
+        attachImage(capturedImage.imageData)
+        showCameraCapture = false
+    }
+
+    /// Dismiss camera without capturing
+    func dismissCamera() {
+        showCameraCapture = false
+    }
+    #endif
+
     /// Create a thumbnail preview from image data
     private func createImagePreview(from data: Data) -> Data? {
         #if canImport(UIKit)
@@ -444,12 +471,14 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         if !messages.isEmpty {
             showNewSessionConfirmation = true
         } else {
-            startNewSession()
+            Task {
+                await startNewSession()
+            }
         }
     }
 
     /// Actually start a new session (called after confirmation or if no messages)
-    func startNewSession() {
+    func startNewSession() async {
         showNewSessionConfirmation = false
 
         // Cancel any running task first
@@ -465,13 +494,12 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Reset agent AND provider session to prevent context bleeding
         // This is critical for Foundation Models which cache the LanguageModelSession
-        Task {
-            await agent.resetForNewConversation()
-            await MainActor.run {
-                updateContextStats()
-            }
-            _ = await SessionManager.shared.startNewSession()
-        }
+        await agent.resetForNewConversation()
+        _ = await SessionManager.shared.startNewSession()
+        updateContextStats()
+
+        // Notify history views to refresh
+        sessionVersion += 1
     }
 
     /// Load the current session from persistence
@@ -528,6 +556,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     private func saveCurrentSession() async {
         let messagesToSave = agent.getMessagesForSave()
         await SessionManager.shared.updateCurrentSession(messages: messagesToSave)
+        // Notify history views to refresh (session may have new title or content)
+        sessionVersion += 1
     }
 
     /// Export conversation as markdown text
@@ -614,15 +644,32 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // If we deleted the active conversation, clear chat and show new conversation screen
         if isDeletingActiveConversation {
-            await MainActor.run {
-                startNewSession()
-            }
+            // Cancel any running task first
+            currentTask?.cancel()
+            currentTask = nil
+            isLoading = false
+            canCancel = false
+
+            // Clear UI state immediately
+            messages.removeAll()
+            streamingContent = ""
+            errorMessage = nil
+
+            // Reset agent AND provider session, then create new session synchronously
+            await agent.resetForNewConversation()
+            _ = await SessionManager.shared.startNewSession()
+            updateContextStats()
         }
+
+        // Notify history views to refresh
+        sessionVersion += 1
     }
 
     /// Rename a session
     func renameSession(id: UUID, newTitle: String) async {
         await SessionManager.shared.renameSession(id: id, newTitle: newTitle)
+        // Notify history views to refresh
+        sessionVersion += 1
     }
 
     // MARK: - AgentCallbacks

@@ -37,6 +37,7 @@
 - [x] Calculator - Math expression evaluation
 - [x] Remember - Long-term memory storage
 - [x] Tool settings UI with enable/disable
+- [x] Image analysis tool (basic)
 
 ### User Interface
 
@@ -52,39 +53,263 @@
 
 ### Platform Integration
 
-- [x] Siri Shortcuts (Ask Clarissa, New Conversation)
+- [x] Siri Shortcuts (Ask Clarissa, New Conversation, Voice Mode)
 - [x] macOS menu bar commands
 - [x] macOS keyboard shortcuts
 - [x] Keychain API key storage
+- [x] iCloud sync for memories (NSUbiquitousKeyValueStore)
 
 ---
 
-## Future Roadmap
+## Roadmap: Apple ML & AI Integration
 
-### Near Term
+Based on [Apple's Foundation Models framework](https://developer.apple.com/documentation/FoundationModels), [WWDC25 announcements](https://developer.apple.com/videos/play/wwdc2025/286/), and the [Apple Intelligence technical report](https://machinelearning.apple.com/research/apple-foundation-models-2025-updates).
 
-- [ ] watchOS companion app
-- [ ] Widget for quick questions
+### High Priority
+
+#### 1. SpeechAnalyzer Upgrade
+
+Replace legacy Speech framework with new SpeechAnalyzer API (iOS 26+).
+
+- [x] Integrate `SpeechAnalyzer` for real-time transcription
+- [x] Add `SpeechTranscriber` for audio file transcription
+- [x] Leverage streaming transcription with advanced accuracy
+- [x] Multi-language transcription support (15 languages)
+
+**Why**: SpeechAnalyzer is dramatically faster and more accurate than the legacy Speech framework. Powers Notes and Voice Memos transcription in iOS 26.
+
+**Resources**:
+
+- [WWDC25: Bring advanced speech-to-text to your app](https://developer.apple.com/videos/play/wwdc2025/277/)
+- [SpeechAnalyzer Documentation](https://developer.apple.com/documentation/Speech/bringing-advanced-speech-to-text-capabilities-to-your-app)
+
+#### 2. Guided Generation with @Generable
+
+Implement structured output using Foundation Models' guided generation.
+
+- [x] Create `@Generable` structs for action item extraction
+- [x] Add `@Guide` annotations for output constraints
+- [x] Implement `PartiallyGenerated` types for streaming UI
+- [x] Use guided generation for calendar event creation
+- [x] Extract entities (people, places, dates) with guaranteed structure
+
+**Why**: Guided generation guarantees structural correctness through constrained decoding. No more parsing JSON or handling malformed responses.
+
+**Example**:
+
+```swift
+@Generable
+struct ActionItems {
+    @Guide(description: "Tasks extracted from conversation", .count(1...5))
+    var tasks: [Task]
+
+    @Guide(description: "Calendar events to create")
+    var events: [CalendarEvent]
+}
+```
+
+**Resources**:
+
+- [WWDC25: Meet the Foundation Models framework](https://developer.apple.com/videos/play/wwdc2025/286/)
+- [WWDC25: Deep dive into the Foundation Models framework](https://developer.apple.com/videos/play/wwdc2025/301/)
+
+#### 3. Content Tagging Adapter
+
+Leverage Apple's specialized content tagging model.
+
+- [x] Integrate `SystemLanguageModel(useCase: .contentTagging)`
+- [x] Implement topic detection for conversations
+- [x] Add entity extraction (people, places, organizations)
+- [x] Detect emotions and actions in user messages
+- [x] Auto-tag saved memories with topics
+
+**Why**: The content tagging adapter is specifically trained for extraction tasks and outperforms the general model for these use cases.
+
+**Example**:
+
+```swift
+@Generable
+struct ConversationTags {
+    @Guide(.maximumCount(5))
+    let topics: [String]
+    @Guide(.maximumCount(3))
+    let emotions: [String]
+    @Guide(.maximumCount(3))
+    let actions: [String]
+}
+
+let session = LanguageModelSession(
+    model: SystemLanguageModel(useCase: .contentTagging),
+    instructions: "Extract topics, emotions, and actions from the text."
+)
+```
+
+#### 4. Enhanced Image Understanding
+
+Upgrade ImageAnalysisTool with Foundation Models vision capabilities.
+
+- [x] Process images with Foundation Models multimodal input
+- [x] Extract text from photos (receipts, documents, screenshots)
+- [x] Understand visual context for better responses
+- [x] Add camera integration for live image analysis
+- [x] Support multi-image reasoning
+
+**Why**: The on-device model now includes a 300M parameter vision encoder (ViTDet-L) that can understand images alongside text.
+
+**Resources**:
+
+- [Apple Foundation Models Tech Report 2025](https://machinelearning.apple.com/research/apple-foundation-models-tech-report-2025)
+
+### Medium Priority
+
+#### 5. Inline Siri Responses
+
+Enable Siri to answer without opening the app.
+
+- [ ] Create `ReturnsValue<String>` intents for inline responses
+- [ ] Add parameterized intents for common queries
+- [ ] Implement background Foundation Models inference
+- [ ] Support follow-up questions in Siri
+
+**Why**: Current intents require opening the app. Inline responses provide a seamless Siri experience.
+
+**Example**:
+
+```swift
+struct InlineAskIntent: AppIntent {
+    @Parameter(title: "Question")
+    var question: String
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        let session = LanguageModelSession()
+        let response = try await session.respond(to: question)
+        return .result(value: response.content)
+    }
+}
+```
+
+#### 6. Document OCR Tool
+
+Add document scanning using Vision framework updates.
+
+- [x] Implement full-document text recognition
+- [x] Add PDF text extraction
+- [x] Support handwriting recognition
+- [x] Integrate with camera for live document capture
+- [x] Extract structured data (tables, forms)
+
+**Why**: iOS 26 Vision framework includes enhanced document recognition that handles entire documents, not just regions.
+
+**Resources**:
+
+- [WWDC25: Read documents using the Vision framework](https://developer.apple.com/videos/play/wwdc2025/272/)
+
+#### 7. Streaming Partial Generation UI
+
+Leverage `PartiallyGenerated` types for responsive streaming.
+
+- [x] Implement snapshot streaming in ChatView
+- [x] Add progressive UI updates during generation
+- [x] Use SwiftUI animations to enhance perceived speed
+- [x] Order struct properties for optimal streaming display
+
+**Why**: Snapshot streaming with partial types provides better UX than raw token streaming, especially for structured outputs.
+
+**Example**:
+
+```swift
+@State private var plan: TripPlan.PartiallyGenerated?
+
+for try await partial in session.streamResponse(generating: TripPlan.self) {
+    withAnimation(.smooth) {
+        plan = partial
+    }
+}
+```
+
+#### 8. Private Cloud Compute Fallback
+
+Integrate Apple's privacy-preserving server inference.
+
+- [ ] Detect when task exceeds on-device capabilities
+- [ ] Seamlessly route to Private Cloud Compute
+- [ ] Maintain privacy guarantees with PCC
+- [ ] Handle PCC availability gracefully
+
+**Why**: Complex reasoning tasks may exceed the 3B on-device model. PCC provides server-scale inference while maintaining Apple's privacy guarantees.
+
+### Lower Priority
+
+#### 9. Custom Adapter Training
+
+Train Clarissa-specific adapters for specialized behaviors.
+
+- [ ] Set up Apple's adapter training toolkit (Python)
+- [ ] Create training data for Clarissa's conversation style
+- [ ] Train rank-32 adapters for memory handling
+- [ ] Implement adapter versioning for OS updates
+- [ ] Test adapter quality regression
+
+**Why**: Custom adapters can teach the model entirely new skills specific to Clarissa. However, they require retraining with each base model update.
+
+**Resources**:
+
+- [Adapter Training Toolkit](https://developer.apple.com/documentation/FoundationModels)
+
+#### 10. BNNSGraph Audio Processing
+
+Optimize real-time audio with Accelerate framework.
+
+- [ ] Implement BNNSGraph for voice activity detection
+- [ ] Add low-latency audio preprocessing
+- [ ] Optimize voice mode power consumption
+- [ ] Support real-time audio effects
+
+**Why**: BNNSGraph provides strict latency and memory control for real-time ML on CPU, ideal for voice processing.
+
+#### 11. MLX Integration
+
+Explore MLX for advanced local model capabilities.
+
+- [ ] Evaluate MLX for specialized tasks
+- [ ] Implement model fine-tuning on device
+- [ ] Add model comparison features
+- [ ] Support custom model deployment
+
+**Why**: MLX enables training and fine-tuning on Apple Silicon's unified memory, opening possibilities for personalization.
+
+---
+
+## Platform Expansion
+
+### watchOS
+
+- [ ] Companion app with voice-first interface
+- [ ] Complications for quick actions
+- [ ] Watch-to-phone handoff
+- [ ] Standalone mode with on-device AI
+
+### visionOS
+
+- [ ] Spatial interface design
+- [ ] Eye tracking for navigation
+- [ ] Virtual keyboard integration
+- [ ] Immersive voice mode
+
+### CarPlay
+
+- [ ] Dashboard quick actions
+- [ ] Voice-only interaction mode
+- [ ] Navigation integration
+- [ ] Hands-free conversation
+
+### Widgets & Extensions
+
+- [ ] Interactive widgets for quick questions
 - [ ] Share extension for web pages
-- [x] iCloud sync for memories (NSUbiquitousKeyValueStore)
-- [ ] Multi-language voice support
-
-### Medium Term
-
-- [ ] Image analysis via Vision framework
-- [ ] Document scanning and OCR
-- [ ] Apple Music integration
-- [ ] HomeKit device control
-- [ ] Focus mode awareness
+- [ ] Lock Screen widgets
+- [ ] Control Center button
 - [ ] Live Activities for long-running tasks
-
-### Long Term
-
-- [ ] visionOS spatial interface
-- [ ] CarPlay dashboard
-- [ ] Apple Watch complications
-- [ ] Multi-agent conversations
-- [ ] Custom trained adapters
 
 ---
 
@@ -94,8 +319,9 @@
 
 - Minimize memory footprint on device
 - Optimize Foundation Models session reuse
-- Efficient context window management
+- Efficient context window management (4096 tokens)
 - Background task completion
+- Prewarm sessions for instant response
 
 ### Privacy
 
@@ -103,6 +329,7 @@
 - No telemetry or analytics
 - Keychain-secured credentials
 - Transparent permission requests
+- PCC for privacy-preserving cloud inference
 
 ### Accessibility
 
@@ -111,6 +338,50 @@
 - Reduce Motion compatibility
 - Reduce Transparency fallbacks
 - High Contrast mode support
+- Voice-first interaction mode
+
+---
+
+## Key Apple Resources
+
+### Documentation
+
+- [Foundation Models Framework](https://developer.apple.com/documentation/FoundationModels)
+- [Speech Framework (SpeechAnalyzer)](https://developer.apple.com/documentation/speech)
+- [Vision Framework](https://developer.apple.com/documentation/vision)
+- [App Intents](https://developer.apple.com/documentation/appintents)
+- [Generative AI HIG](https://developer.apple.com/design/human-interface-guidelines/generative-ai)
+
+### WWDC25 Sessions
+
+| Session | Topic |
+|---------|-------|
+| [286](https://developer.apple.com/videos/play/wwdc2025/286/) | Meet the Foundation Models framework |
+| [301](https://developer.apple.com/videos/play/wwdc2025/301/) | Deep dive into the Foundation Models framework |
+| [277](https://developer.apple.com/videos/play/wwdc2025/277/) | Bring advanced speech-to-text with SpeechAnalyzer |
+| [272](https://developer.apple.com/videos/play/wwdc2025/272/) | Read documents using Vision framework |
+
+### Research
+
+- [Apple Foundation Models 2025 Updates](https://machinelearning.apple.com/research/apple-foundation-models-2025-updates)
+- [Apple Intelligence Tech Report 2025](https://machinelearning.apple.com/research/apple-foundation-models-tech-report-2025)
+
+---
+
+## Implementation Priority Matrix
+
+| Priority | Feature | Effort | Impact |
+|----------|---------|--------|--------|
+| 1 | SpeechAnalyzer upgrade | Medium | High |
+| 2 | Guided Generation (@Generable) | Low | High |
+| 3 | Content Tagging adapter | Low | Medium |
+| 4 | Enhanced Image Understanding | Medium | High |
+| 5 | Inline Siri responses | Medium | Medium |
+| 6 | Document OCR tool | Medium | Medium |
+| 7 | Streaming partial types | Low | Medium |
+| 8 | Private Cloud Compute | High | Medium |
+| 9 | Custom adapter training | High | Low |
+| 10 | BNNSGraph audio | Medium | Low |
 
 ---
 
@@ -118,11 +389,12 @@
 
 | Platform | Status | Minimum Version |
 |----------|--------|-----------------|
-| iOS | ✅ Available | iOS 26.0 |
-| macOS | ✅ Available | macOS 26.0 |
-| iPadOS | ✅ Available | iPadOS 26.0 |
-| watchOS | 🔜 Planned | watchOS 26.0 |
-| visionOS | 🔮 Future | visionOS 26.0 |
+| iOS | Available | iOS 26.0 |
+| macOS | Available | macOS 26.0 |
+| iPadOS | Available | iPadOS 26.0 |
+| watchOS | Planned | watchOS 26.0 |
+| visionOS | Future | visionOS 26.0 |
+| CarPlay | Planned | iOS 26.0 |
 
 ---
 

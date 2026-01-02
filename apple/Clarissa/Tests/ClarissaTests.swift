@@ -1771,7 +1771,6 @@ struct ImageAnalysisToolTests {
             return
         }
 
-        #expect(properties["pdfBase64"] != nil)
         #expect(properties["pdfURL"] != nil)
         #expect(properties["pageRange"] != nil)
     }
@@ -1801,28 +1800,38 @@ struct ImageAnalysisToolTests {
     }
 
     @Test("Image analysis tool unknown action throws error")
-    func testImageAnalysisUnknownAction() async {
+    func testImageAnalysisUnknownAction() async throws {
         let tool = ImageAnalysisTool()
-        // Provide valid image data to get past the image loading check
-        let testImageBase64 = createTestImageBase64()
+        // Provide valid image URL to get past the image loading check
+        guard let imageURL = createTestImageURL() else {
+            Issue.record("Failed to create test image file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: imageURL) }
+
         await #expect(throws: ToolError.self) {
-            _ = try await tool.execute(arguments: "{\"action\": \"unknown\", \"imageBase64\": \"\(testImageBase64)\"}")
+            _ = try await tool.execute(arguments: "{\"action\": \"unknown\", \"imageURL\": \"\(imageURL.absoluteString)\"}")
         }
     }
 
-    @Test("Image analysis tool invalid base64 throws error")
-    func testImageAnalysisInvalidBase64() async {
+    @Test("Image analysis tool invalid URL throws error")
+    func testImageAnalysisInvalidURL() async {
         let tool = ImageAnalysisTool()
-        await #expect(throws: ToolError.self) {
-            _ = try await tool.execute(arguments: "{\"action\": \"ocr\", \"imageBase64\": \"not-valid-base64!!!\"}")
+        await #expect(throws: (any Error).self) {
+            _ = try await tool.execute(arguments: "{\"action\": \"ocr\", \"imageURL\": \"file:///nonexistent/path.png\"}")
         }
     }
 
     @Test("Image analysis tool OCR with valid image")
     func testImageAnalysisOCR() async throws {
         let tool = ImageAnalysisTool()
-        let testImageBase64 = createTestImageBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"ocr\", \"imageBase64\": \"\(testImageBase64)\"}")
+        guard let imageURL = createTestImageURL() else {
+            Issue.record("Failed to create test image file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: imageURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"ocr\", \"imageURL\": \"\(imageURL.absoluteString)\"}")
 
         // Result should be valid JSON with text and lineCount
         guard let data = result.data(using: .utf8),
@@ -1838,8 +1847,13 @@ struct ImageAnalysisToolTests {
     @Test("Image analysis tool classify with valid image")
     func testImageAnalysisClassify() async throws {
         let tool = ImageAnalysisTool()
-        let testImageBase64 = createTestImageBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"classify\", \"imageBase64\": \"\(testImageBase64)\"}")
+        guard let imageURL = createTestImageURL() else {
+            Issue.record("Failed to create test image file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: imageURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"classify\", \"imageURL\": \"\(imageURL.absoluteString)\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1853,8 +1867,13 @@ struct ImageAnalysisToolTests {
     @Test("Image analysis tool detect faces with valid image")
     func testImageAnalysisDetectFaces() async throws {
         let tool = ImageAnalysisTool()
-        let testImageBase64 = createTestImageBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"detect_faces\", \"imageBase64\": \"\(testImageBase64)\"}")
+        guard let imageURL = createTestImageURL() else {
+            Issue.record("Failed to create test image file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: imageURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"detect_faces\", \"imageURL\": \"\(imageURL.absoluteString)\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1869,8 +1888,13 @@ struct ImageAnalysisToolTests {
     @Test("Image analysis tool detect document with valid image")
     func testImageAnalysisDetectDocument() async throws {
         let tool = ImageAnalysisTool()
-        let testImageBase64 = createTestImageBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"detect_document\", \"imageBase64\": \"\(testImageBase64)\"}")
+        guard let imageURL = createTestImageURL() else {
+            Issue.record("Failed to create test image file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: imageURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"detect_document\", \"imageURL\": \"\(imageURL.absoluteString)\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1884,8 +1908,13 @@ struct ImageAnalysisToolTests {
     @Test("PDF page count with valid PDF")
     func testPDFPageCount() async throws {
         let tool = ImageAnalysisTool()
-        let testPDFBase64 = createTestPDFBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"pdf_page_count\", \"pdfBase64\": \"\(testPDFBase64)\"}")
+        guard let pdfURL = createTestPDFURL() else {
+            Issue.record("Failed to create test PDF file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: pdfURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_page_count\", \"pdfURL\": \"\(pdfURL.absoluteString)\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1900,8 +1929,13 @@ struct ImageAnalysisToolTests {
     @Test("PDF extract text with valid PDF")
     func testPDFExtractText() async throws {
         let tool = ImageAnalysisTool()
-        let testPDFBase64 = createTestPDFBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\", \"pdfBase64\": \"\(testPDFBase64)\"}")
+        guard let pdfURL = createTestPDFURL() else {
+            Issue.record("Failed to create test PDF file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: pdfURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\", \"pdfURL\": \"\(pdfURL.absoluteString)\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1918,8 +1952,13 @@ struct ImageAnalysisToolTests {
     @Test("PDF OCR with valid PDF")
     func testPDFOCR() async throws {
         let tool = ImageAnalysisTool()
-        let testPDFBase64 = createTestPDFBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"pdf_ocr\", \"pdfBase64\": \"\(testPDFBase64)\"}")
+        guard let pdfURL = createTestPDFURL() else {
+            Issue.record("Failed to create test PDF file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: pdfURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_ocr\", \"pdfURL\": \"\(pdfURL.absoluteString)\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1935,8 +1974,13 @@ struct ImageAnalysisToolTests {
     @Test("PDF extract text with page range")
     func testPDFExtractTextWithPageRange() async throws {
         let tool = ImageAnalysisTool()
-        let testPDFBase64 = createTestPDFBase64()
-        let result = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\", \"pdfBase64\": \"\(testPDFBase64)\", \"pageRange\": \"1\"}")
+        guard let pdfURL = createTestPDFURL() else {
+            Issue.record("Failed to create test PDF file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: pdfURL) }
+
+        let result = try await tool.execute(arguments: "{\"action\": \"pdf_extract_text\", \"pdfURL\": \"\(pdfURL.absoluteString)\", \"pageRange\": \"1\"}")
 
         guard let data = result.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1947,16 +1991,22 @@ struct ImageAnalysisToolTests {
         #expect(json["pagesExtracted"] as? Int == 1)
     }
 
-    @Test("Invalid PDF base64 throws error")
-    func testInvalidPDFBase64() async {
+    @Test("Invalid PDF URL throws error")
+    func testInvalidPDFURL() async {
         let tool = ImageAnalysisTool()
         await #expect(throws: ToolError.self) {
-            _ = try await tool.execute(arguments: "{\"action\": \"pdf_page_count\", \"pdfBase64\": \"not-valid-pdf\"}")
+            _ = try await tool.execute(arguments: "{\"action\": \"pdf_page_count\", \"pdfURL\": \"file:///nonexistent/path.pdf\"}")
         }
     }
 
     // Helper to create a minimal valid PNG image as base64
     private func createTestImageBase64() -> String {
+        guard let data = createTestImageData() else { return "" }
+        return data.base64EncodedString()
+    }
+
+    // Helper to create test image data
+    private func createTestImageData() -> Data? {
         #if canImport(UIKit)
         let size = CGSize(width: 100, height: 100)
         let renderer = UIGraphicsImageRenderer(size: size)
@@ -1968,7 +2018,7 @@ struct ImageAnalysisToolTests {
             let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 24)]
             text.draw(at: CGPoint(x: 20, y: 40), withAttributes: attrs)
         }
-        return image.pngData()?.base64EncodedString() ?? ""
+        return image.pngData()
         #else
         let size = NSSize(width: 100, height: 100)
         let image = NSImage(size: size)
@@ -1982,14 +2032,26 @@ struct ImageAnalysisToolTests {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return ""
+            return nil
         }
-        return pngData.base64EncodedString()
+        return pngData
         #endif
     }
 
-    // Helper to create a minimal valid PDF as base64
-    private func createTestPDFBase64() -> String {
+    // Helper to create a test image file URL
+    private func createTestImageURL() -> URL? {
+        guard let data = createTestImageData() else { return nil }
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test_image_\(UUID().uuidString).png")
+        do {
+            try data.write(to: tempURL)
+            return tempURL
+        } catch {
+            return nil
+        }
+    }
+
+    // Helper to create test PDF data
+    private func createTestPDFData() -> Data {
         let pdfData = NSMutableData()
         #if canImport(UIKit)
         let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size
@@ -2003,7 +2065,7 @@ struct ImageAnalysisToolTests {
         let pageRect = NSRect(x: 0, y: 0, width: 612, height: 792)
         guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
               let pdfContext = CGContext(consumer: consumer, mediaBox: nil, nil) else {
-            return ""
+            return Data()
         }
         var mediaBox = pageRect
         pdfContext.beginPage(mediaBox: &mediaBox)
@@ -2016,7 +2078,25 @@ struct ImageAnalysisToolTests {
         pdfContext.endPage()
         pdfContext.closePDF()
         #endif
-        return (pdfData as Data).base64EncodedString()
+        return pdfData as Data
+    }
+
+    // Helper to create a minimal valid PDF as base64
+    private func createTestPDFBase64() -> String {
+        return createTestPDFData().base64EncodedString()
+    }
+
+    // Helper to create a test PDF file URL
+    private func createTestPDFURL() -> URL? {
+        let data = createTestPDFData()
+        guard !data.isEmpty else { return nil }
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test_pdf_\(UUID().uuidString).pdf")
+        do {
+            try data.write(to: tempURL)
+            return tempURL
+        } catch {
+            return nil
+        }
     }
 }
 
@@ -2289,3 +2369,228 @@ struct ImagePreProcessorTests {
         #expect(result.error?.contains("decode") == true)
     }
 }
+
+// MARK: - Guided Generation Struct Tests
+// Note: Additional GuidedGeneration tests are in NewFeaturesTests.swift
+
+#if canImport(FoundationModels)
+@Suite("Guided Generation Struct Tests")
+struct GuidedGenerationStructTests {
+
+    @Test("ActionTask struct properties")
+    func testActionTaskStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let task = ActionTask(
+                title: "Complete report",
+                priority: "high",
+                dueDate: "2024-01-15",
+                assignee: "John"
+            )
+            #expect(task.title == "Complete report")
+            #expect(task.priority == "high")
+            #expect(task.dueDate == "2024-01-15")
+            #expect(task.assignee == "John")
+        }
+    }
+
+    @Test("ExtractedEntities struct properties")
+    func testExtractedEntitiesStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let entities = ExtractedEntities(
+                people: ["Alice", "Bob"],
+                places: ["New York", "London"],
+                organizations: ["Apple", "Google"],
+                dates: ["January 15, 2024"],
+                topics: ["technology", "business"]
+            )
+            #expect(entities.people.count == 2)
+            #expect(entities.places.contains("New York"))
+            #expect(entities.organizations.contains("Apple"))
+            #expect(entities.dates.count == 1)
+            #expect(entities.topics.count == 2)
+        }
+    }
+
+    @Test("ConversationAnalysis struct properties")
+    func testConversationAnalysisStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let analysis = ConversationAnalysis(
+                title: "Weather Discussion",
+                summary: "User asked about weather in NYC",
+                topics: ["weather", "travel"],
+                sentiment: "neutral",
+                category: "informational"
+            )
+            #expect(analysis.title == "Weather Discussion")
+            #expect(analysis.sentiment == "neutral")
+            #expect(analysis.category == "informational")
+            #expect(analysis.topics.count == 2)
+        }
+    }
+
+    @Test("SmartReplies struct properties")
+    func testSmartRepliesStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let replies = SmartReplies(
+                suggestions: ["Tell me more", "Thanks!", "What about tomorrow?"]
+            )
+            #expect(replies.suggestions.count == 3)
+            #expect(replies.suggestions.contains("Thanks!"))
+        }
+    }
+
+    @Test("SessionTitle struct properties")
+    func testSessionTitleStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let title = SessionTitle(title: "Weather Inquiry")
+            #expect(title.title == "Weather Inquiry")
+            #expect(title.title.count <= 50)
+        }
+    }
+}
+
+// MARK: - Content Tagger Struct Tests
+
+@Suite("Content Tagger Struct Tests")
+struct ContentTaggerStructTests {
+
+    @Test("ContentTags struct properties")
+    func testContentTagsStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let tags = ContentTags(
+                topics: ["technology", "AI"],
+                emotions: ["excited", "curious"],
+                actions: ["learn", "explore"],
+                category: "question"
+            )
+            #expect(tags.topics.count == 2)
+            #expect(tags.emotions.contains("excited"))
+            #expect(tags.actions.count == 2)
+            #expect(tags.category == "question")
+        }
+    }
+
+    @Test("UserIntent struct properties")
+    func testUserIntentStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let intent = UserIntent(
+                primaryIntent: "task",
+                confidence: "high",
+                suggestedTools: ["calendar", "reminders"],
+                isFollowUp: false
+            )
+            #expect(intent.primaryIntent == "task")
+            #expect(intent.confidence == "high")
+            #expect(intent.suggestedTools.count == 2)
+            #expect(intent.isFollowUp == false)
+        }
+    }
+
+    @Test("PriorityAssessment struct properties")
+    func testPriorityAssessmentStruct() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let priority = PriorityAssessment(
+                urgency: "high",
+                timeSensitivity: "today",
+                responsePriority: 2
+            )
+            #expect(priority.urgency == "high")
+            #expect(priority.timeSensitivity == "today")
+            #expect(priority.responsePriority == 2)
+        }
+    }
+}
+
+// MARK: - Enhanced Image Analysis Tests
+
+@Suite("Enhanced Image Analysis Tests")
+struct EnhancedImageAnalysisTests {
+
+    @Test("EnhancedImageAnalysis contextString with description")
+    func testEnhancedAnalysisWithDescription() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let analysis = EnhancedImageAnalysis(
+                description: "A photo of a sunset over the ocean",
+                extractedText: "",
+                classifications: ["sunset", "ocean"],
+                faceCount: 0,
+                hasDocument: false,
+                entities: ["beach", "waves"],
+                suggestedActions: ["Set as wallpaper"]
+            )
+            #expect(analysis.contextString.contains("Description:"))
+            #expect(analysis.contextString.contains("sunset over the ocean"))
+            #expect(analysis.contextString.contains("sunset, ocean"))
+        }
+    }
+
+    @Test("EnhancedImageAnalysis contextString with text")
+    func testEnhancedAnalysisWithText() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let analysis = EnhancedImageAnalysis(
+                description: "A receipt from a store",
+                extractedText: "ACME Store\nTotal: $45.99\nDate: 2024-01-15",
+                classifications: ["document"],
+                faceCount: 0,
+                hasDocument: true,
+                entities: ["ACME Store", "$45.99"],
+                suggestedActions: ["Track expense"]
+            )
+            #expect(analysis.contextString.contains("Text content:"))
+            #expect(analysis.contextString.contains("ACME Store"))
+            #expect(analysis.contextString.contains("Key elements:"))
+        }
+    }
+
+    @Test("EnhancedImageAnalysis contextString truncates long text")
+    func testEnhancedAnalysisTruncatesText() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let longText = String(repeating: "a", count: 1500)
+            let analysis = EnhancedImageAnalysis(
+                description: "",
+                extractedText: longText,
+                classifications: [],
+                faceCount: 0,
+                hasDocument: false,
+                entities: [],
+                suggestedActions: []
+            )
+            #expect(analysis.contextString.contains("..."))
+            // Should truncate at 1000 chars
+            #expect(analysis.contextString.count < 1500)
+        }
+    }
+
+    @Test("EnhancedImageAnalysis contextString empty returns placeholder")
+    func testEnhancedAnalysisEmpty() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let analysis = EnhancedImageAnalysis(
+                description: "",
+                extractedText: "",
+                classifications: [],
+                faceCount: 0,
+                hasDocument: false,
+                entities: [],
+                suggestedActions: []
+            )
+            #expect(analysis.contextString.contains("No notable content"))
+        }
+    }
+
+    @Test("EnhancedImageAnalysis with faces")
+    func testEnhancedAnalysisWithFaces() {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let analysis = EnhancedImageAnalysis(
+                description: "Group photo",
+                extractedText: "",
+                classifications: ["people"],
+                faceCount: 5,
+                hasDocument: false,
+                entities: [],
+                suggestedActions: []
+            )
+            #expect(analysis.contextString.contains("Faces: 5"))
+        }
+    }
+}
+#endif

@@ -153,6 +153,9 @@ struct ChatView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        #if os(iOS)
+        .modifier(CameraCaptureModifier(viewModel: viewModel))
+        #endif
         #if os(macOS)
         // Focus the input field on appearance and handle keyboard navigation
         .onAppear {
@@ -202,6 +205,11 @@ struct ChatView: View {
 
                     // Image picker button
                     imagePickerButton
+
+                    // Camera button (iOS only)
+                    #if os(iOS)
+                    cameraButton
+                    #endif
 
                     // Text input field
                     TextField("Message Clarissa...", text: $viewModel.inputText, axis: .vertical)
@@ -531,6 +539,30 @@ struct ChatView: View {
         .accessibilityLabel("Attach image")
         .accessibilityHint("Double-tap to select an image for analysis")
     }
+
+    #if os(iOS)
+    @available(iOS 26.0, *)
+    private var cameraButton: some View {
+        Button {
+            HapticManager.shared.lightTap()
+            viewModel.showCamera()
+        } label: {
+            Image(systemName: "camera")
+                .font(.title2)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(
+            reduceMotion
+                ? Glass.regular
+                : Glass.regular.interactive(),
+            in: .circle
+        )
+        .glassEffectID("camera", in: inputNamespace)
+        .accessibilityLabel("Take photo")
+        .accessibilityHint("Double-tap to open camera and capture an image for analysis")
+    }
+    #endif
 
     @available(iOS 26.0, macOS 26.0, *)
     private func imagePreviewView(data: Data) -> some View {
@@ -1215,11 +1247,18 @@ struct SessionHistoryView: View {
             await loadData()
             isLoading = false
         }
+        .onChange(of: viewModel.sessionVersion) { _, _ in
+            Task {
+                await loadData()
+            }
+        }
         .alert("Delete Conversation", isPresented: $showDeleteAlert, presenting: sessionToDelete) { session in
             Button("Delete", role: .destructive) {
                 Task {
                     await viewModel.deleteSession(id: session.id)
                     sessions.removeAll { $0.id == session.id }
+                    // Refresh currentSessionId since it may have changed after deletion
+                    currentSessionId = await viewModel.getCurrentSessionId()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -1400,6 +1439,8 @@ struct SessionHistoryView: View {
             for session in sessionsToDelete {
                 await viewModel.deleteSession(id: session.id)
             }
+            // Refresh currentSessionId since it may have changed after deletion
+            currentSessionId = await viewModel.getCurrentSessionId()
         }
     }
 
@@ -1415,6 +1456,8 @@ struct SessionHistoryView: View {
             for id in idsToDelete {
                 await viewModel.deleteSession(id: id)
             }
+            // Refresh currentSessionId since it may have changed after deletion
+            currentSessionId = await viewModel.getCurrentSessionId()
         }
     }
     #endif
@@ -1717,6 +1760,33 @@ struct ActivityViewController: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif
+
+// MARK: - Camera Capture Modifier
+
+#if os(iOS)
+/// ViewModifier that adds camera capture sheet to the view
+struct CameraCaptureModifier: ViewModifier {
+    @ObservedObject var viewModel: ChatViewModel
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .fullScreenCover(isPresented: $viewModel.showCameraCapture) {
+                    CameraCaptureView(
+                        onImageCaptured: { capturedImage in
+                            viewModel.handleCameraCapture(capturedImage)
+                        },
+                        onDismiss: {
+                            viewModel.dismissCamera()
+                        }
+                    )
+                }
+        } else {
+            content
+        }
+    }
 }
 #endif
 

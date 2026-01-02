@@ -22,7 +22,9 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 
 ### Voice Capabilities
 
-- **Speech recognition** for hands-free input
+- **SpeechAnalyzer** (iOS 26+) for dramatically faster, more accurate transcription
+- **Audio file transcription** using SpeechTranscriber with 15+ language support
+- **Legacy fallback** to SFSpeechRecognizer on older devices
 - **Text-to-speech** with configurable voice and speed
 - **Voice mode** for full hands-free conversation
 - **Audio interruption handling** for phone calls, Siri, etc.
@@ -37,9 +39,18 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 - **Location** - Get current position with reverse geocoding
 - **Web Fetch** - Fetch and parse web content
 - **Calculator** - Mathematical expression evaluation
-- **Remember** - Store long-term memories
-- **Image Analysis** - OCR, object detection, face detection (Vision framework)
-- **PDF Analysis** - Text extraction, OCR for scanned documents (PDFKit + Vision)
+- **Remember** - Store long-term memories with auto-tagging (iOS 26+)
+- **Image Analysis** - OCR, handwriting, object detection, face detection, multi-image comparison
+- **Document OCR** - Full-document recognition, PDF extraction, handwriting, table detection (iOS 26+)
+- **Document Scanner** - Live camera with auto-detection, corner overlay, perspective correction (iOS 26+)
+- **Camera Capture** - Live photo capture for AI image analysis (iOS 26+)
+
+### AI Enhancements (iOS 26+)
+
+- **Guided Generation** - Structured output with `@Generable` for action items, entities, analysis
+- **Content Tagging** - Topic detection, emotion analysis, intent classification
+- **Streaming Partial UI** - Progressive display of structured results with animations
+- **Enhanced Image Understanding** - Foundation Models vision encoder with multi-image reasoning
 
 ### User Interface
 
@@ -68,12 +79,13 @@ apple/Clarissa/
 ├── Sources/
 │   ├── App/           # App entry point and state
 │   ├── Agent/         # ReAct agent implementation
+│   ├── Camera/        # Camera capture for image analysis (iOS 26+)
 │   ├── Intents/       # Siri Shortcuts integration
-│   ├── LLM/           # LLM providers (Foundation Models, OpenRouter)
-│   ├── Persistence/   # Session, memory, and keychain management
-│   ├── Tools/         # Tool implementations
-│   ├── UI/            # SwiftUI views and components
-│   └── Voice/         # Speech recognition and synthesis
+│   ├── LLM/           # LLM providers, guided generation, content tagging
+│   ├── Persistence/   # Session, memory (with auto-tagging), and keychain
+│   ├── Tools/         # Tool implementations including DocumentOCR
+│   ├── UI/            # SwiftUI views, streaming partial views
+│   └── Voice/         # SpeechAnalyzer, SpeechRecognizer, synthesis
 ├── Resources/         # Info.plist, assets
 └── Tests/             # Unit tests
 ```
@@ -126,6 +138,7 @@ The app requests the following permissions as needed:
 | **Location** | Get current location for weather and context |
 | **Microphone** | Voice input for hands-free mode |
 | **Speech Recognition** | Transcribe voice to text |
+| **Camera** | Capture photos for AI image analysis |
 | **Photo Library** | Analyze images for text, objects, and faces |
 
 ## Architecture
@@ -148,6 +161,18 @@ The agent implements a ReAct (Reasoning + Acting) loop:
   - Channel token parsing for clean output
   - Session prewarming for faster first response
 
+- **GuidedGenerationService**: Structured output using guided generation
+  - Action item extraction (tasks, events, reminders)
+  - Entity extraction (people, places, organizations, dates)
+  - Conversation analysis with sentiment and categorization
+  - Session title generation
+
+- **ContentTagger**: Specialized content tagging adapter
+  - Topic detection and emotion analysis
+  - Intent classification with tool suggestions
+  - Priority and urgency assessment
+  - Auto-tagging for memories
+
 - **OpenRouterProvider**: Cloud fallback using OpenRouter API
   - 100+ model options (Claude, GPT-4, Gemini, Llama, etc.)
   - Secure API key storage in Keychain
@@ -165,14 +190,17 @@ Tools are registered with the `ToolRegistry` and implement the `ClarissaTool` pr
 | `location` | CoreLocation | Yes |
 | `web_fetch` | URLSession web fetching | No |
 | `calculator` | Math expression evaluation | No |
-| `remember` | Long-term memory storage | No |
-| `image_analysis` | Vision + PDFKit (OCR, classification, faces, PDF text) | No |
+| `remember` | Long-term memory storage with auto-tagging | No |
+| `image_analysis` | Vision + Foundation Models (OCR, classification, faces, AI descriptions) | No |
 
 ### Voice System
 
 The voice system uses a unified `VoiceManager` that coordinates:
 
-- **SpeechRecognizer**: On-device speech recognition using `Speech` framework
+- **SpeechRecognizer**: Unified interface with automatic backend selection
+  - **SpeechAnalyzerRecognizer** (iOS 26+): New SpeechAnalyzer API for better accuracy
+  - **Legacy fallback**: SFSpeechRecognizer on older devices
+- **AudioFileTranscriber**: Transcribe audio files with multi-language support
 - **SpeechSynthesizer**: Text-to-speech with configurable Siri voices
 - **AudioSessionManager**: Handles audio routing, interruptions, and device changes
 
@@ -185,15 +213,9 @@ Liquid Glass components in `GlassComponents.swift`:
 - `ClarissaStateIndicator` - Status display (idle, listening, thinking, speaking)
 - `GlassThinkingIndicator` - Animated loading indicator with glass backing
 - `AccessibleGlassModifier` - Glass effects with full accessibility support
-
-## Related Documentation
-
-- [APPLE_FOUNDATION_MODELS_GUIDE.md](APPLE_FOUNDATION_MODELS_GUIDE.md) - Foundation Models API reference
-- [APPLE_FOUNDATION_MODELS_COMMUNITY_INSIGHTS.md](APPLE_FOUNDATION_MODELS_COMMUNITY_INSIGHTS.md) - Community tips and best practices
-- [APPLE_LIQUID_GLASS_GUIDE.md](APPLE_LIQUID_GLASS_GUIDE.md) - Liquid Glass design system guide
-- [APPLE_AUDIO.md](APPLE_AUDIO.md) - Audio and voice implementation details
-- [APPLE_TESTFLIGHT.md](APPLE_TESTFLIGHT.md) - TestFlight distribution guide
-- [APPLE_APPSTORE.md](APPLE_APPSTORE.md) - App Store submission guide
+- `StreamingAnalysisView` - Progressive display of conversation analysis
+- `StreamingActionItemsView` - Progressive display of extracted action items
+- `FlowLayout` - Flowing tag layout for topics and categories
 
 ---
 

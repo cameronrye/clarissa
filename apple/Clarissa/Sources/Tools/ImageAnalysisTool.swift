@@ -14,7 +14,7 @@ import AppKit
 /// Only file:// URLs are supported to stay within context limits.
 final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
     let name = "image_analysis"
-    let description = "Perform targeted analysis on images or PDFs via file URL. Actions: 'ocr' (text), 'classify' (objects), 'detect_faces', 'detect_document', 'pdf_extract_text', 'pdf_ocr', 'pdf_page_count'. Only file:// URLs supported."
+    let description = "Perform targeted analysis on images or PDFs via file URL. Actions: 'ocr' (text), 'handwriting' (handwritten text), 'classify' (objects), 'detect_faces', 'detect_document', 'compare' (multi-image), 'pdf_extract_text', 'pdf_ocr', 'pdf_page_count'. Only file:// URLs supported."
     let priority = ToolPriority.extended
 
     /// Maximum characters to return from PDF text extraction
@@ -29,12 +29,17 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
             "properties": [
                 "action": [
                     "type": "string",
-                    "enum": ["ocr", "classify", "detect_faces", "detect_document", "pdf_extract_text", "pdf_ocr", "pdf_page_count"],
-                    "description": "Analysis type: 'ocr' for image text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count"
+                    "enum": ["ocr", "handwriting", "classify", "detect_faces", "detect_document", "scan_document", "compare", "pdf_extract_text", "pdf_ocr", "pdf_page_count"],
+                    "description": "Analysis type: 'ocr' for printed text, 'handwriting' for handwritten text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'scan_document' for document OCR with perspective correction, 'compare' for multi-image comparison, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count"
                 ],
                 "imageURL": [
                     "type": "string",
                     "description": "File URL to the image (file:// scheme only)"
+                ],
+                "imageURLs": [
+                    "type": "array",
+                    "items": ["type": "string"],
+                    "description": "Array of file URLs for 'compare' action (2-5 images)"
                 ],
                 "pdfURL": [
                     "type": "string",
@@ -43,6 +48,10 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
                 "pageRange": [
                     "type": "string",
                     "description": "Page range for PDF operations, e.g., '1-5' or '1,3,5' (optional, defaults to all pages)"
+                ],
+                "comparisonPrompt": [
+                    "type": "string",
+                    "description": "Optional prompt for 'compare' action (e.g., 'What changed between these images?')"
                 ]
             ],
             "required": ["action"]
@@ -78,22 +87,40 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
             }
         }
 
+        // Handle multi-image compare action
+        if action == "compare" {
+            guard let urlStrings = args["imageURLs"] as? [String], urlStrings.count >= 2 else {
+                throw ToolError.invalidArguments("'compare' action requires 'imageURLs' array with 2-5 images")
+            }
+            let comparisonPrompt = args["comparisonPrompt"] as? String
+            return try await compareImages(urlStrings: urlStrings, prompt: comparisonPrompt)
+        }
+
         // Handle image actions (file URLs only)
         guard let urlString = args["imageURL"] as? String,
               let url = URL(string: urlString) else {
             throw ToolError.invalidArguments("Image actions require 'imageURL' (file:// URL)")
         }
-        let cgImage = try imageFromURL(url)
 
         switch action {
         case "ocr":
+            let cgImage = try imageFromURL(url)
             return try await performOCR(on: cgImage)
+        case "handwriting":
+            let imageData = try dataFromURL(url)
+            return try await performHandwritingRecognition(on: imageData)
         case "classify":
+            let cgImage = try imageFromURL(url)
             return try await performClassification(on: cgImage)
         case "detect_faces":
+            let cgImage = try imageFromURL(url)
             return try await detectFaces(in: cgImage)
         case "detect_document":
+            let cgImage = try imageFromURL(url)
             return try await detectDocument(in: cgImage)
+        case "scan_document":
+            let imageData = try dataFromURL(url)
+            return try await scanDocument(from: imageData)
         default:
             throw ToolError.invalidArguments("Unknown action: \(action)")
         }
@@ -108,6 +135,13 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
 
         let imageData = try Data(contentsOf: url)
         return try cgImageFromData(imageData)
+    }
+
+    private func dataFromURL(_ url: URL) throws -> Data {
+        guard url.isFileURL else {
+            throw ToolError.invalidArguments("Only file:// URLs are supported")
+        }
+        return try Data(contentsOf: url)
     }
 
     private func cgImageFromData(_ data: Data) throws -> CGImage {
@@ -219,6 +253,143 @@ final class ImageAnalysisTool: ClarissaTool, @unchecked Sendable {
             "corners": corners,
             "confidence": Double(document.confidence)
         ])
+    }
+
+    private func performHandwritingRecognition(on imageData: Data) async throws -> String {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let result = try await DocumentOCRService.shared.recognizeHandwriting(from: imageData)
+            return jsonResponse([
+                "text": result.text,
+                "lineCount": result.lines.count,
+                "confidence": Double(result.confidence),
+                "isHandwritten": result.isHandwritten,
+                "lines": result.lines.map { ["text": $0.text, "confidence": Double($0.confidence)] }
+            ])
+        } else {
+            // Fall back to standard OCR for older versions
+            let cgImage = try cgImageFromData(imageData)
+            return try await performOCR(on: cgImage)
+        }
+    }
+
+    private func scanDocument(from imageData: Data) async throws -> String {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let result = try await DocumentOCRService.shared.scanDocument(from: imageData)
+            return jsonResponse([
+                "text": result.text,
+                "paragraphCount": result.paragraphs.count,
+                "confidence": Double(result.confidence),
+                "containsHandwriting": result.containsHandwriting,
+                "perspectiveCorrected": true
+            ])
+        } else {
+            // Fall back to standard OCR without perspective correction
+            let cgImage = try cgImageFromData(imageData)
+            return try await performOCR(on: cgImage)
+        }
+    }
+
+    private func compareImages(urlStrings: [String], prompt: String?) async throws -> String {
+        // Limit to 5 images maximum
+        let limitedURLs = Array(urlStrings.prefix(5))
+
+        var imageAnalyses: [[String: Any]] = []
+
+        for (index, urlString) in limitedURLs.enumerated() {
+            guard let url = URL(string: urlString) else {
+                throw ToolError.invalidArguments("Invalid URL at index \(index): \(urlString)")
+            }
+
+            let cgImage = try imageFromURL(url)
+
+            // Get basic analysis for each image
+            let ocrResult = try await performOCRInternal(on: cgImage)
+            let classificationResult = try await performClassificationInternal(on: cgImage)
+            let faceResult = try await detectFacesInternal(in: cgImage)
+
+            var analysis: [String: Any] = [
+                "imageIndex": index + 1,
+                "url": urlString
+            ]
+
+            if !ocrResult.isEmpty {
+                analysis["text"] = ocrResult
+            }
+            if !classificationResult.isEmpty {
+                analysis["classifications"] = classificationResult
+            }
+            analysis["faceCount"] = faceResult
+
+            imageAnalyses.append(analysis)
+        }
+
+        // Build comparison summary
+        var response: [String: Any] = [
+            "imageCount": limitedURLs.count,
+            "images": imageAnalyses
+        ]
+
+        if let prompt = prompt {
+            response["comparisonPrompt"] = prompt
+        }
+
+        // Add comparison hints
+        if imageAnalyses.count >= 2 {
+            var hints: [String] = []
+
+            // Compare text content
+            let texts = imageAnalyses.compactMap { $0["text"] as? String }
+            if texts.count >= 2 {
+                let allSame = texts.dropFirst().allSatisfy { $0 == texts.first }
+                hints.append(allSame ? "Text content appears identical" : "Text content differs between images")
+            }
+
+            // Compare face counts
+            let faceCounts = imageAnalyses.compactMap { $0["faceCount"] as? Int }
+            if faceCounts.count >= 2 && faceCounts.contains(where: { $0 > 0 }) {
+                let totalFaces = faceCounts.reduce(0, +)
+                hints.append("Total faces across images: \(totalFaces)")
+            }
+
+            if !hints.isEmpty {
+                response["comparisonHints"] = hints
+            }
+        }
+
+        return jsonResponse(response)
+    }
+
+    // Internal versions that return raw values for comparison
+    private func performOCRInternal(on image: CGImage) async throws -> String {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        try handler.perform([request])
+
+        return request.results?.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n") ?? ""
+    }
+
+    private func performClassificationInternal(on image: CGImage) async throws -> [String] {
+        let request = VNClassifyImageRequest()
+
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        try handler.perform([request])
+
+        return request.results?
+            .filter { $0.confidence > 0.1 }
+            .prefix(3)
+            .map { $0.identifier } ?? []
+    }
+
+    private func detectFacesInternal(in image: CGImage) async throws -> Int {
+        let request = VNDetectFaceRectanglesRequest()
+
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        try handler.perform([request])
+
+        return request.results?.count ?? 0
     }
 
     // MARK: - PDF Loading

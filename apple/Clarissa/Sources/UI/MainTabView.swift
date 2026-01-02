@@ -122,6 +122,11 @@ struct SidebarView: View {
         .task {
             await loadData()
         }
+        .onChange(of: viewModel.sessionVersion) { _, _ in
+            Task {
+                await loadData()
+            }
+        }
         .refreshable {
             await loadData()
         }
@@ -130,6 +135,8 @@ struct SidebarView: View {
                 Task {
                     await viewModel.deleteSession(id: session.id)
                     sessions.removeAll { $0.id == session.id }
+                    // Refresh currentSessionId since it may have changed after deletion
+                    currentSessionId = await viewModel.getCurrentSessionId()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -442,7 +449,9 @@ struct ChatTabContent: View {
                     viewModel.requestNewSession()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .clearConversation)) { _ in
-                    viewModel.startNewSession()
+                    Task {
+                        await viewModel.startNewSession()
+                    }
                 }
                 #endif
         }
@@ -453,7 +462,9 @@ struct ChatTabContent: View {
             }
             Button("Start New", role: .destructive) {
                 HapticManager.shared.warning()
-                viewModel.startNewSession()
+                Task {
+                    await viewModel.startNewSession()
+                }
             }
         } message: {
             Text("Your current conversation will be saved to history.")
@@ -673,11 +684,18 @@ struct HistoryTabContent: View {
         .task {
             await loadData()
         }
+        .onChange(of: viewModel.sessionVersion) { _, _ in
+            Task {
+                await loadData()
+            }
+        }
         .alert("Delete Conversation", isPresented: $showDeleteAlert, presenting: sessionToDelete) { session in
             Button("Delete", role: .destructive) {
                 Task {
                     await viewModel.deleteSession(id: session.id)
                     sessions.removeAll { $0.id == session.id }
+                    // Refresh currentSessionId since it may have changed after deletion
+                    currentSessionId = await viewModel.getCurrentSessionId()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -835,6 +853,8 @@ struct HistoryTabContent: View {
             for session in sessionsToDelete {
                 await viewModel.deleteSession(id: session.id)
             }
+            // Refresh currentSessionId since it may have changed after deletion
+            currentSessionId = await viewModel.getCurrentSessionId()
         }
     }
 
@@ -850,6 +870,8 @@ struct HistoryTabContent: View {
             for id in idsToDelete {
                 await viewModel.deleteSession(id: id)
             }
+            // Refresh currentSessionId since it may have changed after deletion
+            currentSessionId = await viewModel.getCurrentSessionId()
         }
     }
     #endif

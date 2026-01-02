@@ -142,6 +142,7 @@ public actor MemoryManager {
     }
 
     /// Add a new memory
+    /// Automatically tags memories with topics using ContentTagger on iOS 26+
     func add(_ content: String) async {
         await ensureLoaded()
 
@@ -159,7 +160,15 @@ public actor MemoryManager {
             return
         }
 
-        let memory = Memory(content: sanitizedContent)
+        // Auto-tag memory with topics using ContentTagger (iOS 26+)
+        var topics: [String]? = nil
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            topics = await extractTopicsForMemory(sanitizedContent)
+        }
+        #endif
+
+        let memory = Memory(content: sanitizedContent, topics: topics)
         memories.append(memory)
 
         // Trim old memories if needed
@@ -172,6 +181,25 @@ public actor MemoryManager {
         await save()
     }
 
+    /// Extract topics from memory content using ContentTagger
+    #if canImport(FoundationModels)
+    @available(iOS 26.0, macOS 26.0, *)
+    private func extractTopicsForMemory(_ content: String) async -> [String]? {
+        do {
+            let topics = try await MainActor.run {
+                Task {
+                    try await ContentTagger.shared.extractTopics(from: content)
+                }
+            }.value
+            logger.debug("Tagged memory with topics: \(topics)")
+            return topics.isEmpty ? nil : topics
+        } catch {
+            logger.warning("Failed to tag memory: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    #endif
+
     /// Get all memories
     func getAll() async -> [Memory] {
         await ensureLoaded()
@@ -179,6 +207,7 @@ public actor MemoryManager {
     }
 
     /// Get memories formatted for the system prompt
+    /// Includes topic tags when available for better context
     func getForPrompt() async -> String? {
         await ensureLoaded()
 
@@ -189,7 +218,13 @@ public actor MemoryManager {
 
         // Take most recent memories first
         let recentMemories = memories.suffix(20)
-        let memoryList = recentMemories.map { "- \($0.content)" }.joined(separator: "\n")
+        let memoryList = recentMemories.map { memory -> String in
+            if let topics = memory.topics, !topics.isEmpty {
+                let topicStr = topics.joined(separator: ", ")
+                return "- \(memory.content) [topics: \(topicStr)]"
+            }
+            return "- \(memory.content)"
+        }.joined(separator: "\n")
 
         logger.info("getForPrompt: Including \(recentMemories.count) memories in system prompt")
 
@@ -446,10 +481,14 @@ struct Memory: Identifiable, Codable {
     let content: String
     let createdAt: Date
 
-    init(id: UUID = UUID(), content: String, createdAt: Date = Date()) {
+    /// Optional topics extracted by ContentTagger (iOS 26+)
+    var topics: [String]?
+
+    init(id: UUID = UUID(), content: String, createdAt: Date = Date(), topics: [String]? = nil) {
         self.id = id
         self.content = content
         self.createdAt = createdAt
+        self.topics = topics
     }
 }
 
