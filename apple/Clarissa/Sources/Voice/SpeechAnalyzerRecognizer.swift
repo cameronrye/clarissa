@@ -74,23 +74,19 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
         // Get the best audio format for the transcriber
         self.analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
 
-        // Create async stream for audio input
-        let (inputSequence, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-
         isRecording = true
         transcript = ""
         error = nil
 
         // Start audio capture on dedicated queue to avoid @MainActor isolation crash
         // The audio tap callback runs on a real-time audio thread
+        // CRITICAL: The AsyncStream and continuation must be created and managed
+        // entirely within the audio handler to avoid MainActor isolation issues
         let format = self.analyzerFormat
-        try await audioHandler.start(
+        let inputSequence = try await audioHandler.start(
             skipSessionConfig: useExternalAudioSession,
             targetFormat: format
-        ) { buffer in
-            let input = AnalyzerInput(buffer: buffer)
-            continuation.yield(input)
-        }
+        )
 
         // Start analysis task
         analysisTask = Task { @MainActor [weak self] in
@@ -118,8 +114,6 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
                 }
             }
 
-            // Signal end of audio input
-            continuation.finish()
             self.stopRecordingInternal()
         }
     }
@@ -130,7 +124,7 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
         analysisTask = nil
 
         // Stop audio capture on dedicated queue
-        audioHandler.stopSync(skipSessionDeactivation: useExternalAudioSession)
+        audioHandler.stop(skipSessionDeactivation: useExternalAudioSession)
 
         speechAnalyzer = nil
         speechTranscriber = nil
@@ -165,25 +159,38 @@ final class SpeechAnalyzerRecognizer: ObservableObject {
 
 /// Handles AVAudioEngine operations on a dedicated queue to avoid @MainActor isolation crashes
 /// The audio tap callback runs on a real-time audio thread, which conflicts with Swift 6 strict concurrency
+///
+/// CRITICAL FIX: The AsyncStream and its continuation are now created and managed entirely
+/// within this handler class on its dedicated queue. This prevents the MainActor from being
+/// involved in any audio callback operations, which was causing dispatch_assert_queue failures.
 @available(iOS 26.0, macOS 26.0, *)
 private final class SpeechAnalyzerAudioHandler: @unchecked Sendable {
     private let audioEngine = AVAudioEngine()
     private let queue = DispatchQueue(label: "com.clarissa.speechanalyzer.audio", qos: .userInitiated)
-    private var currentBufferHandler: (@Sendable (AVAudioPCMBuffer) -> Void)?
 
-    /// Start audio capture
+    // The continuation is stored here and managed on the audio queue
+    // This ensures no MainActor involvement in audio callbacks
+    private var continuation: AsyncStream<AnalyzerInput>.Continuation?
+    private var targetFormat: AVAudioFormat?
+
+    /// Start audio capture and return an AsyncStream of AnalyzerInput
     /// - Parameters:
     ///   - skipSessionConfig: If true, skips audio session configuration (use when VoiceManager manages the session)
     ///   - targetFormat: Optional target format to convert audio buffers to
-    ///   - bufferHandler: Callback for audio buffers (called on audio thread)
+    /// - Returns: AsyncStream of AnalyzerInput for the SpeechAnalyzer
     func start(
         skipSessionConfig: Bool = false,
-        targetFormat: AVAudioFormat? = nil,
-        bufferHandler: @escaping @Sendable (AVAudioPCMBuffer) -> Void
-    ) async throws {
-        currentBufferHandler = bufferHandler
+        targetFormat: AVAudioFormat? = nil
+    ) async throws -> AsyncStream<AnalyzerInput> {
+        self.targetFormat = targetFormat
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        // Create the AsyncStream - the continuation will be stored and used on the audio queue
+        let stream = AsyncStream<AnalyzerInput> { continuation in
+            self.continuation = continuation
+        }
+
+        // Start audio engine on dedicated queue
+        try await withCheckedThrowingContinuation { (startContinuation: CheckedContinuation<Void, Error>) in
             queue.async { [self] in
                 do {
                     #if os(iOS)
@@ -202,31 +209,46 @@ private final class SpeechAnalyzerAudioHandler: @unchecked Sendable {
                     }
 
                     // Install tap to capture audio
+                    // CRITICAL: The callback captures only self (the handler), not any MainActor state
+                    // The continuation is accessed through self and is Sendable-safe
                     inputNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, _ in
-                        guard let handler = self?.currentBufferHandler else { return }
+                        guard let self, let continuation = self.continuation else { return }
 
                         // Convert buffer to target format if needed
-                        if let targetFormat, let converted = Self.convertBuffer(buffer, to: targetFormat) {
-                            handler(converted)
+                        let outputBuffer: AVAudioPCMBuffer
+                        if let targetFormat = self.targetFormat,
+                           let converted = Self.convertBuffer(buffer, to: targetFormat) {
+                            outputBuffer = converted
                         } else {
-                            handler(buffer)
+                            outputBuffer = buffer
                         }
+
+                        // Yield to the continuation - this is safe because continuation is Sendable
+                        let input = AnalyzerInput(buffer: outputBuffer)
+                        continuation.yield(input)
                     }
 
                     audioEngine.prepare()
                     try audioEngine.start()
-                    continuation.resume()
+                    startContinuation.resume()
                 } catch {
-                    continuation.resume(throwing: error)
+                    startContinuation.resume(throwing: error)
                 }
             }
         }
+
+        return stream
     }
 
-    /// Stop audio capture synchronously
-    func stopSync(skipSessionDeactivation: Bool = false) {
-        currentBufferHandler = nil
-        queue.sync { [self] in
+    /// Stop audio capture
+    func stop(skipSessionDeactivation: Bool = false) {
+        // Finish the continuation first
+        continuation?.finish()
+        continuation = nil
+        targetFormat = nil
+
+        // Stop audio engine on the dedicated queue
+        queue.async { [self] in
             if audioEngine.isRunning {
                 audioEngine.stop()
             }

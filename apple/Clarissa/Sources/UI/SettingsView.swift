@@ -40,8 +40,8 @@ public struct SettingsView: View {
     @State private var showingSaveConfirmation = false
     @State private var showingClearMemoriesConfirmation = false
     @State private var availableVoices: [AVSpeechSynthesisVoice] = []
-    @State private var testSynthesizer: AVSpeechSynthesizer?
-    @State private var isTestingVoice = false
+    @StateObject private var voiceTester = VoiceTester()
+    private var isTestingVoice: Bool { voiceTester.isSpeaking }
 
     #if os(macOS)
     @State private var selectedTab: SettingsTab = .general
@@ -657,36 +657,7 @@ public struct SettingsView: View {
     }
 
     private func testVoice() {
-        // Prevent multiple simultaneous tests
-        guard !isTestingVoice else { return }
-        isTestingVoice = true
-
-        // Create and retain synthesizer to prevent deallocation during playback
-        let synthesizer = AVSpeechSynthesizer()
-        testSynthesizer = synthesizer
-
-        let utterance = AVSpeechUtterance(string: "Hello, I'm Clarissa, your AI assistant.")
-        utterance.rate = Float(speechRate) * AVSpeechUtteranceMaximumSpeechRate
-
-        if !selectedVoiceIdentifier.isEmpty,
-           let voice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
-            utterance.voice = voice
-        }
-
-        // Estimate duration based on text length and speech rate (rough approximation)
-        // Average speaking rate is about 150 words per minute
-        let wordCount = 7 // "Hello, I'm Clarissa, your AI assistant."
-        let baseSeconds = Double(wordCount) / 2.5 // ~2.5 words per second at normal rate
-        let adjustedSeconds = baseSeconds / max(0.1, speechRate * 2) // Adjust for rate
-        let estimatedDuration = max(2.0, min(8.0, adjustedSeconds)) // Clamp between 2-8 seconds
-
-        synthesizer.speak(utterance)
-
-        // Reset the state after estimated playback duration
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(estimatedDuration * 1_000_000_000))
-            isTestingVoice = false
-        }
+        voiceTester.testVoice(rate: speechRate, voiceIdentifier: selectedVoiceIdentifier)
     }
 
     /// Save API key to Keychain (debounced)
@@ -996,6 +967,55 @@ struct MemorySettingsView: View {
             }
         }
         memories.remove(atOffsets: offsets)
+    }
+}
+
+// MARK: - Voice Tester Helper
+
+/// Helper class for testing voice settings with proper delegate handling
+/// Uses AVSpeechSynthesizerDelegate for accurate completion tracking
+final class VoiceTester: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published var isSpeaking: Bool = false
+
+    private var synthesizer: AVSpeechSynthesizer?
+
+    override init() {
+        super.init()
+    }
+
+    func testVoice(rate: Double, voiceIdentifier: String) {
+        // Prevent multiple simultaneous tests
+        guard !isSpeaking else { return }
+
+        // Create and retain synthesizer to prevent deallocation during playback
+        let synth = AVSpeechSynthesizer()
+        synth.delegate = self
+        synthesizer = synth
+
+        let utterance = AVSpeechUtterance(string: "Hello, I'm Clarissa, your AI assistant.")
+        utterance.rate = Float(rate) * AVSpeechUtteranceMaximumSpeechRate
+
+        if !voiceIdentifier.isEmpty,
+           let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) {
+            utterance.voice = voice
+        }
+
+        isSpeaking = true
+        synth.speak(utterance)
+    }
+
+    // MARK: - AVSpeechSynthesizerDelegate
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isSpeaking = false
+        }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isSpeaking = false
+        }
     }
 }
 

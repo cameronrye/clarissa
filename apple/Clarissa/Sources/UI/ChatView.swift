@@ -228,8 +228,15 @@ struct ChatView: View {
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
-                if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                    viewModel.attachImage(data)
+                guard let newItem else { return }
+                do {
+                    if let data = try await newItem.loadTransferable(type: Data.self) {
+                        viewModel.attachImage(data)
+                    } else {
+                        viewModel.errorMessage = "Unable to load the selected image"
+                    }
+                } catch {
+                    viewModel.errorMessage = "Failed to load image: \(error.localizedDescription)"
                 }
                 selectedPhotoItem = nil
             }
@@ -276,8 +283,15 @@ struct ChatView: View {
         .background(.bar)
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
-                if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                    viewModel.attachImage(data)
+                guard let newItem else { return }
+                do {
+                    if let data = try await newItem.loadTransferable(type: Data.self) {
+                        viewModel.attachImage(data)
+                    } else {
+                        viewModel.errorMessage = "Unable to load the selected image"
+                    }
+                } catch {
+                    viewModel.errorMessage = "Failed to load image: \(error.localizedDescription)"
                 }
                 selectedPhotoItem = nil
             }

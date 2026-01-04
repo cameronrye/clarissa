@@ -64,6 +64,10 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Store reference so we can cancel if configure(with:) is called before completion
         initTask = Task {
             await setupProvider()
+
+            // Check for cancellation before loading session (in case configure was called)
+            guard !Task.isCancelled else { return }
+
             await loadCurrentSession()
             isSettingUpProvider = false
         }
@@ -196,16 +200,25 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     func configure(with appState: AppState) {
         self.appState = appState
 
-        // Cancel any in-progress init task to prevent race condition
-        initTask?.cancel()
+        // Cancel any in-progress init task and wait for it to complete
+        // This prevents race conditions where multiple initialization tasks run concurrently
+        let previousTask = initTask
         initTask = nil
 
-        Task {
+        initTask = Task {
+            // Wait for previous task to complete (it will exit early due to cancellation checks)
+            previousTask?.cancel()
+            _ = await previousTask?.value
+
             isSettingUpProvider = true
             // Set up provider with fallback if persisted selection is unavailable
             await appState.setProviderWithFallback(appState.selectedProvider) { providerType in
                 await self.checkProviderAvailability(providerType)
             }
+
+            // Check for cancellation before continuing
+            guard !Task.isCancelled else { return }
+
             await setupProvider(for: appState.selectedProvider)
             await loadCurrentSession()
             isSettingUpProvider = false
@@ -215,6 +228,11 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Switch to a different provider
     func switchProvider(to providerType: LLMProviderType) async {
         isSettingUpProvider = true
+
+        // Reset agent to clear any cached context from the previous provider
+        // This prevents context bleeding between providers (e.g., Foundation Models session cache)
+        await agent.resetForNewConversation()
+
         // Use fallback if the requested provider is unavailable
         if let appState = appState {
             await appState.setProviderWithFallback(providerType) { type in
@@ -224,6 +242,9 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         } else {
             await setupProvider(for: providerType)
         }
+
+        // Reload the current session into the new provider
+        await loadCurrentSession()
         isSettingUpProvider = false
     }
 
@@ -762,8 +783,17 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Speak response in voice mode
         if isVoiceModeActive, let voiceManager = voiceManager {
-            // Read voice output setting
-            let voiceOutputEnabled = UserDefaults.standard.bool(forKey: "voiceOutputEnabled")
+            // Read voice output setting - default to true to match @AppStorage default in SettingsView
+            // Note: UserDefaults.bool(forKey:) returns false if key doesn't exist,
+            // so we need to check if the key exists first
+            let voiceOutputEnabled: Bool
+            if UserDefaults.standard.object(forKey: "voiceOutputEnabled") == nil {
+                // Key not set yet, use default of true
+                voiceOutputEnabled = true
+            } else {
+                voiceOutputEnabled = UserDefaults.standard.bool(forKey: "voiceOutputEnabled")
+            }
+
             if voiceOutputEnabled {
                 voiceManager.speak(content)
             }
