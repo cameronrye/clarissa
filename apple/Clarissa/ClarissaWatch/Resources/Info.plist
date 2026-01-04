@@ -33,6 +33,14 @@
 	<string>dev.rye.clarissa</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<false/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>self-care</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dev.rye.clarissa.watchkitapp.refresh</string>
+	</array>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Clarissa uses speech recognition to understand your voice commands.</string>
 	<key>NSMicrophoneUsageDescription</key>

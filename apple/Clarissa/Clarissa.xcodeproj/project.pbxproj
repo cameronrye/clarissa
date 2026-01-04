@@ -12,7 +12,7 @@
 		W0000010 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = W0000011 /* WidgetKit.framework */; };
 		W0000012 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = W0000013 /* SwiftUI.framework */; };
 		W0000020 /* ClarissaWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = W0000003 /* ClarissaWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		WA000001 /* ClarissaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = WA000002 /* ClarissaWatch.app */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		WA000001 /* ClarissaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = WA000002 /* ClarissaWatch.app */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,7 +70,7 @@
 		W0000003 /* ClarissaWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ClarissaWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		W0000011 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		W0000013 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		WA000002 /* ClarissaWatch.app */ = {isa = PBXFileReference; explicitFileType = "wrapper.application"; includeInIndex = 0; path = ClarissaWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		WA000002 /* ClarissaWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClarissaWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -108,11 +108,6 @@
 			path = Sources/App;
 			sourceTree = "<group>";
 		};
-		WS000001 /* Sources/Watch */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Sources/Watch;
-			sourceTree = "<group>";
-		};
 		A0000005 /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -135,6 +130,11 @@
 				WA000051 /* Exceptions for "ClarissaWatch" folder in "ClarissaWatch" target */,
 			);
 			path = ClarissaWatch;
+			sourceTree = "<group>";
+		};
+		WS000001 /* Sources/Watch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Sources/Watch;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -253,8 +253,8 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A0000004 /* Sources/App */,
-				WS000001 /* Sources/Watch */,
 				A0000005 /* Resources */,
+				WS000001 /* Sources/Watch */,
 			);
 			name = Clarissa;
 			packageProductDependencies = (
@@ -434,9 +434,7 @@
 		};
 		WA000011 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			platformFilters = (
-				ios,
-			);
+			platformFilter = ios;
 			target = WA000003 /* ClarissaWatch */;
 			targetProxy = WA000010 /* PBXContainerItemProxy */;
 		};
