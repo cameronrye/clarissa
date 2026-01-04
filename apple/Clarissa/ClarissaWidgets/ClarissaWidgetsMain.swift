@@ -10,6 +10,13 @@ struct ClarissaWidgetsMain: WidgetBundle {
     var body: some Widget {
         QuickAskWidget()
         ConversationWidget()
+
+        #if os(iOS)
+        // Control Center widgets (iOS 18+)
+        ClarissaControlWidget()
+        VoiceModeControlWidget()
+        NewChatControlWidget()
+        #endif
     }
 }
 

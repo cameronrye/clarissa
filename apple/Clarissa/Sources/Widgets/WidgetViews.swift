@@ -115,7 +115,7 @@ struct QuickAskWidgetView: View {
                         }
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .background(Color.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                 }
@@ -210,7 +210,7 @@ struct ConversationWidgetView: View {
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
             }
