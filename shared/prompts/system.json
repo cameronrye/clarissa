@@ -1,4 +1,5 @@
 {
+  "$comment": "Shared prompt configuration for CLI. iOS/macOS apps build their own prompts optimized for Apple Foundation Models with token-efficient formatting. See apple/Clarissa/Sources/Agent/Agent.swift for iOS implementation.",
   "name": "clarissa",
   "version": "1.0.0",
   "base": {

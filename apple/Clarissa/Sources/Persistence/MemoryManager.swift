@@ -208,6 +208,7 @@ public actor MemoryManager {
 
     /// Get memories formatted for the system prompt
     /// Includes topic tags when available for better context
+    /// Optimized for token efficiency while maintaining clarity
     func getForPrompt() async -> String? {
         await ensureLoaded()
 
@@ -221,21 +222,17 @@ public actor MemoryManager {
         let memoryList = recentMemories.map { memory -> String in
             if let topics = memory.topics, !topics.isEmpty {
                 let topicStr = topics.joined(separator: ", ")
-                return "- \(memory.content) [topics: \(topicStr)]"
+                return "- \(memory.content) [\(topicStr)]"
             }
             return "- \(memory.content)"
         }.joined(separator: "\n")
 
         logger.info("getForPrompt: Including \(recentMemories.count) memories in system prompt")
 
+        // Concise format - the system prompt already instructs to use saved facts
         return """
-        ## Saved Facts About This User
-
+        USER FACTS:
         \(memoryList)
-
-        IMPORTANT: When the user asks about their name, preferences, or anything in the saved facts above, respond using this information directly. For example:
-        - "Say my name" or "What's my name?" -> Answer with their name from saved facts
-        - "What do you know about me?" -> List the saved facts
         """
     }
 

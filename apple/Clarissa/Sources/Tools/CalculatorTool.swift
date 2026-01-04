@@ -316,11 +316,16 @@ final class CalculatorTool: ClarissaTool, @unchecked Sendable {
 	            if computedValue.isNaN {
 	                throw ToolError.executionFailed("Expression '\(name)(\(argString))' resulted in an undefined value (NaN).")
 	            }
+	            // Allow infinity as a valid result - expressions like log(0) should return -Infinity
+	            // Format infinity as a string representation to avoid NSExpression issues
+	            let replacement: String
 	            if computedValue.isInfinite {
-	                throw ToolError.executionFailed("Expression '\(name)(\(argString))' resulted in a value too large to represent.")
+	                replacement = computedValue > 0 ? "Infinity" : "-Infinity"
+	            } else {
+	                replacement = "\(computedValue)"
 	            }
-	
-	            result.replaceSubrange(fullRange, with: "\(computedValue)")
+
+	            result.replaceSubrange(fullRange, with: replacement)
 	        }
 
         return result

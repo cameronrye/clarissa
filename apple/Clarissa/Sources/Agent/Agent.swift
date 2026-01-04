@@ -171,46 +171,33 @@ public final class Agent: ObservableObject {
     /// - Explicit negative rules to avoid unnecessary tool use
     /// Community insights: "Instructions in English work best", "Use CAPS for critical rules"
     private func buildSystemPrompt() async -> String {
-        // Keep prompt concise (~600 chars = ~150 tokens) to maximize context for conversation
+        // Format current date/time for relative date understanding
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
+        let currentTime = dateFormatter.string(from: Date())
+
+        // Keep prompt concise to maximize context for conversation
+        // Optimized based on Foundation Models community insights
         var prompt = """
-        You are Clarissa, an iOS assistant.
+        You are Clarissa, a personal assistant. Be warm but concise.
+        Current time: \(currentTime)
 
-        ALWAYS USE TOOLS FOR:
-        - Weather/temperature/forecast/rain/hot/cold -> weather tool
-        - Math/calculate/percent/tip/convert -> calculator tool
-        - Schedule/meeting/event/calendar/what's on -> calendar tool
-        - Remind me/task/to-do/don't forget/list reminders -> reminders tool
-        - Phone number/email/contact/call/text -> contacts tool
-        - Where am I/my location/current location -> location tool
-        - Remember that/remember I/my preference/I like -> remember tool
-        - URL/webpage/fetch/read page/get content -> web_fetch tool
-        - Image file URL (file://) needs analysis -> image_analysis tool
-        - PDF file URL (file://) needs reading -> image_analysis tool (pdf_extract_text or pdf_ocr)
+        TOOLS: weather(location?), calculator(expression), calendar(action,title?,date?), reminders(action,title?), contacts(query), location(), remember(content), web_fetch(url), image_analysis(file_url)
 
-        ANSWER DIRECTLY (no tools):
-        - Message contains "[Image Analysis]" -> USE the provided OCR text and classifications to respond
-        - Date/time/day -> answer from your knowledge
-        - General knowledge -> answer directly
-        - Opinions/advice -> respond conversationally
-        - Greetings/chat -> respond naturally
+        USE TOOLS for: weather, math, calendar, reminders, contacts, location, saving facts, fetching URLs, analyzing images/PDFs
+        ANSWER DIRECTLY for: "[Image Analysis]" in message (use provided OCR/classifications), date/time questions, general knowledge, opinions, greetings
 
         EXAMPLES:
-        "Weather?" -> weather (no params = current location)
         "Weather in Paris" -> weather(location="Paris")
-        "What's 20% of 85?" -> calculator(expression="85 * 0.20")
-        "Meeting tomorrow 2pm" -> calendar(action=create, title, startDate)
-        "What's on my calendar?" -> calendar(action=list)
-        "Remind me to call Bob" -> reminders(action=create, title="Call Bob")
-        "Show my reminders" -> reminders(action=list)
-        "What's John's phone number?" -> contacts(action=search, query="John")
-        "Fetch example.com" -> web_fetch(url="https://example.com")
-        User: "Analyze this image [Image Analysis] Text: Hello World Contains: sign" -> "This image shows a sign with the text 'Hello World'."
+        "What's 20% of 85?" -> calculator(expression="85*0.20")
+        "Meeting tomorrow 2pm" -> calendar(action=create,title,startDate)
 
-        RESPONSE RULES:
-        - Be brief (1-2 sentences)
+        RULES:
+        - Brief responses (1-2 sentences)
         - State result, not process
+        - If request is ambiguous, ask one clarifying question before using tools
         - If tool fails, explain and suggest alternative
-        - If user asks about saved facts (name, preferences), answer from Saved Facts section
+        - Use saved facts when user asks about their name/preferences
         """
 
         // Add disabled tools section so AI can inform user about features that can be enabled
@@ -380,7 +367,7 @@ public final class Agent: ObservableObject {
             // The LLM session has already executed tools and incorporated results
             if nativeToolHandling {
                 ClarissaLogger.agent.info("Agent run completed (native tool handling)")
-                let finalContent = Self.applyRefusalFallback(fullContent)
+                let finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
                 callbacks?.onResponse(content: finalContent)
                 return finalContent
             }
@@ -413,7 +400,7 @@ public final class Agent: ObservableObject {
 
             // No tool calls - final response
             ClarissaLogger.agent.info("Agent run completed with response")
-            let finalContent = Self.applyRefusalFallback(fullContent)
+            let finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
             callbacks?.onResponse(content: finalContent)
             return finalContent
         }
@@ -442,19 +429,39 @@ public final class Agent: ObservableObject {
         "i'm sorry, but i can't"
     ]
 
-    /// Friendly redirect message when model refuses
-    private static let refusalFallback = """
-        I'm best at helping with tasks like checking your calendar, setting reminders, getting weather updates, and doing calculations. What can I help you with?
-        """
+    /// Context-aware suggestions based on what the user was trying to do
+    private static func getRefusalSuggestion(for userMessage: String) -> String {
+        let lowercased = userMessage.lowercased()
 
-    /// Check if a response is a refusal and provide a helpful redirect if so
-    private static func applyRefusalFallback(_ content: String) -> String {
+        // Detect intent and suggest relevant alternatives
+        if lowercased.contains("weather") || lowercased.contains("temperature") || lowercased.contains("forecast") {
+            return "I can check the weather for you. Try asking \"What's the weather in [city]?\" or just \"Weather?\""
+        }
+        if lowercased.contains("remind") || lowercased.contains("reminder") || lowercased.contains("task") {
+            return "I can help with reminders. Try \"Remind me to [task]\" or \"Show my reminders\"."
+        }
+        if lowercased.contains("calendar") || lowercased.contains("meeting") || lowercased.contains("schedule") || lowercased.contains("event") {
+            return "I can help with your calendar. Try \"What's on my calendar?\" or \"Schedule a meeting\"."
+        }
+        if lowercased.contains("calculate") || lowercased.contains("math") || lowercased.contains("%") || lowercased.contains("tip") {
+            return "I can do calculations. Try \"What's 20% of 85?\" or \"Calculate 15 + 27\"."
+        }
+        if lowercased.contains("contact") || lowercased.contains("phone") || lowercased.contains("email") || lowercased.contains("call") {
+            return "I can look up contacts. Try \"What's [name]'s phone number?\" or \"Find [name]'s email\"."
+        }
+
+        // Default fallback
+        return "I'm best at helping with your calendar, reminders, weather, calculations, and contacts. What can I help you with?"
+    }
+
+    /// Check if a response is a refusal and provide a context-aware redirect if so
+    private static func applyRefusalFallback(_ content: String, userMessage: String) -> String {
         let lowercased = content.lowercased()
 
         for phrase in refusalPhrases {
             if lowercased.contains(phrase) {
-                ClarissaLogger.agent.info("Detected refusal response, applying fallback")
-                return refusalFallback
+                ClarissaLogger.agent.info("Detected refusal response, applying context-aware fallback")
+                return getRefusalSuggestion(for: userMessage)
             }
         }
 

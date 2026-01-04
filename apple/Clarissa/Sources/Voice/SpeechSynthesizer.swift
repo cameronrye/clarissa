@@ -106,7 +106,8 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
         return AVSpeechSynthesisVoice(language: "en-US")
     }
 
-    /// Speak the given text
+    /// Speak the given text using SSML for improved prosody
+    /// Converts plain text to SSML with natural pauses at sentence boundaries
     func speak(_ text: String) {
         // Stop any current speech
         stop()
@@ -124,12 +125,21 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
         }
         #endif
 
-        // Create utterance with settings from UserDefaults
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = selectedVoice
-        utterance.rate = speechRate
-        utterance.pitchMultiplier = pitchMultiplier
-        utterance.volume = volume
+        // Try SSML first for better prosody, fall back to plain text
+        let utterance: AVSpeechUtterance
+        if let ssmlUtterance = createSSMLUtterance(from: text) {
+            utterance = ssmlUtterance
+            // Note: When using SSML, voice/rate/pitch are set via SSML tags
+            // but we still set the voice as fallback
+            utterance.voice = selectedVoice
+        } else {
+            // Fallback to plain text utterance
+            utterance = AVSpeechUtterance(string: text)
+            utterance.voice = selectedVoice
+            utterance.rate = speechRate
+            utterance.pitchMultiplier = pitchMultiplier
+            utterance.volume = volume
+        }
 
         // Add slight pauses for more natural speech
         utterance.preUtteranceDelay = 0.1
@@ -139,6 +149,70 @@ final class SpeechSynthesizer: NSObject, ObservableObject {
 
         currentUtterance = utterance
         synthesizer.speak(utterance)
+    }
+
+    /// Create an SSML utterance from plain text with natural prosody
+    /// Adds appropriate pauses after sentences and at punctuation for more natural speech
+    private func createSSMLUtterance(from text: String) -> AVSpeechUtterance? {
+        let ssml = convertToSSML(text)
+        return AVSpeechUtterance(ssmlRepresentation: ssml)
+    }
+
+    /// Convert plain text to SSML with prosody markup
+    /// - Adds short breaks after sentences (. ! ?)
+    /// - Adds very short breaks after commas and semicolons
+    /// - Wraps in speak tags with prosody rate based on settings
+    private func convertToSSML(_ text: String) -> String {
+        // Escape XML special characters
+        var escaped = text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+
+        // Add breaks after sentence-ending punctuation for natural pauses
+        // Using 300ms for sentences (natural pause)
+        escaped = escaped.replacingOccurrences(
+            of: ". ",
+            with: ".<break time=\"300ms\"/> "
+        )
+        escaped = escaped.replacingOccurrences(
+            of: "! ",
+            with: "!<break time=\"300ms\"/> "
+        )
+        escaped = escaped.replacingOccurrences(
+            of: "? ",
+            with: "?<break time=\"300ms\"/> "
+        )
+
+        // Add shorter breaks after commas and semicolons (150ms)
+        escaped = escaped.replacingOccurrences(
+            of: ", ",
+            with: ",<break time=\"150ms\"/> "
+        )
+        escaped = escaped.replacingOccurrences(
+            of: "; ",
+            with: ";<break time=\"150ms\"/> "
+        )
+
+        // Convert speech rate to percentage (0.5 = 100%, 0.25 = 50%, 1.0 = 200%)
+        let ratePercent = Int((speechRate / AVSpeechUtteranceDefaultSpeechRate) * 100)
+
+        // Wrap in SSML speak tag with prosody
+        return """
+        <speak><prosody rate="\(ratePercent)%" volume="\(volumeSSMLValue)">\(escaped)</prosody></speak>
+        """
+    }
+
+    /// Convert volume (0.0-1.0) to SSML volume value
+    private var volumeSSMLValue: String {
+        switch volume {
+        case 0.0..<0.2: return "x-soft"
+        case 0.2..<0.4: return "soft"
+        case 0.4..<0.6: return "medium"
+        case 0.6..<0.8: return "loud"
+        default: return "x-loud"
+        }
     }
 
     /// Stop speaking

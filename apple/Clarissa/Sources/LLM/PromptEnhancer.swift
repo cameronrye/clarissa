@@ -1,28 +1,14 @@
 import Foundation
 
 /// System prompt for the prompt enhancement feature.
-/// Optimized for Apple's on-device model - focuses on clarity for tool execution.
-/// Keeps prompts short and direct rather than making them verbose.
+/// Optimized for Apple's on-device model - uses examples only, no redundant rules.
+/// The instruction and examples are sufficient for the model to understand the task.
 private let enhancementSystemPrompt = """
-Rewrite the user's request to be clearer. Output ONLY the rewritten text.
+Rewrite to be clearer. Output ONLY the rewritten text.
 
-Example:
-User: "weather"
-Output: "What's the weather right now?"
-
-Example:
-User: "remind me about the thing tomorrow"
-Output: "Set a reminder for tomorrow"
-
-Example:
-User: "whats 15% of 50 dolars"
-Output: "What's 15% of $50?"
-
-Rules:
-- Keep it short and direct
-- Fix typos and grammar
-- Add missing context (like "current" for weather)
-- Output ONLY the improved text
+"weather" -> "What's the weather right now?"
+"remind me about the thing tomorrow" -> "Set a reminder for tomorrow"
+"whats 15% of 50 dolars" -> "What's 15% of $50?"
 """
 
 /// Keywords that indicate the prompt is already clear enough for tool use

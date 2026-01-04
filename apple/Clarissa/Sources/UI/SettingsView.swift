@@ -245,6 +245,10 @@ public struct SettingsView: View {
                         }
                     }
 
+                    if !hasHighQualityVoices {
+                        VoiceDownloadPromptView()
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Speech Rate")
@@ -275,12 +279,7 @@ public struct SettingsView: View {
             } header: {
                 Text("Voice Output")
             } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("When enabled, Clarissa will speak responses aloud in voice mode.")
-                    if voiceOutputEnabled {
-                        Text("Premium and Enhanced voices provide the best quality. Download more in System Settings -> Accessibility -> Spoken Content -> System Voices.")
-                    }
-                }
+                Text("When enabled, Clarissa will speak responses aloud in voice mode.")
             }
         }
         .formStyle(.grouped)
@@ -495,6 +494,10 @@ public struct SettingsView: View {
                             }
                         }
 
+                        if !hasHighQualityVoices {
+                            VoiceDownloadPromptView()
+                        }
+
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text("Speech Rate")
@@ -525,12 +528,7 @@ public struct SettingsView: View {
                 } header: {
                     Text("Voice")
                 } footer: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("When enabled, Clarissa will speak responses aloud in voice mode.")
-                        if voiceOutputEnabled {
-                            Text("Premium and Enhanced voices provide the best quality. Download more in Settings -> Accessibility -> Spoken Content -> Voices.")
-                        }
-                    }
+                    Text("When enabled, Clarissa will speak responses aloud in voice mode.")
                 }
 
                 Section {
@@ -653,6 +651,13 @@ public struct SettingsView: View {
         case 0.3..<0.6: return "Normal"
         case 0.6..<0.8: return "Fast"
         default: return "Very Fast"
+        }
+    }
+
+    /// Check if any Premium or Enhanced voices are available
+    private var hasHighQualityVoices: Bool {
+        availableVoices.contains { voice in
+            voice.quality == .premium || voice.quality == .enhanced
         }
     }
 
@@ -967,6 +972,55 @@ struct MemorySettingsView: View {
             }
         }
         memories.remove(atOffsets: offsets)
+    }
+}
+
+// MARK: - Voice Download Prompt
+
+/// View shown when no Premium or Enhanced voices are installed
+/// Provides helpful guidance and a deep link to system settings
+private struct VoiceDownloadPromptView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("No High-Quality Voices")
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            Text("For the best experience, download Premium or Enhanced voices from System Settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            #if os(iOS)
+            Button {
+                // Deep link to Accessibility settings
+                // iOS 26: Settings > Accessibility > Read & Speak > Voices
+                if let url = URL(string: "App-prefs:ACCESSIBILITY") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Open Accessibility Settings")
+                    Image(systemName: "arrow.up.forward.app")
+                }
+                .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(ClarissaTheme.purple)
+            .controlSize(.small)
+
+            Text("Go to: Read & Speak > Voices")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            #else
+            Text("Open System Settings > Accessibility > Spoken Content > System Voices")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            #endif
+        }
+        .padding(.vertical, 8)
     }
 }
 
