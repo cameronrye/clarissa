@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import Combine
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -527,10 +530,13 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Load the current session from persistence
     private func loadCurrentSession() async {
         // In screenshot mode, load demo data instead of real session
+        // Only available in DEBUG builds for App Store screenshots
+        #if DEBUG
         if DemoData.isScreenshotMode {
             loadDemoData()
             return
         }
+        #endif
 
         let session = await SessionManager.shared.getCurrentSession()
         let savedMessages = session.messages
@@ -555,9 +561,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Load into agent
         agent.loadMessages(savedMessages)
         updateContextStats()
+
+        // Refresh widgets with current session data
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
 
     /// Load demo data for screenshot mode based on current scenario
+    /// Only available in DEBUG builds for App Store screenshots
+    #if DEBUG
     private func loadDemoData() {
         let scenario = DemoData.currentScenario
         switch scenario {
@@ -575,6 +588,7 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             messages = []
         }
     }
+    #endif
 
     /// Save the current session
     private func saveCurrentSession() async {
@@ -648,6 +662,11 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Load into agent for context
         agent.loadMessages(session.messages)
         updateContextStats()
+
+        // Refresh widgets after session switch
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
 
     /// Get all sessions for history display

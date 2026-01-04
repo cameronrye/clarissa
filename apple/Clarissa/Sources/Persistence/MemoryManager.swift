@@ -3,6 +3,14 @@ import os.log
 
 private let logger = Logger(subsystem: "dev.rye.Clarissa", category: "MemoryManager")
 
+/// Sync status for iCloud memory synchronization
+public enum MemorySyncStatus: Sendable {
+    case idle
+    case syncing
+    case synced
+    case error(String)
+}
+
 /// Manages long-term memories for the agent
 /// Syncs across devices via iCloud Key-Value Storage (NSUbiquitousKeyValueStore)
 /// On macOS, also syncs with CLI at ~/.clarissa/memories.json for cross-app memory sharing
@@ -12,6 +20,9 @@ public actor MemoryManager {
 
     private var memories: [Memory] = []
     private var isLoaded = false
+
+    /// Current sync status for UI display
+    private(set) var syncStatus: MemorySyncStatus = .idle
 
     /// Keychain storage (injectable for testing)
     private let keychain: KeychainStorage
@@ -206,6 +217,11 @@ public actor MemoryManager {
         return memories
     }
 
+    /// Get the current sync status
+    public func getSyncStatus() -> MemorySyncStatus {
+        return syncStatus
+    }
+
     /// Get memories formatted for the system prompt
     /// Includes topic tags when available for better context
     /// Optimized for token efficiency while maintaining clarity
@@ -395,12 +411,15 @@ public actor MemoryManager {
     }
 
     private func save() async {
+        syncStatus = .syncing
+
         do {
             let encoder = JSONEncoder()
             let data = try encoder.encode(memories)
 
             guard let jsonString = String(data: data, encoding: .utf8) else {
                 logger.error("Failed to encode memories to string")
+                syncStatus = .error("Failed to encode memories")
                 return
             }
 
@@ -417,8 +436,11 @@ public actor MemoryManager {
             #if os(macOS)
             await saveToSharedCLIFile()
             #endif
+
+            syncStatus = .synced
         } catch {
             logger.error("Failed to save memories to Keychain: \(error.localizedDescription)")
+            syncStatus = .error(error.localizedDescription)
         }
     }
 

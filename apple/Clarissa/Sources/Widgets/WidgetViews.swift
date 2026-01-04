@@ -45,6 +45,8 @@ struct QuickAskWidgetView: View {
                 .font(.title2)
         }
         .widgetURL(URL(string: "clarissa://new"))
+        .accessibilityLabel("Ask Clarissa")
+        .accessibilityHint("Opens Clarissa to start a new conversation")
     }
 
     // MARK: - Lock Screen Rectangular
@@ -63,9 +65,12 @@ struct QuickAskWidgetView: View {
             Spacer()
         }
         .widgetURL(URL(string: "clarissa://new"))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Clarissa, tap to ask")
+        .accessibilityHint("Opens Clarissa to start a new conversation")
     }
     #endif
-    
+
     // MARK: - System Small
 
     private var smallView: some View {
@@ -81,6 +86,9 @@ struct QuickAskWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .widgetURL(URL(string: "clarissa://new"))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Ask Clarissa")
+        .accessibilityHint("Opens Clarissa to start a new conversation")
     }
 
     // MARK: - System Medium

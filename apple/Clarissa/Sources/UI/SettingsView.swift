@@ -43,6 +43,9 @@ public struct SettingsView: View {
     @StateObject private var voiceTester = VoiceTester()
     private var isTestingVoice: Bool { voiceTester.isSpeaking }
 
+    /// Memory sync status for iCloud indicator
+    @State private var memorySyncStatus: MemorySyncStatus = .idle
+
     #if os(macOS)
     @State private var selectedTab: SettingsTab = .general
     #endif
@@ -83,6 +86,7 @@ public struct SettingsView: View {
 
     private func loadInitialData() async {
         memories = await MemoryManager.shared.getAll()
+        memorySyncStatus = await MemoryManager.shared.getSyncStatus()
         openRouterApiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
         loadAvailableVoices()
     }
@@ -214,7 +218,7 @@ public struct SettingsView: View {
                     Text("This will permanently delete all saved memories. This action cannot be undone.")
                 }
             } header: {
-                Text("Long-term Memory")
+                memorySectionHeader
             }
         }
         .formStyle(.grouped)
@@ -453,7 +457,7 @@ public struct SettingsView: View {
                         Text("This will permanently delete all saved memories. This action cannot be undone.")
                     }
                 } header: {
-                    Text("Long-term Memory")
+                    memorySectionHeader
                 }
 
                 Section {
@@ -572,6 +576,52 @@ public struct SettingsView: View {
         }
     }
     #endif
+
+    // MARK: - Shared UI Components
+
+    /// Memory section header with iCloud sync indicator
+    private var memorySectionHeader: some View {
+        HStack(spacing: 6) {
+            Text("Long-term Memory")
+            Spacer()
+            syncStatusIndicator
+        }
+    }
+
+    /// Sync status indicator for iCloud memory sync
+    @ViewBuilder
+    private var syncStatusIndicator: some View {
+        switch memorySyncStatus {
+        case .idle:
+            EmptyView()
+        case .syncing:
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("Syncing")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        case .synced:
+            HStack(spacing: 4) {
+                Image(systemName: "icloud.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+                Text("Synced")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        case .error:
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.icloud.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                Text("Sync Error")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
 
     // MARK: - Version Helpers
 
@@ -995,14 +1045,14 @@ private struct VoiceDownloadPromptView: View {
 
             #if os(iOS)
             Button {
-                // Deep link to Accessibility settings
-                // iOS 26: Settings > Accessibility > Read & Speak > Voices
-                if let url = URL(string: "App-prefs:ACCESSIBILITY") {
+                // Open app settings - user can navigate to Accessibility from there
+                // Note: Direct deep links to Accessibility are not supported in release builds
+                if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text("Open Accessibility Settings")
+                    Text("Open Settings")
                     Image(systemName: "arrow.up.forward.app")
                 }
                 .font(.caption.weight(.medium))
@@ -1011,7 +1061,7 @@ private struct VoiceDownloadPromptView: View {
             .tint(ClarissaTheme.purple)
             .controlSize(.small)
 
-            Text("Go to: Read & Speak > Voices")
+            Text("Then go to: Settings > Accessibility > Read & Speak > Voices")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             #else

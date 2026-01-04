@@ -149,6 +149,8 @@ public struct OnboardingView: View {
                 } else {
                     continueButton
                         .glassEffectID("primaryButton", in: onboardingNamespace)
+
+                    skipButton
                 }
             }
             .padding(.horizontal, 24)
@@ -164,10 +166,28 @@ public struct OnboardingView: View {
                 getStartedButton
             } else {
                 continueButton
+
+                skipButton
             }
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
+    }
+
+    // MARK: - Skip Button
+
+    private var skipButton: some View {
+        Button {
+            HapticManager.shared.lightTap()
+            appState.completeOnboarding()
+        } label: {
+            Text("Skip")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Skip")
+        .accessibilityHint("Double-tap to skip onboarding and start using Clarissa")
     }
 
     // MARK: - Button Components with Glass Effects
@@ -273,12 +293,15 @@ private struct PermissionsPageView: View {
     @State private var locationGranted = false
     @State private var speechGranted = false
     @State private var remindersGranted = false
+    @State private var isRequestingPermission = false
+    @State private var requestingPermissionType: String?
+
+    // Use StateObject for the location delegate to properly handle callbacks
+    @StateObject private var locationDelegate = LocationPermissionDelegate()
 
     // Use static instances to avoid recreating on every view update
-    // These are reference types that should persist across view recreations
     private static let eventStore = EKEventStore()
     private static let contactStore = CNContactStore()
-    private static let locationManager = CLLocationManager()
 
     var body: some View {
         VStack(spacing: 16) {
@@ -299,6 +322,7 @@ private struct PermissionsPageView: View {
                         title: "Calendar",
                         description: "Schedule and view events",
                         isGranted: calendarGranted,
+                        isLoading: requestingPermissionType == "calendar",
                         onRequest: requestCalendarAccess
                     )
 
@@ -307,6 +331,7 @@ private struct PermissionsPageView: View {
                         title: "Contacts",
                         description: "Find contact information",
                         isGranted: contactsGranted,
+                        isLoading: requestingPermissionType == "contacts",
                         onRequest: requestContactsAccess
                     )
 
@@ -315,6 +340,7 @@ private struct PermissionsPageView: View {
                         title: "Reminders",
                         description: "Create and manage reminders",
                         isGranted: remindersGranted,
+                        isLoading: requestingPermissionType == "reminders",
                         onRequest: requestRemindersAccess
                     )
 
@@ -323,6 +349,7 @@ private struct PermissionsPageView: View {
                         title: "Location",
                         description: "Get weather for your area",
                         isGranted: locationGranted,
+                        isLoading: requestingPermissionType == "location",
                         onRequest: requestLocationAccess
                     )
 
@@ -331,6 +358,7 @@ private struct PermissionsPageView: View {
                         title: "Speech Recognition",
                         description: "Use voice commands",
                         isGranted: speechGranted,
+                        isLoading: requestingPermissionType == "speech",
                         onRequest: requestSpeechAccess
                     )
                 }
@@ -343,6 +371,9 @@ private struct PermissionsPageView: View {
         }
         .onAppear {
             checkPermissions()
+            locationDelegate.onAuthorizationChanged = { status in
+                updateLocationStatus(status)
+            }
         }
     }
 
@@ -359,8 +390,8 @@ private struct PermissionsPageView: View {
         let remindersStatus = EKEventStore.authorizationStatus(for: .reminder)
         remindersGranted = remindersStatus == .fullAccess
 
-        // Check location
-        let locationStatus = Self.locationManager.authorizationStatus
+        // Check location using delegate's manager
+        let locationStatus = locationDelegate.locationManager.authorizationStatus
         #if os(macOS)
         locationGranted = locationStatus == .authorized || locationStatus == .authorizedAlways
         #else
@@ -372,57 +403,92 @@ private struct PermissionsPageView: View {
         speechGranted = speechStatus == .authorized
     }
 
+    private func updateLocationStatus(_ status: CLAuthorizationStatus) {
+        requestingPermissionType = nil
+        #if os(macOS)
+        locationGranted = status == .authorized || status == .authorizedAlways
+        #else
+        locationGranted = status == .authorizedWhenInUse || status == .authorizedAlways
+        #endif
+    }
+
     private func requestCalendarAccess() {
+        requestingPermissionType = "calendar"
         Task {
             do {
                 let granted = try await Self.eventStore.requestFullAccessToEvents()
-                await MainActor.run { calendarGranted = granted }
+                await MainActor.run {
+                    calendarGranted = granted
+                    requestingPermissionType = nil
+                }
             } catch {
-                // Log error but don't show alert - user can proceed without permission
+                await MainActor.run { requestingPermissionType = nil }
                 ClarissaLogger.ui.error("Calendar permission request failed: \(error.localizedDescription)")
             }
         }
     }
 
     private func requestContactsAccess() {
+        requestingPermissionType = "contacts"
         Task {
             do {
                 let granted = try await Self.contactStore.requestAccess(for: .contacts)
-                await MainActor.run { contactsGranted = granted }
+                await MainActor.run {
+                    contactsGranted = granted
+                    requestingPermissionType = nil
+                }
             } catch {
-                // Log error but don't show alert - user can proceed without permission
+                await MainActor.run { requestingPermissionType = nil }
                 ClarissaLogger.ui.error("Contacts permission request failed: \(error.localizedDescription)")
             }
         }
     }
 
     private func requestRemindersAccess() {
+        requestingPermissionType = "reminders"
         Task {
             do {
                 let granted = try await Self.eventStore.requestFullAccessToReminders()
-                await MainActor.run { remindersGranted = granted }
+                await MainActor.run {
+                    remindersGranted = granted
+                    requestingPermissionType = nil
+                }
             } catch {
-                // Log error but don't show alert - user can proceed without permission
+                await MainActor.run { requestingPermissionType = nil }
                 ClarissaLogger.ui.error("Reminders permission request failed: \(error.localizedDescription)")
             }
         }
     }
 
     private func requestLocationAccess() {
-        Self.locationManager.requestWhenInUseAuthorization()
-        // Check again after a delay
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            await MainActor.run { checkPermissions() }
-        }
+        requestingPermissionType = "location"
+        locationDelegate.locationManager.requestWhenInUseAuthorization()
     }
 
     private func requestSpeechAccess() {
+        requestingPermissionType = "speech"
         SFSpeechRecognizer.requestAuthorization { status in
             Task { @MainActor in
                 speechGranted = status == .authorized
+                requestingPermissionType = nil
             }
         }
+    }
+}
+
+// MARK: - Location Permission Delegate
+
+private class LocationPermissionDelegate: NSObject, ObservableObject, CLLocationManagerDelegate {
+    let locationManager = CLLocationManager()
+    var onAuthorizationChanged: ((CLAuthorizationStatus) -> Void)?
+
+    override init() {
+        super.init()
+        locationManager.delegate = self
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        onAuthorizationChanged?(manager.authorizationStatus)
     }
 }
 
@@ -431,6 +497,7 @@ private struct PermissionRow: View {
     let title: String
     let description: String
     let isGranted: Bool
+    var isLoading: Bool = false
     let onRequest: () -> Void
 
     var body: some View {
@@ -453,6 +520,11 @@ private struct PermissionRow: View {
             if isGranted {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+                    .transition(.scale.combined(with: .opacity))
+            } else if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .transition(.opacity)
             } else {
                 Button("Allow") {
                     HapticManager.shared.lightTap()
@@ -460,15 +532,18 @@ private struct PermissionRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .transition(.opacity)
             }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(Color.secondary.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .animation(.easeInOut(duration: 0.2), value: isGranted)
+        .animation(.easeInOut(duration: 0.2), value: isLoading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title), \(description), \(isGranted ? "granted" : "not granted")")
-        .accessibilityHint(isGranted ? "" : "Double-tap to request permission")
+        .accessibilityLabel("\(title), \(description), \(isGranted ? "granted" : isLoading ? "requesting" : "not granted")")
+        .accessibilityHint(isGranted || isLoading ? "" : "Double-tap to request permission")
     }
 }
 

@@ -1,7 +1,47 @@
 import Foundation
+import os.log
 
 /// Maps technical errors to user-friendly messages
 enum ErrorMapper {
+
+    private static let logger = Logger(subsystem: "dev.rye.clarissa", category: "ErrorMapper")
+
+    /// Error severity levels for reporting
+    enum Severity: String {
+        case info
+        case warning
+        case error
+        case critical
+    }
+
+    /// Structured error info for reporting
+    struct ErrorInfo {
+        let userMessage: String
+        let technicalMessage: String
+        let severity: Severity
+        let isRecoverable: Bool
+        let suggestedAction: String?
+    }
+
+    /// Get detailed error information for reporting and display
+    static func analyze(_ error: Error) -> ErrorInfo {
+        let userMessage = userFriendlyMessage(for: error)
+        let technicalMessage = String(describing: error)
+        let severity = determineSeverity(for: error)
+        let isRecoverable = isErrorRecoverable(error)
+        let suggestedAction = suggestAction(for: error)
+
+        // Log the error with appropriate level
+        logError(error, severity: severity)
+
+        return ErrorInfo(
+            userMessage: userMessage,
+            technicalMessage: technicalMessage,
+            severity: severity,
+            isRecoverable: isRecoverable,
+            suggestedAction: suggestedAction
+        )
+    }
 
     /// Convert any error to a user-friendly message with guidance
     static func userFriendlyMessage(for error: Error) -> String {
@@ -136,6 +176,122 @@ enum ErrorMapper {
                 return "The AI had trouble processing that request. Please try again with a simpler question."
             }
             return "Something went wrong with the AI. Please try again."
+        }
+    }
+
+    // MARK: - Error Analysis Helpers
+
+    private static func determineSeverity(for error: Error) -> Severity {
+        if let agentError = error as? AgentError {
+            switch agentError {
+            case .maxIterationsReached:
+                return .warning
+            case .noProvider:
+                return .error
+            case .toolNotFound:
+                return .warning
+            case .toolExecutionFailed:
+                return .warning
+            }
+        }
+
+        if let foundationError = error as? FoundationModelsError {
+            switch foundationError {
+            case .notAvailable, .deviceNotEligible:
+                return .critical
+            case .appleIntelligenceNotEnabled, .modelNotReady:
+                return .error
+            case .guardrailViolation, .refusal:
+                return .info
+            case .rateLimited, .concurrentRequests:
+                return .warning
+            default:
+                return .error
+            }
+        }
+
+        if error is URLError {
+            return .warning
+        }
+
+        return .error
+    }
+
+    private static func isErrorRecoverable(_ error: Error) -> Bool {
+        if let foundationError = error as? FoundationModelsError {
+            switch foundationError {
+            case .notAvailable, .deviceNotEligible:
+                return false
+            case .rateLimited, .concurrentRequests, .modelNotReady:
+                return true
+            default:
+                return true
+            }
+        }
+
+        if error is URLError {
+            return true
+        }
+
+        if let agentError = error as? AgentError {
+            switch agentError {
+            case .noProvider:
+                return false
+            default:
+                return true
+            }
+        }
+
+        return true
+    }
+
+    private static func suggestAction(for error: Error) -> String? {
+        if let foundationError = error as? FoundationModelsError {
+            switch foundationError {
+            case .appleIntelligenceNotEnabled:
+                return "Open Settings to enable Apple Intelligence"
+            case .deviceNotEligible:
+                return "This feature requires iPhone 15 Pro or later"
+            case .rateLimited:
+                return "Wait a few seconds and try again"
+            default:
+                return nil
+            }
+        }
+
+        if let agentError = error as? AgentError {
+            switch agentError {
+            case .noProvider:
+                return "Configure an AI provider in Settings"
+            default:
+                return nil
+            }
+        }
+
+        if let toolError = error as? ToolError {
+            switch toolError {
+            case .permissionDenied:
+                return "Open Settings to grant permission"
+            default:
+                return nil
+            }
+        }
+
+        return nil
+    }
+
+    private static func logError(_ error: Error, severity: Severity) {
+        let message = "Error: \(String(describing: error))"
+
+        switch severity {
+        case .info:
+            logger.info("\(message)")
+        case .warning:
+            logger.warning("\(message)")
+        case .error:
+            logger.error("\(message)")
+        case .critical:
+            logger.critical("\(message)")
         }
     }
 }

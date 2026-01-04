@@ -2,12 +2,141 @@ import Foundation
 import Testing
 import CoreGraphics
 import CoreText
+import Combine
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
 import AppKit
 #endif
 @testable import ClarissaKit
+
+// MARK: - Mock LLM Provider for Testing
+
+/// A mock LLM provider for unit testing that returns predefined responses
+final class MockLLMProvider: LLMProvider, @unchecked Sendable {
+    let name = "Mock Provider"
+    var isAvailable: Bool { _isAvailable }
+    let maxTools = 10
+    var handlesToolsNatively: Bool { _handlesToolsNatively }
+
+    private var _isAvailable: Bool
+    private var _handlesToolsNatively: Bool
+    private var responses: [String]
+    private var currentIndex = 0
+    private var toolCallsToReturn: [[ToolCall]]
+    private var shouldThrowError: Error?
+    private(set) var messagesReceived: [[Message]] = []
+    private(set) var resetSessionCalled = false
+    private let lock = NSLock()
+
+    init(
+        responses: [String] = ["Hello, I'm Clarissa!"],
+        toolCalls: [[ToolCall]] = [],
+        isAvailable: Bool = true,
+        handlesToolsNatively: Bool = false,
+        shouldThrowError: Error? = nil
+    ) {
+        self.responses = responses
+        self.toolCallsToReturn = toolCalls
+        self._isAvailable = isAvailable
+        self._handlesToolsNatively = handlesToolsNatively
+        self.shouldThrowError = shouldThrowError
+    }
+
+    func streamComplete(
+        messages: [Message],
+        tools: [ToolDefinition]
+    ) -> AsyncThrowingStream<StreamChunk, Error> {
+        lock.lock()
+        messagesReceived.append(messages)
+        let index = currentIndex
+        currentIndex += 1
+        lock.unlock()
+
+        return AsyncThrowingStream { continuation in
+            if let error = self.shouldThrowError {
+                continuation.finish(throwing: error)
+                return
+            }
+
+            let responseIndex = min(index, self.responses.count - 1)
+            let response = self.responses[responseIndex]
+
+            // Send tool calls if available for this response
+            if index < self.toolCallsToReturn.count && !self.toolCallsToReturn[index].isEmpty {
+                continuation.yield(StreamChunk(
+                    content: nil,
+                    toolCalls: self.toolCallsToReturn[index],
+                    isComplete: false
+                ))
+            }
+
+            // Stream the response in chunks
+            for char in response {
+                continuation.yield(StreamChunk(
+                    content: String(char),
+                    toolCalls: nil,
+                    isComplete: false
+                ))
+            }
+
+            continuation.yield(StreamChunk(content: nil, toolCalls: nil, isComplete: true))
+            continuation.finish()
+        }
+    }
+
+    func resetSession() async {
+        // Use a Task to safely access the lock from async context
+        resetSessionCalled = true
+        currentIndex = 0
+    }
+}
+
+// MARK: - Mock Agent Callbacks for Testing
+
+/// A mock callbacks implementation that captures all callback events
+@MainActor
+final class MockAgentCallbacks: AgentCallbacks {
+    private(set) var thinkingCount = 0
+    private(set) var toolCalls: [(name: String, arguments: String)] = []
+    private(set) var toolResults: [(name: String, result: String, success: Bool)] = []
+    private(set) var streamedChunks: [String] = []
+    private(set) var responses: [String] = []
+    private(set) var errors: [Error] = []
+
+    func onThinking() {
+        thinkingCount += 1
+    }
+
+    func onToolCall(name: String, arguments: String) {
+        toolCalls.append((name, arguments))
+    }
+
+    func onToolResult(name: String, result: String, success: Bool) {
+        toolResults.append((name, result, success))
+    }
+
+    func onStreamChunk(chunk: String) {
+        streamedChunks.append(chunk)
+    }
+
+    func onResponse(content: String) {
+        responses.append(content)
+    }
+
+    func onError(error: Error) {
+        errors.append(error)
+    }
+
+    func reset() {
+        thinkingCount = 0
+        toolCalls.removeAll()
+        toolResults.removeAll()
+        streamedChunks.removeAll()
+        responses.removeAll()
+        errors.removeAll()
+    }
+}
 
 // MARK: - Mock Keychain for Testing
 
@@ -2601,3 +2730,247 @@ struct EnhancedImageAnalysisTests {
     }
 }
 #endif
+
+// MARK: - Agent Tests
+
+@Suite("Agent Tests")
+struct AgentTests {
+
+    @Test("Agent initializes with default config")
+    @MainActor
+    func testAgentInitialization() {
+        let agent = Agent()
+        let stats = agent.getContextStats()
+        #expect(stats.messageCount == 0)
+        #expect(stats.currentTokens == 0)
+    }
+
+    @Test("Agent accepts custom config")
+    @MainActor
+    func testAgentCustomConfig() {
+        let config = AgentConfig(maxIterations: 5, maxRetries: 2, baseRetryDelay: 0.5)
+        let agent = Agent(config: config)
+        #expect(agent.getContextStats().messageCount == 0)
+    }
+
+    @Test("Agent run throws when no provider configured")
+    @MainActor
+    func testAgentNoProvider() async {
+        let agent = Agent()
+        await #expect(throws: AgentError.self) {
+            _ = try await agent.run("Hello")
+        }
+    }
+
+    @Test("Agent run with mock provider returns response")
+    @MainActor
+    func testAgentRunWithMockProvider() async throws {
+        let mockProvider = MockLLMProvider(responses: ["Hello! How can I help?"])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        let callbacks = MockAgentCallbacks()
+        agent.callbacks = callbacks
+
+        let response = try await agent.run("Hi there")
+
+        #expect(response == "Hello! How can I help?")
+        #expect(callbacks.thinkingCount >= 1)
+        #expect(callbacks.responses.count == 1)
+        #expect(callbacks.streamedChunks.joined() == "Hello! How can I help?")
+    }
+
+    @Test("Agent streams chunks to callbacks")
+    @MainActor
+    func testAgentStreamingChunks() async throws {
+        let mockProvider = MockLLMProvider(responses: ["ABC"])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        let callbacks = MockAgentCallbacks()
+        agent.callbacks = callbacks
+
+        _ = try await agent.run("Test")
+
+        // Each character should be a separate chunk
+        #expect(callbacks.streamedChunks == ["A", "B", "C"])
+    }
+
+    @Test("Agent reset clears messages")
+    @MainActor
+    func testAgentReset() async throws {
+        let mockProvider = MockLLMProvider(responses: ["Response"])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        _ = try await agent.run("Hello")
+        let statsBefore = agent.getContextStats()
+        #expect(statsBefore.messageCount > 0)
+
+        agent.reset()
+        let statsAfter = agent.getContextStats()
+        // After reset, only system message may remain (or 0)
+        #expect(statsAfter.messageCount <= 1)
+    }
+
+    @Test("Agent resetForNewConversation calls provider reset")
+    @MainActor
+    func testAgentResetForNewConversation() async throws {
+        let mockProvider = MockLLMProvider(responses: ["Response"])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        _ = try await agent.run("Hello")
+        await agent.resetForNewConversation()
+
+        #expect(mockProvider.resetSessionCalled)
+    }
+
+    @Test("Agent getMessagesForSave excludes system messages")
+    @MainActor
+    func testAgentGetMessagesForSave() async throws {
+        let mockProvider = MockLLMProvider(responses: ["Response"])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        _ = try await agent.run("Hello")
+
+        let savedMessages = agent.getMessagesForSave()
+        #expect(!savedMessages.contains { $0.role == .system })
+        #expect(savedMessages.contains { $0.role == .user && $0.content == "Hello" })
+        #expect(savedMessages.contains { $0.role == .assistant && $0.content == "Response" })
+    }
+
+    @Test("Agent loadMessages restores history")
+    @MainActor
+    func testAgentLoadMessages() {
+        let agent = Agent()
+        let messages = [
+            Message.user("Previous question"),
+            Message.assistant("Previous answer")
+        ]
+
+        agent.loadMessages(messages)
+        let loaded = agent.getHistory()
+
+        #expect(loaded.contains { $0.role == .user && $0.content == "Previous question" })
+        #expect(loaded.contains { $0.role == .assistant && $0.content == "Previous answer" })
+    }
+
+    @Test("Agent context stats calculation")
+    @MainActor
+    func testAgentContextStats() async throws {
+        let mockProvider = MockLLMProvider(responses: ["Short response"])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        _ = try await agent.run("A question for testing context stats")
+
+        let stats = agent.getContextStats()
+        #expect(stats.messageCount >= 2)  // At least system + user + assistant
+        #expect(stats.userTokens > 0)
+        #expect(stats.assistantTokens > 0)
+        #expect(stats.usagePercent >= 0 && stats.usagePercent <= 1)
+    }
+
+    @Test("Agent handles provider error")
+    @MainActor
+    func testAgentHandlesProviderError() async {
+        let testError = NSError(domain: "TestError", code: 500, userInfo: [NSLocalizedDescriptionKey: "Test error"])
+        let mockProvider = MockLLMProvider(shouldThrowError: testError)
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        await #expect(throws: Error.self) {
+            _ = try await agent.run("Hello")
+        }
+    }
+}
+
+// MARK: - Agent ReAct Loop Integration Tests
+
+@Suite("Agent ReAct Loop Tests")
+struct AgentReActTests {
+
+    @Test("Agent ReAct loop executes tool and continues")
+    @MainActor
+    func testReActLoopWithToolCall() async throws {
+        // First response has tool call, second is final response
+        let toolCall = ToolCall(name: "calculator", arguments: "{\"expression\": \"2+2\"}")
+        let mockProvider = MockLLMProvider(
+            responses: ["", "The answer is 4!"],
+            toolCalls: [[toolCall], []]
+        )
+
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        let callbacks = MockAgentCallbacks()
+        agent.callbacks = callbacks
+
+        let response = try await agent.run("What is 2+2?")
+
+        #expect(response == "The answer is 4!")
+        #expect(callbacks.toolCalls.count == 1)
+        #expect(callbacks.toolCalls.first?.name == "calculator")
+        #expect(callbacks.toolResults.count == 1)
+        #expect(callbacks.toolResults.first?.success == true)
+    }
+
+    @Test("Agent handles multiple tool calls in sequence")
+    @MainActor
+    func testReActLoopMultipleToolCalls() async throws {
+        let calcCall = ToolCall(name: "calculator", arguments: "{\"expression\": \"10*5\"}")
+        let mockProvider = MockLLMProvider(
+            responses: ["", "The result is 50."],
+            toolCalls: [[calcCall], []]
+        )
+
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        let callbacks = MockAgentCallbacks()
+        agent.callbacks = callbacks
+
+        let response = try await agent.run("Calculate 10 times 5")
+
+        #expect(response.contains("50"))
+        #expect(callbacks.thinkingCount >= 2)  // Once per iteration
+    }
+
+    @Test("Agent applies refusal fallback")
+    @MainActor
+    func testAgentRefusalFallback() async throws {
+        // Provider returns a refusal response
+        let mockProvider = MockLLMProvider(responses: ["I cannot fulfill that request."])
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        let response = try await agent.run("What's the weather?")
+
+        // Should get a helpful redirect instead of the refusal
+        #expect(response.contains("weather") || response.contains("help"))
+        #expect(!response.contains("cannot fulfill"))
+    }
+
+    @Test("Agent with native tool handling skips manual execution")
+    @MainActor
+    func testNativeToolHandling() async throws {
+        let mockProvider = MockLLMProvider(
+            responses: ["The weather is sunny."],
+            handlesToolsNatively: true
+        )
+
+        let agent = Agent()
+        agent.setProvider(mockProvider)
+
+        let callbacks = MockAgentCallbacks()
+        agent.callbacks = callbacks
+
+        let response = try await agent.run("What's the weather?")
+
+        #expect(response == "The weather is sunny.")
+        // No manual tool calls for native providers
+        #expect(callbacks.toolCalls.isEmpty)
+    }
+}

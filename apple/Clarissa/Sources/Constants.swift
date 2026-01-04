@@ -89,6 +89,14 @@ public enum ClarissaConstants {
 
     /// Maximum session count to display (shows "99+" for higher)
     public static let maxDisplayedSessionCount = 99
+
+    // MARK: - Accessibility
+
+    /// Minimum touch target size for accessibility (44pt per Apple HIG)
+    public static let minimumTouchTargetSize: CGFloat = 44
+
+    /// Minimum contrast ratio for text (WCAG AA standard)
+    public static let minimumContrastRatio: Double = 4.5
 }
 
 // MARK: - macOS Menu Command Notifications

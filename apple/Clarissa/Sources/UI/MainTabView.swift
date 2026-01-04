@@ -697,6 +697,16 @@ struct HistoryTabContent: View {
         }
     }
 
+    /// Check if session count is approaching the limit (80%+)
+    private var isApproachingSessionLimit: Bool {
+        sessions.count >= Int(Double(ClarissaConstants.maxSessions) * 0.8)
+    }
+
+    /// Sessions remaining before limit
+    private var sessionsRemaining: Int {
+        max(0, ClarissaConstants.maxSessions - sessions.count)
+    }
+
     var body: some View {
         NavigationStack {
             historyList
@@ -791,6 +801,24 @@ struct HistoryTabContent: View {
         } else if filteredSessions.isEmpty && !searchText.isEmpty {
             ContentUnavailableView.search(text: searchText)
         } else {
+            // Show warning when approaching session limit
+            if isApproachingSessionLimit && searchText.isEmpty {
+                Section {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Approaching Storage Limit")
+                                .font(.subheadline.weight(.medium))
+                            Text("\(sessionsRemaining) conversation\(sessionsRemaining == 1 ? "" : "s") remaining. Older conversations will be removed automatically.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
             ForEach(filteredSessions) { session in
                 SessionRowView(
                     session: session,

@@ -169,6 +169,8 @@ struct WatchContentView: View {
             }
             .buttonStyle(.plain)
             .disabled(isProcessing)
+            .accessibilityLabel("Ask Clarissa")
+            .accessibilityHint("Opens voice input to ask a question")
         }
         .padding(.bottom, 8)
     }

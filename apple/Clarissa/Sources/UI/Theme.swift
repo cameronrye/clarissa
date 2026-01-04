@@ -89,6 +89,43 @@ extension View {
         self.overlay(ClarissaTheme.gradient)
             .mask(self)
     }
+
+    /// Ensures minimum touch target size for accessibility
+    func accessibleTouchTarget() -> some View {
+        self.frame(
+            minWidth: ClarissaConstants.minimumTouchTargetSize,
+            minHeight: ClarissaConstants.minimumTouchTargetSize
+        )
+    }
+}
+
+/// Dynamic Type aware spacing helper
+struct DynamicSpacing: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let base: CGFloat
+
+    var body: some View {
+        Spacer()
+            .frame(height: scaledValue)
+    }
+
+    private var scaledValue: CGFloat {
+        switch dynamicTypeSize {
+        case .xSmall, .small, .medium:
+            return base
+        case .large, .xLarge:
+            return base * 1.1
+        case .xxLarge, .xxxLarge:
+            return base * 1.25
+        case .accessibility1, .accessibility2:
+            return base * 1.5
+        case .accessibility3, .accessibility4, .accessibility5:
+            return base * 2.0
+        @unknown default:
+            return base
+        }
+    }
 }
 
 /// Clarissa logo view matching the doc site design
