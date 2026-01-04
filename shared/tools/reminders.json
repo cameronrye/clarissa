@@ -1,0 +1,82 @@
+{
+  "name": "reminders",
+  "description": "Create, read, update, and complete reminders using Apple Reminders. Can manage tasks with due dates, priorities, and lists.",
+  "category": "system",
+  "priority": 1,
+  "requiresConfirmation": true,
+  "platforms": ["ios", "macos"],
+  "permissions": ["reminders"],
+  "triggers": [
+    "remind me",
+    "reminder",
+    "to-do",
+    "task",
+    "don't forget",
+    "add to my list",
+    "what's on my list",
+    "mark as done"
+  ],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["create", "list", "complete", "delete"],
+        "description": "The action to perform"
+      },
+      "title": {
+        "type": "string",
+        "description": "Reminder title (required for create)"
+      },
+      "notes": {
+        "type": "string",
+        "description": "Additional notes for the reminder"
+      },
+      "dueDate": {
+        "type": "string",
+        "description": "Due date in ISO 8601 format or natural language (e.g., 'tomorrow at 9am')"
+      },
+      "priority": {
+        "type": "integer",
+        "enum": [0, 1, 5, 9],
+        "description": "Priority level: 0 (none), 1 (high), 5 (medium), 9 (low)"
+      },
+      "reminderId": {
+        "type": "string",
+        "description": "Reminder identifier (for complete/delete actions)"
+      },
+      "listName": {
+        "type": "string",
+        "description": "Name of the reminders list (defaults to default list)"
+      }
+    },
+    "required": ["action"]
+  },
+  "examples": [
+    {
+      "description": "Create a reminder with due date",
+      "input": "Remind me to call Mom tomorrow at 5pm",
+      "call": {
+        "action": "create",
+        "title": "Call Mom",
+        "dueDate": "tomorrow at 5pm"
+      },
+      "output": "Created reminder: 'Call Mom' due tomorrow at 5:00 PM"
+    },
+    {
+      "description": "List upcoming reminders",
+      "input": "What's on my to-do list?",
+      "call": {
+        "action": "list"
+      },
+      "output": "Upcoming reminders:\n1. Call Mom - Tomorrow 5pm\n2. Buy groceries - Saturday"
+    }
+  ],
+  "notes": [
+    "Uses Apple Reminders app data",
+    "Supports natural language date parsing",
+    "Reminders sync across all Apple devices",
+    "Lists are synced with iCloud"
+  ]
+}
+

@@ -1,6 +1,6 @@
 {
   "name": "image_analysis",
-  "description": "Analyze images or PDFs using Vision and PDFKit frameworks. Supports OCR (text extraction), image classification, face detection, document detection, and PDF text extraction/OCR. Provide data as base64 or file URL.",
+  "description": "Perform targeted analysis on images or PDFs via file URL. Actions: 'ocr' (text), 'handwriting' (handwritten text), 'classify' (objects), 'detect_faces', 'detect_document', 'scan_document' (OCR with perspective correction), 'compare' (multi-image), 'pdf_extract_text', 'pdf_ocr', 'pdf_page_count'. Only file:// URLs supported.",
   "category": "utility",
   "priority": 3,
   "requiresConfirmation": false,
@@ -21,37 +21,40 @@
     "read PDF",
     "what's in this PDF",
     "extract text from PDF",
-    "how many pages"
+    "how many pages",
+    "compare images",
+    "handwriting recognition"
   ],
   "parameters": {
     "type": "object",
     "properties": {
       "action": {
         "type": "string",
-        "enum": ["ocr", "classify", "detect_faces", "detect_document", "pdf_extract_text", "pdf_ocr", "pdf_page_count"],
-        "description": "Analysis type: 'ocr' for image text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count"
-      },
-      "imageBase64": {
-        "type": "string",
-        "description": "Base64-encoded image data (PNG, JPEG, or HEIC)"
+        "enum": ["ocr", "handwriting", "classify", "detect_faces", "detect_document", "scan_document", "compare", "pdf_extract_text", "pdf_ocr", "pdf_page_count"],
+        "description": "Analysis type: 'ocr' for printed text, 'handwriting' for handwritten text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'scan_document' for document OCR with perspective correction, 'compare' for multi-image comparison, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count"
       },
       "imageURL": {
         "type": "string",
         "format": "uri",
-        "description": "File URL to the image (file:// scheme)"
+        "description": "File URL to the image (file:// scheme only)"
       },
-      "pdfBase64": {
-        "type": "string",
-        "description": "Base64-encoded PDF data"
+      "imageURLs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Array of file URLs for 'compare' action (2-5 images)"
       },
       "pdfURL": {
         "type": "string",
         "format": "uri",
-        "description": "File URL to the PDF (file:// scheme)"
+        "description": "File URL to the PDF (file:// scheme only)"
       },
       "pageRange": {
         "type": "string",
         "description": "Page range for PDF operations, e.g., '1-5' or '1,3,5' (optional, defaults to all pages)"
+      },
+      "comparisonPrompt": {
+        "type": "string",
+        "description": "Optional prompt for 'compare' action (e.g., 'What changed between these images?')"
       }
     },
     "required": ["action"]
@@ -62,16 +65,25 @@
       "input": "What text is in this image?",
       "call": {
         "action": "ocr",
-        "imageBase64": "<base64_image_data>"
+        "imageURL": "file:///Users/user/Documents/receipt.jpg"
       },
       "output": "Recognized text:\n1. Meeting at 3pm\n2. Call John\n3. Buy groceries"
+    },
+    {
+      "description": "Recognize handwritten notes",
+      "input": "Read the handwriting in this note",
+      "call": {
+        "action": "handwriting",
+        "imageURL": "file:///Users/user/Documents/handwritten_note.jpg"
+      },
+      "output": "Recognized handwriting:\nDear Mom, Thanks for everything..."
     },
     {
       "description": "Identify objects in a photo",
       "input": "What's in this photo?",
       "call": {
         "action": "classify",
-        "imageBase64": "<base64_image_data>"
+        "imageURL": "file:///Users/user/Photos/dog.jpg"
       },
       "output": "Image classification:\n- golden retriever (92.5%)\n- dog (89.3%)\n- domestic animal (85.1%)"
     },
@@ -80,36 +92,19 @@
       "input": "How many people are in this picture?",
       "call": {
         "action": "detect_faces",
-        "imageBase64": "<base64_image_data>"
+        "imageURL": "file:///Users/user/Photos/family.jpg"
       },
       "output": "Found 4 faces in the image"
     },
     {
-      "description": "Detect document in an image",
-      "input": "Is there a document in this image?",
+      "description": "Compare two images",
+      "input": "What changed between these two photos?",
       "call": {
-        "action": "detect_document",
-        "imageBase64": "<base64_image_data>"
+        "action": "compare",
+        "imageURLs": ["file:///Users/user/before.jpg", "file:///Users/user/after.jpg"],
+        "comparisonPrompt": "What changed between these images?"
       },
-      "output": "Document detected covering 78.5% of the image"
-    },
-    {
-      "description": "Analyze image from file URL",
-      "input": "Read text from this file",
-      "call": {
-        "action": "ocr",
-        "imageURL": "file:///Users/user/Documents/receipt.jpg"
-      },
-      "output": "Recognized text:\nReceipt #12345\nTotal: $45.99\nThank you for your purchase!"
-    },
-    {
-      "description": "Extract text from a searchable PDF",
-      "input": "Summarize this PDF document",
-      "call": {
-        "action": "pdf_extract_text",
-        "pdfBase64": "<base64_pdf_data>"
-      },
-      "output": "Extracted 2,450 characters from 3 pages:\n\nQ3 Financial Report\n\nRevenue increased 15% year-over-year..."
+      "output": "Comparison of 2 images:\n- Text content differs between images\n- Face count: 2 in first, 3 in second"
     },
     {
       "description": "OCR a scanned PDF document",
@@ -119,15 +114,6 @@
         "pdfURL": "file:///Users/user/Documents/scanned_contract.pdf"
       },
       "output": "OCR completed on 5 pages:\n\n--- Page 1 ---\nSERVICE AGREEMENT\n\nThis agreement is entered into..."
-    },
-    {
-      "description": "Get PDF page count",
-      "input": "How many pages is this PDF?",
-      "call": {
-        "action": "pdf_page_count",
-        "pdfBase64": "<base64_pdf_data>"
-      },
-      "output": "This PDF has 12 pages"
     },
     {
       "description": "Extract specific pages from PDF",
@@ -141,13 +127,14 @@
     }
   ],
   "notes": [
-    "For images: provide imageBase64 or imageURL",
-    "For PDFs: provide pdfBase64 or pdfURL",
+    "Only file:// URLs are supported (no base64 or remote URLs)",
+    "For user-attached images, pre-processing happens before the LLM call via ImagePreProcessor",
+    "This tool is for targeted follow-up operations on files (e.g., 'get face coordinates')",
     "pdf_extract_text is fast for searchable PDFs (text-based)",
     "pdf_ocr renders pages as images and runs OCR (for scanned documents)",
     "pageRange is optional, supports '1-5' or '1,3,5' formats",
     "PDF text is truncated at ~15,000 characters; OCR limited to 10 pages",
-    "For OCR, works best with clear, well-lit images",
+    "handwriting and scan_document actions require iOS/macOS 26.0+",
     "Classification returns top 5 labels with confidence scores"
   ]
 }

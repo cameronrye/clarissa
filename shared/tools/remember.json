@@ -1,0 +1,52 @@
+{
+  "name": "remember",
+  "description": "Store information in long-term memory that persists across conversations. Use for preferences, facts, or context the user wants remembered.",
+  "category": "utility",
+  "priority": 2,
+  "requiresConfirmation": false,
+  "platforms": ["ios", "macos", "cli"],
+  "triggers": [
+    "remember",
+    "don't forget",
+    "note that",
+    "keep in mind",
+    "my preference is",
+    "I prefer",
+    "save this"
+  ],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "string",
+        "description": "The information to remember (concise, 1-2 sentences)"
+      }
+    },
+    "required": ["content"]
+  },
+  "examples": [
+    {
+      "description": "Remember a preference",
+      "input": "Remember that I prefer dark mode",
+      "call": {
+        "content": "User prefers dark mode for applications"
+      },
+      "output": "I'll remember that you prefer dark mode"
+    },
+    {
+      "description": "Remember a fact",
+      "input": "My dog's name is Max",
+      "call": {
+        "content": "User's dog is named Max"
+      },
+      "output": "Got it! I'll remember that your dog's name is Max"
+    }
+  ],
+  "notes": [
+    "Memories persist across app restarts",
+    "Keep memories concise for best retrieval",
+    "Memories are stored locally and privately",
+    "Use for long-term facts, not temporary information"
+  ]
+}
+

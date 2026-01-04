@@ -1,0 +1,51 @@
+{
+  "name": "location",
+  "description": "Get the user's current location including coordinates and optional reverse-geocoded address.",
+  "category": "system",
+  "priority": 2,
+  "requiresConfirmation": false,
+  "platforms": ["ios", "macos"],
+  "permissions": ["location"],
+  "triggers": [
+    "where am I",
+    "my location",
+    "current location",
+    "what city am I in",
+    "my address",
+    "nearby"
+  ],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "includeAddress": {
+        "type": "boolean",
+        "default": true,
+        "description": "Whether to include reverse-geocoded address information"
+      }
+    }
+  },
+  "examples": [
+    {
+      "description": "Get current location with address",
+      "input": "Where am I right now?",
+      "call": {
+        "includeAddress": true
+      },
+      "output": "You are at: 1 Infinite Loop, Cupertino, CA 95014\nCoordinates: 37.3318, -122.0312"
+    },
+    {
+      "description": "Get just coordinates",
+      "input": "What are my GPS coordinates?",
+      "call": {
+        "includeAddress": false
+      },
+      "output": "Coordinates: 37.3318, -122.0312"
+    }
+  ],
+  "notes": [
+    "Requires location permission from the user",
+    "Address lookup uses Apple Maps reverse geocoding",
+    "Accuracy depends on available location services (GPS, Wi-Fi, cellular)"
+  ]
+}
+

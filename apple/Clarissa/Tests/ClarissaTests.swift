@@ -1706,6 +1706,13 @@ struct ToolRegistryTests {
         #expect(tool != nil)
     }
 
+    @Test("Tool registry has image_analysis tool")
+    func testHasImageAnalysisTool() {
+        let registry = ToolRegistry.shared
+        let tool = registry.get("image_analysis")
+        #expect(tool != nil)
+    }
+
     @Test("All tool names are unique")
     func testUniqueToolNames() {
         let registry = ToolRegistry.shared

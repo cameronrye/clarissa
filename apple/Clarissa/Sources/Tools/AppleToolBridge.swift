@@ -592,11 +592,11 @@ struct AppleRememberTool: Tool {
 /// Typed arguments for image analysis tool
 struct ImageAnalysisToolArgs: Codable, Sendable {
     var action: String
-    var imageBase64: String?
     var imageURL: String?
-    var pdfBase64: String?
+    var imageURLs: [String]?
     var pdfURL: String?
     var pageRange: String?
+    var comparisonPrompt: String?
 }
 
 /// Apple Foundation Models Tool for image and PDF analysis using Vision and PDFKit frameworks
@@ -604,29 +604,29 @@ struct ImageAnalysisToolArgs: Codable, Sendable {
 struct AppleImageAnalysisTool: Tool {
     let name = "image_analysis"
     // Enhanced description with specific triggers for images and PDFs
-    let description = "Analyze images or PDFs for text, objects, faces, or documents. TRIGGERS: 'read text from image', 'what's in this photo', 'OCR', 'scan', 'summarize PDF', 'read PDF', 'extract text from PDF'. Image actions: ocr, classify, detect_faces, detect_document. PDF actions: pdf_extract_text, pdf_ocr, pdf_page_count."
+    let description = "Analyze images or PDFs via file URL. TRIGGERS: 'read text from image', 'what's in this photo', 'OCR', 'scan document', 'handwriting', 'compare images', 'summarize PDF', 'read PDF'. Image actions: ocr, handwriting, classify, detect_faces, detect_document, scan_document, compare. PDF actions: pdf_extract_text, pdf_ocr, pdf_page_count. Only file:// URLs supported."
 
     private let underlyingTool: ImageAnalysisTool
 
     @Generable(description: "Image and PDF analysis parameters")
     struct Arguments {
-        @Guide(description: "Analysis type: 'ocr' for image text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count")
+        @Guide(description: "Analysis type: 'ocr' for printed text, 'handwriting' for handwritten text, 'classify' for objects, 'detect_faces' for faces, 'detect_document' for boundaries, 'scan_document' for document OCR with perspective correction, 'compare' for multi-image comparison, 'pdf_extract_text' for searchable PDFs, 'pdf_ocr' for scanned PDFs, 'pdf_page_count' for page count")
         var action: String
 
-        @Guide(description: "Base64-encoded image data (for image actions)")
-        var imageBase64: String?
-
-        @Guide(description: "File URL to the image (file:// scheme)")
+        @Guide(description: "File URL to the image (file:// scheme only)")
         var imageURL: String?
 
-        @Guide(description: "Base64-encoded PDF data (for pdf_ actions)")
-        var pdfBase64: String?
+        @Guide(description: "Array of file URLs for 'compare' action (2-5 images)")
+        var imageURLs: [String]?
 
-        @Guide(description: "File URL to the PDF (file:// scheme)")
+        @Guide(description: "File URL to the PDF (file:// scheme only)")
         var pdfURL: String?
 
         @Guide(description: "Page range for PDF operations, e.g., '1-5' or '1,3,5' (optional)")
         var pageRange: String?
+
+        @Guide(description: "Optional prompt for 'compare' action (e.g., 'What changed between these images?')")
+        var comparisonPrompt: String?
     }
 
     init(wrapping tool: ImageAnalysisTool) {
@@ -637,11 +637,11 @@ struct AppleImageAnalysisTool: Tool {
         logToolCall(name, arguments)
         let typedArgs = ImageAnalysisToolArgs(
             action: arguments.action,
-            imageBase64: arguments.imageBase64,
             imageURL: arguments.imageURL,
-            pdfBase64: arguments.pdfBase64,
+            imageURLs: arguments.imageURLs,
             pdfURL: arguments.pdfURL,
-            pageRange: arguments.pageRange
+            pageRange: arguments.pageRange,
+            comparisonPrompt: arguments.comparisonPrompt
         )
         let jsonData = try JSONEncoder().encode(typedArgs)
         let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"

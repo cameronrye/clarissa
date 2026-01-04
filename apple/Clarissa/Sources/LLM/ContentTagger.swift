@@ -103,7 +103,7 @@ public final class ContentTagger {
             instructions: Instructions("""
                 Classify the user's intent from their message.
                 Determine what they're trying to accomplish and which tools might help.
-                Available tools: calendar, reminders, weather, contacts, location, calculator, web_fetch.
+                Available tools: calendar, reminders, weather, contacts, location, calculator, web_fetch, image_analysis, remember.
                 """)
         )
 

@@ -1,0 +1,69 @@
+{
+  "name": "weather",
+  "description": "Get current weather conditions and forecasts for a location. Can use location name or coordinates.",
+  "category": "utility",
+  "priority": 1,
+  "requiresConfirmation": false,
+  "platforms": ["ios", "macos"],
+  "permissions": ["location"],
+  "triggers": [
+    "weather",
+    "forecast",
+    "temperature",
+    "is it going to rain",
+    "what's the weather",
+    "will it snow",
+    "how hot",
+    "how cold"
+  ],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "Location name (e.g., 'San Francisco, CA' or 'Tokyo, Japan')"
+      },
+      "latitude": {
+        "type": "number",
+        "description": "Latitude coordinate (use with longitude for precise location)"
+      },
+      "longitude": {
+        "type": "number",
+        "description": "Longitude coordinate (use with latitude for precise location)"
+      },
+      "forecast": {
+        "type": "string",
+        "enum": ["current", "hourly", "daily"],
+        "default": "current",
+        "description": "Type of forecast: 'current' for now, 'hourly' for next 24 hours, 'daily' for next 10 days"
+      }
+    }
+  },
+  "examples": [
+    {
+      "description": "Get current weather for a city",
+      "input": "What's the weather in New York?",
+      "call": {
+        "location": "New York, NY",
+        "forecast": "current"
+      },
+      "output": "Currently in New York: 72F (22C), Partly Cloudy, Humidity 65%, Wind 8 mph NW"
+    },
+    {
+      "description": "Get weekly forecast",
+      "input": "Will it rain this week in Seattle?",
+      "call": {
+        "location": "Seattle, WA",
+        "forecast": "daily"
+      },
+      "output": "10-day forecast for Seattle:\nMon: 58F, Rain (80%)\nTue: 55F, Cloudy..."
+    }
+  ],
+  "notes": [
+    "Uses Apple WeatherKit for accurate forecasts",
+    "Location permission required for 'current location' requests",
+    "Hourly forecast covers next 24 hours",
+    "Daily forecast covers next 10 days"
+  ]
+}
+
