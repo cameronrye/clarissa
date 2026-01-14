@@ -19,7 +19,7 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane screenshots_all
 ```
 
-Capture all screenshots (iOS + macOS)
+Capture all screenshots (iOS + macOS + watchOS)
 
 ### frame_all
 
@@ -102,6 +102,19 @@ Add frames and marketing text to macOS screenshots
 ```
 
 Full macOS workflow: capture + frame
+
+----
+
+
+## watchos
+
+### watchos screenshots
+
+```sh
+[bundle exec] fastlane watchos screenshots
+```
+
+Capture watchOS screenshots via UI tests
 
 ----
 

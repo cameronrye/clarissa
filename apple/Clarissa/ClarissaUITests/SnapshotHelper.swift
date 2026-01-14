@@ -155,13 +155,18 @@ open class Snapshot: NSObject {
             return
         }
 
-        let screenshot = XCUIScreen.main.screenshot()
-
         #if os(macOS)
-        // On macOS, use "Mac" as the device name
+        // On macOS, capture the app window instead of the entire screen
+        // App Store requires: 1280x800, 1440x900, 2560x1600, or 2880x1800
+        guard let appWindow = app?.windows.firstMatch else {
+            NSLog("No app window found for screenshot")
+            return
+        }
+        let screenshot = appWindow.screenshot()
         let deviceName = "Mac"
         let image = screenshot.image
         #elseif os(iOS) && !targetEnvironment(macCatalyst)
+        let screenshot = XCUIScreen.main.screenshot()
         // On iOS simulator, get device name and handle landscape
         guard var deviceName = ProcessInfo().environment["SIMULATOR_DEVICE_NAME"] else { return }
         // Remove clone prefix if present
@@ -171,8 +176,10 @@ open class Snapshot: NSObject {
         }
         let image = XCUIDevice.shared.orientation.isLandscape ? fixLandscapeOrientation(image: screenshot.image) : screenshot.image
         #else
-        // Fallback for other platforms
+        // Fallback for other platforms (watchOS, etc.)
+        let screenshot = XCUIScreen.main.screenshot()
         let deviceName = "Device"
+        let image = screenshot.image
         #endif
 
         let path = screenshotsDir.appendingPathComponent("\(deviceName)-\(name).png")
@@ -245,9 +252,12 @@ open class Snapshot: NSObject {
             if let simulatorHostHome = ProcessInfo().environment["SIMULATOR_HOST_HOME"] {
                 let homeDir = URL(fileURLWithPath: simulatorHostHome)
                 let cacheDir = homeDir.appendingPathComponent(cachePath)
-                // Test if we can write to this directory
-                if FileManager.default.isWritableFile(atPath: cacheDir.deletingLastPathComponent().path) {
+                // Test if we can write to this directory by trying to create it
+                do {
+                    try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
                     return cacheDir
+                } catch {
+                    NSLog("Cannot write to SIMULATOR_HOST_HOME cache: \(error.localizedDescription)")
                 }
             }
             // Try to get the real home from /etc/passwd
@@ -256,12 +266,15 @@ open class Snapshot: NSObject {
                 let homeDir = URL(fileURLWithPath: realHome)
                 let cacheDir = homeDir.appendingPathComponent(cachePath)
                 // Test if we can write to this directory
-                if FileManager.default.isWritableFile(atPath: cacheDir.deletingLastPathComponent().path) {
+                do {
+                    try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
                     return cacheDir
+                } catch {
+                    NSLog("Cannot write to real home cache: \(error.localizedDescription)")
                 }
             }
-            // Fallback to /tmp for sandboxed apps (always writable)
-            let tmpDir = URL(fileURLWithPath: "/tmp/tools.fastlane")
+            // Fallback to app's temporary directory (always writable, even for sandboxed apps)
+            let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("tools.fastlane")
             return tmpDir
         #elseif arch(i386) || arch(x86_64) || arch(arm64)
             // On iOS simulator, use the host home directory

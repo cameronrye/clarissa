@@ -49,8 +49,6 @@ DerivedData/
 build/
 
 # Fastlane
-apple/Clarissa/fastlane/fastlane/
-apple/Clarissa/fastlane/screenshots/
 apple/Clarissa/fastlane/test_output/
 apple/Clarissa/fastlane/report.xml
 

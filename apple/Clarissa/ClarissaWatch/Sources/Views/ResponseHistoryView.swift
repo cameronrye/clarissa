@@ -5,6 +5,19 @@ struct ResponseHistoryView: View {
     @EnvironmentObject private var appState: WatchAppState
     @Environment(\.dismiss) private var dismiss
 
+    /// For demo mode: navigate directly to detail view
+    @State private var showDetailForDemo = false
+
+    /// Check if we're in demo mode
+    private var isDemoMode: Bool {
+        WatchDemoData.isScreenshotMode
+    }
+
+    /// Current demo scenario
+    private var demoScenario: WatchDemoScenario {
+        WatchDemoData.currentScenario
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -21,6 +34,17 @@ struct ResponseHistoryView: View {
                     Button("Done") {
                         dismiss()
                     }
+                }
+            }
+            .navigationDestination(isPresented: $showDetailForDemo) {
+                if let firstItem = appState.responseHistory.first {
+                    ResponseDetailView(item: firstItem)
+                }
+            }
+            .onAppear {
+                // Auto-navigate to detail for historyDetail scenario
+                if isDemoMode && demoScenario == .historyDetail {
+                    showDetailForDemo = true
                 }
             }
         }

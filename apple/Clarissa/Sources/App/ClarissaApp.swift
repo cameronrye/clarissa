@@ -4,6 +4,10 @@ import SwiftUI
 import FoundationModels
 #endif
 
+#if os(macOS)
+import AppKit
+#endif
+
 #if os(iOS)
 import BackgroundTasks
 import CarPlay
@@ -100,6 +104,11 @@ struct ClarissaApp: App {
     // @StateObject would create ownership confusion with the shared singleton
     @ObservedObject private var appState = AppState.shared
 
+    /// Check if the app is running in screenshot/demo mode (for App Store screenshots)
+    private static var isScreenshotMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-SCREENSHOT_MODE")
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -125,6 +134,13 @@ struct ClarissaApp: App {
                 // Start Watch connectivity handler for Apple Watch integration
                 WatchQueryHandler.shared.start()
                 #endif
+
+                #if os(macOS)
+                // Resize window for App Store screenshots (1440x900)
+                if Self.isScreenshotMode {
+                    Self.resizeWindowForScreenshots()
+                }
+                #endif
             }
             .onOpenURL { url in
                 // Handle URL scheme for CLI integration
@@ -141,7 +157,11 @@ struct ClarissaApp: App {
         #if os(macOS)
         .windowStyle(.automatic)
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 900, height: 700)
+        // Use App Store screenshot size (1440x900) if in screenshot mode, otherwise default
+        .defaultSize(
+            width: Self.isScreenshotMode ? 1440 : 900,
+            height: Self.isScreenshotMode ? 900 : 700
+        )
         .commands {
             // File menu
             CommandGroup(replacing: .newItem) {
@@ -169,6 +189,41 @@ struct ClarissaApp: App {
                     )
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
+
+                Divider()
+
+                Button("Show History") {
+                    NotificationCenter.default.post(name: .showHistory, object: nil)
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+            }
+
+            // Settings menu (for screenshot navigation)
+            CommandMenu("Settings") {
+                Button("General") {
+                    openSettingsTab(.showSettingsGeneral)
+                }
+                .keyboardShortcut("1", modifiers: [.command, .option])
+
+                Button("Tools") {
+                    openSettingsTab(.showSettingsTools)
+                }
+                .keyboardShortcut("2", modifiers: [.command, .option])
+
+                Button("Voice") {
+                    openSettingsTab(.showSettingsVoice)
+                }
+                .keyboardShortcut("3", modifiers: [.command, .option])
+
+                Button("Shortcuts") {
+                    openSettingsTab(.showSettingsShortcuts)
+                }
+                .keyboardShortcut("4", modifiers: [.command, .option])
+
+                Button("About") {
+                    openSettingsTab(.showSettingsAbout)
+                }
+                .keyboardShortcut("5", modifiers: [.command, .option])
             }
 
             // Voice menu
@@ -225,4 +280,49 @@ struct ClarissaApp: App {
         }
         #endif
     }
+
+    #if os(macOS)
+    /// Resize the main window for App Store screenshots
+    /// App Store accepts: 1280x800, 1440x900, 2560x1600, or 2880x1800
+    @MainActor
+    private static func resizeWindowForScreenshots() {
+        guard let window = NSApplication.shared.windows.first else { return }
+        // Set window size to 1440x900 (a required App Store dimension)
+        let screenshotSize = NSSize(width: 1440, height: 900)
+        window.setContentSize(screenshotSize)
+        // Center the window on screen
+        window.center()
+    }
+
+    /// Open the Settings window programmatically for screenshot mode
+    @MainActor
+    private static func openSettingsWindow() {
+        // Use the standard macOS Settings action
+        if #available(macOS 14.0, *) {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        } else {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
+    }
+    #endif
 }
+
+// MARK: - Settings Menu Helpers
+
+#if os(macOS)
+/// Open Settings window and switch to a specific tab
+/// Defined at module level to avoid MainActor isolation issues in Button actions
+private func openSettingsTab(_ notification: Notification.Name) {
+    Task { @MainActor in
+        // Open Settings window using the standard macOS action
+        if #available(macOS 14.0, *) {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        } else {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
+        // Post notification after delay to allow the window to load
+        try? await Task.sleep(for: .milliseconds(300))
+        NotificationCenter.default.post(name: notification, object: nil)
+    }
+}
+#endif

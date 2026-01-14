@@ -573,19 +573,11 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     #if DEBUG
     private func loadDemoData() {
         let scenario = DemoData.currentScenario
-        switch scenario {
-        case .welcome:
-            // Empty state with suggestions - no messages needed
-            messages = []
-        case .conversation:
-            messages = DemoData.getConversationChatMessages()
-        case .context:
-            // Load some messages and set demo context stats for context visualizer
-            messages = DemoData.getConversationChatMessages()
+        messages = DemoData.getMessagesForScenario(scenario)
+
+        // Set demo context stats for context visualizer scenario
+        if scenario == .context {
             contextStats = DemoData.demoContextStats
-        case .settings:
-            // Settings screen doesn't need messages
-            messages = []
         }
     }
     #endif

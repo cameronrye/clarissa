@@ -9,10 +9,25 @@ import AppKit
 public struct MainTabView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var chatViewModel = ChatViewModel()
-    @State private var selectedTab: ClarissaTab = .chat
+    @State private var selectedTab: ClarissaTab = {
+        // Auto-select settings tab for screenshot mode
+        #if os(macOS)
+        if DemoData.isScreenshotMode {
+            let scenario = DemoData.currentScenario
+            if scenario == .settingsProvider || scenario == .settingsVoice {
+                return .settings
+            }
+        }
+        #endif
+        return .chat
+    }()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    #if os(macOS)
+    @State private var showHistorySheet = false
+    #endif
 
     public init() {}
 
@@ -40,6 +55,45 @@ public struct MainTabView: View {
         NavigationSplitView {
             SidebarView(viewModel: chatViewModel, selectedTab: $selectedTab)
         } detail: {
+            detailContent
+        }
+        .tint(ClarissaTheme.purple)
+        #if os(macOS)
+        .frame(minWidth: 900, minHeight: 600)
+        .sheet(isPresented: $showHistorySheet) {
+            HistoryTabContent(viewModel: chatViewModel)
+                .frame(width: 500, height: 600)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showHistory)) { _ in
+            showHistorySheet = true
+        }
+        #endif
+        .onAppear {
+            chatViewModel.configure(with: appState)
+            #if os(macOS)
+            // Auto-present history sheet for screenshot mode on macOS
+            if DemoData.isScreenshotMode && DemoData.currentScenario == .history {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showHistorySheet = true
+                }
+            }
+            #endif
+        }
+        .onChange(of: appState.selectedProvider) { _, newValue in
+            Task {
+                await chatViewModel.switchProvider(to: newValue)
+            }
+        }
+    }
+
+    /// Detail content for split view - handles screenshot mode for tools
+    @ViewBuilder
+    private var detailContent: some View {
+        // For screenshot mode with settingsVoice scenario, show ToolSettingsView directly
+        if DemoData.isScreenshotMode && DemoData.currentScenario == .settingsVoice {
+            ToolSettingsView()
+                .environmentObject(appState)
+        } else {
             switch selectedTab {
             case .chat:
                 ChatTabContent(viewModel: chatViewModel)
@@ -48,18 +102,6 @@ public struct MainTabView: View {
                 ChatTabContent(viewModel: chatViewModel)
             case .settings:
                 SettingsTabContent()
-            }
-        }
-        .tint(ClarissaTheme.purple)
-        #if os(macOS)
-        .frame(minWidth: 900, minHeight: 600)
-        #endif
-        .onAppear {
-            chatViewModel.configure(with: appState)
-        }
-        .onChange(of: appState.selectedProvider) { _, newValue in
-            Task {
-                await chatViewModel.switchProvider(to: newValue)
             }
         }
     }
@@ -228,8 +270,14 @@ struct SidebarView: View {
     // MARK: - Helpers
 
     private func loadData() async {
-        sessions = await viewModel.getAllSessions()
-        currentSessionId = await viewModel.getCurrentSessionId()
+        // Use demo sessions for history screenshot
+        if DemoData.isScreenshotMode && DemoData.currentScenario == .history {
+            sessions = DemoData.historyDemoSessions
+            currentSessionId = sessions.first?.id
+        } else {
+            sessions = await viewModel.getAllSessions()
+            currentSessionId = await viewModel.getCurrentSessionId()
+        }
     }
 
     private func deleteSessions(at offsets: IndexSet) {
@@ -513,6 +561,26 @@ struct ChatTabContent: View {
                 appState.pendingShortcutQuestion = nil
                 viewModel.inputText = question
                 viewModel.sendMessage()
+            }
+        }
+        // Auto-present sheets for screenshot mode scenarios
+        .onAppear {
+            if DemoData.isScreenshotMode {
+                // Small delay to ensure view is fully loaded before presenting sheet
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    switch DemoData.currentScenario {
+                    case .history:
+                        #if os(iOS)
+                        showHistorySheet = true
+                        #endif
+                    case .settingsProvider, .settingsVoice:
+                        #if os(iOS)
+                        showSettingsSheet = true
+                        #endif
+                    default:
+                        break
+                    }
+                }
             }
         }
     }

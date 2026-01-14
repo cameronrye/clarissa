@@ -15,11 +15,16 @@ struct ClarissaWatchApp: App {
             WatchContentView()
                 .environmentObject(appState)
                 .task {
-                    // Activate WatchConnectivity
-                    WatchConnectivityClient.shared.activate()
+                    // Check for screenshot mode
+                    if WatchDemoData.isScreenshotMode {
+                        appState.setupDemoMode()
+                    } else {
+                        // Activate WatchConnectivity
+                        WatchConnectivityClient.shared.activate()
 
-                    // Schedule background refresh to keep connectivity alive
-                    BackgroundTaskManager.shared.scheduleBackgroundRefresh()
+                        // Schedule background refresh to keep connectivity alive
+                        BackgroundTaskManager.shared.scheduleBackgroundRefresh()
+                    }
                 }
         }
     }
@@ -236,6 +241,59 @@ final class WatchAppState: ObservableObject {
     func clearError() {
         if case .error = status {
             status = .idle
+        }
+    }
+
+    // MARK: - Demo Mode
+
+    /// Setup demo mode for App Store screenshots
+    func setupDemoMode() {
+        isReachable = true
+        let scenario = WatchDemoData.currentScenario
+
+        switch scenario {
+        case .welcome:
+            // Empty state - no history
+            responseHistory = []
+            status = .idle
+        case .response:
+            // Show a weather response
+            responseHistory = [WatchDemoData.demoResponse]
+            status = .idle
+        case .quickActions:
+            // Show meeting response (distinct from weather in response screenshot)
+            responseHistory = [WatchDemoData.demoHistoryItems[1]]  // "Next meeting?" response
+            status = .idle
+        case .voiceInput:
+            // Listening state
+            responseHistory = []
+            status = .listening
+        case .processing:
+            // Processing state
+            responseHistory = []
+            pendingQuery = "What's the weather?"
+            status = .processing("Thinking")
+        case .history:
+            // History list with multiple items
+            responseHistory = WatchDemoData.demoHistoryItems
+            status = .idle
+        case .historyDetail:
+            // History detail - will show first item
+            responseHistory = WatchDemoData.demoHistoryItems
+            status = .idle
+        case .error:
+            // Error state
+            responseHistory = Array(WatchDemoData.demoHistoryItems.prefix(1))
+            status = .error(WatchDemoData.demoErrorMessage)
+        case .connected:
+            // Connected state with calendar response (distinct from weather in response screenshot)
+            responseHistory = [WatchDemoData.demoConnectedResponse]
+            status = .idle
+        case .sending:
+            // Sending state
+            responseHistory = []
+            pendingQuery = WatchDemoData.demoSendingQuery
+            status = .sending
         }
     }
 }

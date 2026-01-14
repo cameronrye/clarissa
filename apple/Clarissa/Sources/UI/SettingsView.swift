@@ -47,7 +47,16 @@ public struct SettingsView: View {
     @State private var memorySyncStatus: MemorySyncStatus = .idle
 
     #if os(macOS)
-    @State private var selectedTab: SettingsTab = .general
+    @State private var selectedTab: SettingsTab = {
+        // Auto-select Tools tab for screenshot mode with settingsVoice scenario
+        if DemoData.isScreenshotMode && DemoData.currentScenario == .settingsVoice {
+            return .tools
+        }
+        return .general
+    }()
+    #else
+    /// Navigation path for iOS programmatic navigation (used for screenshot mode)
+    @State private var navigationPath = NavigationPath()
     #endif
 
     // Namespace for glass morphing in settings
@@ -127,6 +136,21 @@ public struct SettingsView: View {
                 .tag(SettingsTab.about)
         }
         .frame(width: 500, height: 450)
+        .onReceive(NotificationCenter.default.publisher(for: .showSettingsGeneral)) { _ in
+            selectedTab = .general
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSettingsTools)) { _ in
+            selectedTab = .tools
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSettingsVoice)) { _ in
+            selectedTab = .voice
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSettingsShortcuts)) { _ in
+            selectedTab = .shortcuts
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSettingsAbout)) { _ in
+            selectedTab = .about
+        }
     }
 
     private var generalTabContent: some View {
@@ -366,8 +390,14 @@ public struct SettingsView: View {
     // MARK: - iOS Scrolling Settings
 
     #if os(iOS)
+    /// Navigation destination for iOS programmatic navigation
+    private enum SettingsDestination: Hashable {
+        case tools
+        case memories
+    }
+
     private var iOSSettingsView: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Form {
                 Section {
                     providerPicker
@@ -461,10 +491,7 @@ public struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink {
-                        ToolSettingsView()
-                            .environmentObject(appState)
-                    } label: {
+                    NavigationLink(value: SettingsDestination.tools) {
                         HStack {
                             Image(systemName: "wrench.and.screwdriver")
                                 .foregroundStyle(ClarissaTheme.purple)
@@ -573,6 +600,23 @@ public struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: SettingsDestination.self) { destination in
+                switch destination {
+                case .tools:
+                    ToolSettingsView()
+                        .environmentObject(appState)
+                case .memories:
+                    MemoryListView(memories: $memories)
+                }
+            }
+            .onAppear {
+                // Auto-navigate to Tools for screenshot mode
+                if DemoData.isScreenshotMode && DemoData.currentScenario == .settingsVoice {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        navigationPath.append(SettingsDestination.tools)
+                    }
+                }
+            }
         }
     }
     #endif

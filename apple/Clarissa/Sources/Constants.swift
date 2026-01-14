@@ -120,6 +120,24 @@ public extension Notification.Name {
 
     /// Posted when user stops speech playback
     static let stopSpeaking = Notification.Name("clarissa.stopSpeaking")
+
+    /// Posted when user requests to show history view
+    static let showHistory = Notification.Name("clarissa.showHistory")
+
+    /// Posted when user requests to show settings General tab
+    static let showSettingsGeneral = Notification.Name("clarissa.showSettingsGeneral")
+
+    /// Posted when user requests to show settings Tools tab
+    static let showSettingsTools = Notification.Name("clarissa.showSettingsTools")
+
+    /// Posted when user requests to show settings Voice tab
+    static let showSettingsVoice = Notification.Name("clarissa.showSettingsVoice")
+
+    /// Posted when user requests to show settings Shortcuts tab
+    static let showSettingsShortcuts = Notification.Name("clarissa.showSettingsShortcuts")
+
+    /// Posted when user requests to show settings About tab
+    static let showSettingsAbout = Notification.Name("clarissa.showSettingsAbout")
 }
 #endif
 

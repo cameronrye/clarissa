@@ -7,10 +7,23 @@ struct WatchContentView: View {
     @State private var showingVoiceInput = false
     @State private var showingHistory = false
 
+    /// Check if we're in demo mode for screenshot capture
+    private var isDemoMode: Bool {
+        WatchDemoData.isScreenshotMode
+    }
+
+    /// Current demo scenario
+    private var demoScenario: WatchDemoScenario {
+        WatchDemoData.currentScenario
+    }
+
     var body: some View {
         NavigationStack {
             Group {
-                if appState.isReachable {
+                // In demo mode, show scenario-specific views
+                if isDemoMode {
+                    demoContentView
+                } else if appState.isReachable {
                     connectedView
                 } else {
                     disconnectedView
@@ -26,6 +39,36 @@ struct WatchContentView: View {
             .sheet(isPresented: $showingHistory) {
                 ResponseHistoryView()
             }
+            .onAppear {
+                // Auto-present sheets for demo scenarios
+                if isDemoMode {
+                    switch demoScenario {
+                    case .voiceInput:
+                        showingVoiceInput = true
+                    case .history, .historyDetail:
+                        showingHistory = true
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Demo Content View
+
+    @ViewBuilder
+    private var demoContentView: some View {
+        switch demoScenario {
+        case .welcome, .response, .quickActions, .processing, .sending, .error, .connected:
+            // These use the standard connected view with different state
+            connectedView
+        case .voiceInput:
+            // Voice input is shown as a sheet, show connected view underneath
+            connectedView
+        case .history, .historyDetail:
+            // History views are shown as sheets, show connected view underneath
+            connectedView
         }
     }
 

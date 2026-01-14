@@ -37,6 +37,13 @@
 			remoteGlobalIDString = WA000003;
 			remoteInfo = ClarissaWatch;
 		};
+		WT000010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A000000B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = WA000003;
+			remoteInfo = ClarissaWatch;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -71,6 +78,7 @@
 		W0000011 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		W0000013 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		WA000002 /* ClarissaWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClarissaWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		WT000001 /* ClarissaWatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClarissaWatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -137,6 +145,11 @@
 			path = Sources/Watch;
 			sourceTree = "<group>";
 		};
+		WT000050 /* ClarissaWatchUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ClarissaWatchUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -172,6 +185,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		WT000060 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -184,6 +204,7 @@
 				W0000050 /* ClarissaWidgets */,
 				WA000050 /* ClarissaWatch */,
 				7EECC0682EFB0BE8006BB322 /* ClarissaUITests */,
+				WT000050 /* ClarissaWatchUITests */,
 				W0000070 /* Frameworks */,
 				A0000008 /* Products */,
 			);
@@ -196,6 +217,7 @@
 				W0000003 /* ClarissaWidgets.appex */,
 				WA000002 /* ClarissaWatch.app */,
 				7EECC0672EFB0BE8006BB322 /* ClarissaUITests.xctest */,
+				WT000001 /* ClarissaWatchUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -309,6 +331,29 @@
 			productReference = WA000002 /* ClarissaWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		WT000002 /* ClarissaWatchUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = WT000080 /* Build configuration list for PBXNativeTarget "ClarissaWatchUITests" */;
+			buildPhases = (
+				WT000061 /* Sources */,
+				WT000060 /* Frameworks */,
+				WT000062 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				WT000011 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				WT000050 /* ClarissaWatchUITests */,
+			);
+			name = ClarissaWatchUITests;
+			packageProductDependencies = (
+			);
+			productName = ClarissaWatchUITests;
+			productReference = WT000001 /* ClarissaWatchUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -331,6 +376,10 @@
 					};
 					WA000003 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					WT000002 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = WA000003;
 					};
 				};
 			};
@@ -355,6 +404,7 @@
 				W0000004 /* ClarissaWidgets */,
 				WA000003 /* ClarissaWatch */,
 				7EECC0662EFB0BE8006BB322 /* ClarissaUITests */,
+				WT000002 /* ClarissaWatchUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -382,6 +432,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		WA000062 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		WT000062 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -419,6 +476,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		WT000061 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -437,6 +501,11 @@
 			platformFilter = ios;
 			target = WA000003 /* ClarissaWatch */;
 			targetProxy = WA000010 /* PBXContainerItemProxy */;
+		};
+		WT000011 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = WA000003 /* ClarissaWatch */;
+			targetProxy = WT000010 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -814,6 +883,66 @@
 			};
 			name = Release;
 		};
+		WT000081 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				DEVELOPMENT_TEAM = SDRCMNG666;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rye.ClarissaWatchUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = ClarissaWatch;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		WT000082 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				DEVELOPMENT_TEAM = SDRCMNG666;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rye.ClarissaWatchUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = ClarissaWatch;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -858,6 +987,15 @@
 			buildConfigurations = (
 				WA000081 /* Debug */,
 				WA000082 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		WT000080 /* Build configuration list for PBXNativeTarget "ClarissaWatchUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				WT000081 /* Debug */,
+				WT000082 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
