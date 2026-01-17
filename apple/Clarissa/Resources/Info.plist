@@ -49,6 +49,8 @@
 	<string>Clarissa needs access to your contacts to help you find and reference contact information.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Clarissa needs your location to provide weather information and location-based assistance.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Clarissa needs your location to provide weather information and location-based assistance.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Clarissa uses the microphone for voice input so you can speak your messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

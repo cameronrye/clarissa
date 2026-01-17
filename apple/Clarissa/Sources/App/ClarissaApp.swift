@@ -6,6 +6,20 @@ import FoundationModels
 
 #if os(macOS)
 import AppKit
+
+/// macOS App Delegate to handle dock icon clicks when window is closed
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
+    /// Called when user clicks dock icon - reopen main window if none visible
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // No visible windows - reopen the main window
+            if let window = sender.windows.first {
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
+        return true
+    }
+}
 #endif
 
 #if os(iOS)
@@ -97,6 +111,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct ClarissaApp: App {
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #endif
+
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) var macAppDelegate
     #endif
 
     // Use shared AppState so Intents, URL handling, and UI all share one source of truth
@@ -244,6 +262,21 @@ struct ClarissaApp: App {
                     NotificationCenter.default.post(name: .stopSpeaking, object: nil)
                 }
                 .keyboardShortcut(".", modifiers: .command)
+            }
+
+            // Window menu - add command to show main window
+            CommandGroup(before: .windowList) {
+                Button("Clarissa") {
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    if let window = NSApplication.shared.windows.first(where: { $0.title == "Clarissa" || $0.identifier?.rawValue.contains("main") == true }) {
+                        window.makeKeyAndOrderFront(nil)
+                    } else if let window = NSApplication.shared.windows.first {
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                }
+                .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
             }
 
             // Help menu

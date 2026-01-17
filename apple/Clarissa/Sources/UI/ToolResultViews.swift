@@ -159,9 +159,20 @@ struct WeatherResultView: View {
                 Text("\(Int(result.temperature))\(result.temperatureUnit)")
                     .font(.title.weight(.semibold))
             }
+
+            // Apple Weather attribution (required by WeatherKit)
+            Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
+                HStack(spacing: 4) {
+                    Image(systemName: "apple.logo")
+                        .font(.caption2)
+                    Text("Weather")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("Apple Weather. Tap for legal attribution.")
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Weather: \(result.condition), \(Int(result.temperature)) degrees")
+        .accessibilityElement(children: .contain)
     }
 }
 
