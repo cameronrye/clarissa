@@ -382,6 +382,21 @@ public struct SettingsView: View {
             } header: {
                 Text("About")
             }
+
+            // Apple Weather attribution (required by WeatherKit per App Store guideline 5.2.5)
+            Section {
+                Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
+                    HStack {
+                        Text("\u{F8FF} Weather")
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .foregroundStyle(.primary)
+            } header: {
+                Text("Data Sources")
+            }
         }
         .formStyle(.grouped)
     }
@@ -596,6 +611,21 @@ public struct SettingsView: View {
                     .foregroundStyle(.primary)
                 } header: {
                     Text("About")
+                }
+
+                // Apple Weather attribution (required by WeatherKit per App Store guideline 5.2.5)
+                Section {
+                    Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
+                        HStack {
+                            Text("\u{F8FF} Weather")
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                } header: {
+                    Text("Data Sources")
                 }
             }
             .navigationTitle("Settings")

@@ -250,7 +250,30 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
                         lastContent = currentContent
                     }
 
-                    // Complete - no manual tool handling needed
+                    // Extract tool executions from NativeToolUsageTracker after streaming completes
+                    // The Apple tools record their executions there during native tool handling
+                    let nativeExecutions = NativeToolUsageTracker.shared.consumeExecutions()
+                    let toolExecutions = nativeExecutions.map { exec in
+                        ToolExecution(
+                            name: exec.name,
+                            arguments: exec.arguments,
+                            result: exec.result,
+                            success: true
+                        )
+                    }
+
+                    // Yield tool executions if any were found
+                    if !toolExecutions.isEmpty {
+                        ClarissaLogger.provider.info("Found \(toolExecutions.count) tool executions from native handling")
+                        continuation.yield(StreamChunk(
+                            content: nil,
+                            toolCalls: nil,
+                            toolExecutions: toolExecutions,
+                            isComplete: false
+                        ))
+                    }
+
+                    // Complete
                     continuation.yield(StreamChunk(
                         content: nil,
                         toolCalls: nil,
@@ -305,6 +328,7 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
             return .generationFailed(error.localizedDescription)
         }
     }
+
     #endif
 
     private func buildPrompt(from messages: [Message]) -> String {

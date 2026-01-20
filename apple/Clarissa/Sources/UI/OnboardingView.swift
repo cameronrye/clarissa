@@ -150,7 +150,10 @@ public struct OnboardingView: View {
                     continueButton
                         .glassEffectID("primaryButton", in: onboardingNamespace)
 
-                    skipButton
+                    // Hide skip on permissions page per App Store guideline 5.1.1
+                    if !pages[currentPage].isPermissionsPage {
+                        skipButton
+                    }
                 }
             }
             .padding(.horizontal, 24)
@@ -167,7 +170,10 @@ public struct OnboardingView: View {
             } else {
                 continueButton
 
-                skipButton
+                // Hide skip on permissions page per App Store guideline 5.1.1
+                if !pages[currentPage].isPermissionsPage {
+                    skipButton
+                }
             }
         }
         .padding(.horizontal, 24)
@@ -526,7 +532,7 @@ private struct PermissionRow: View {
                     .controlSize(.small)
                     .transition(.opacity)
             } else {
-                Button("Allow") {
+                Button("Continue") {
                     HapticManager.shared.lightTap()
                     onRequest()
                 }

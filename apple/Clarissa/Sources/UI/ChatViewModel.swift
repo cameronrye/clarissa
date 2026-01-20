@@ -548,11 +548,25 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Convert saved messages to ChatMessages for display
         var loadedCount = 0
         for message in savedMessages {
-            if message.role == .user || message.role == .assistant {
+            switch message.role {
+            case .user, .assistant:
                 var chatMessage = ChatMessage(role: message.role, content: message.content)
                 chatMessage.imageData = message.imageData
                 messages.append(chatMessage)
                 loadedCount += 1
+            case .tool:
+                // Restore tool messages with their results for tool result cards
+                var chatMessage = ChatMessage(
+                    role: .tool,
+                    content: formatToolDisplayName(message.toolName ?? "tool"),
+                    toolName: message.toolName,
+                    toolStatus: .completed
+                )
+                chatMessage.toolResult = message.content  // content contains the tool result
+                messages.append(chatMessage)
+                loadedCount += 1
+            case .system:
+                break  // Skip system messages in UI
             }
         }
 

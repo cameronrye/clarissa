@@ -3,19 +3,13 @@ import SwiftUI
 /// Standalone view for managing tools - accessible from overflow menu
 struct ToolSettingsView: View {
     @EnvironmentObject var appState: AppState
-    @State private var tools: [ToolInfo]
-    @State private var enabledCount: Int
-    @State private var isAtLimit: Bool
+    @State private var tools: [ToolInfo] = []
+    @State private var enabledCount: Int = 0
+    @State private var isAtLimit: Bool = false
     let onDismiss: (() -> Void)?
 
     init(onDismiss: (() -> Void)? = nil) {
         self.onDismiss = onDismiss
-        // Initialize state with current tool settings
-        // This ensures tools are available immediately, not just after .task runs
-        let settings = ToolSettings.shared
-        _tools = State(initialValue: settings.allTools)
-        _enabledCount = State(initialValue: settings.enabledCount)
-        _isAtLimit = State(initialValue: settings.isAtFoundationModelsLimit)
     }
 
     private var isFoundationModels: Bool {
@@ -85,58 +79,73 @@ struct ToolSettingsView: View {
             }
         }
         .frame(minWidth: 400, minHeight: 400)
+        .task {
+            refreshTools()
+        }
     }
     #endif
 
     #if os(iOS)
     private var iOSContent: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(tools) { tool in
-                        ToolRow(
-                            tool: tool,
-                            isAtLimit: isFoundationModels && isAtLimit,
-                            onToggle: {
-                                ToolSettings.shared.toggleTool(tool.id)
-                                refreshTools()
+        // When presented as a sheet (onDismiss provided), wrap in NavigationStack
+        // When pushed via NavigationLink (no onDismiss), use List directly to avoid nested NavigationStack
+        Group {
+            if onDismiss != nil {
+                NavigationStack {
+                    toolsList
+                        .toolbar {
+                            if let onDismiss = onDismiss {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    toolsDoneButton(onDismiss: onDismiss)
+                                }
                             }
-                        )
-                    }
-                } header: {
-                    if isFoundationModels {
-                        Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
-                    } else {
-                        Text("Built-in Tools")
-                    }
-                } footer: {
-                    if isFoundationModels {
-                        Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
-                    } else {
-                        Text("Select which tools the assistant can use.")
-                    }
+                        }
                 }
-
-                Section {
-                    customToolsComingSoon
-                } header: {
-                    Text("Custom Tools")
-                }
-            }
-            .navigationTitle("Tools")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if let onDismiss = onDismiss {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        toolsDoneButton(onDismiss: onDismiss)
-                    }
-                }
+            } else {
+                toolsList
             }
         }
         .tint(ClarissaTheme.purple)
         .task {
             refreshTools()
         }
+    }
+
+    private var toolsList: some View {
+        List {
+            Section {
+                ForEach(tools) { tool in
+                    ToolRow(
+                        tool: tool,
+                        isAtLimit: isFoundationModels && isAtLimit,
+                        onToggle: {
+                            ToolSettings.shared.toggleTool(tool.id)
+                            refreshTools()
+                        }
+                    )
+                }
+            } header: {
+                if isFoundationModels {
+                    Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
+                } else {
+                    Text("Built-in Tools")
+                }
+            } footer: {
+                if isFoundationModels {
+                    Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
+                } else {
+                    Text("Select which tools the assistant can use.")
+                }
+            }
+
+            Section {
+                customToolsComingSoon
+            } header: {
+                Text("Custom Tools")
+            }
+        }
+        .navigationTitle("Tools")
+        .navigationBarTitleDisplayMode(.inline)
     }
     #endif
 
@@ -198,41 +207,7 @@ struct ToolSettingsView: View {
     }
 }
 
-// MARK: - Embedded Tools List (for Settings tab)
-
-/// Embeddable version without NavigationStack for use inside Settings
-struct EmbeddedToolsListView: View {
-    let isFoundationModels: Bool
-
-    @ObservedObject private var settings = ToolSettings.shared
-
-    var body: some View {
-        List {
-            Section {
-                ForEach(settings.allTools) { tool in
-                    ToolRow(
-                        tool: tool,
-                        isAtLimit: isFoundationModels && settings.isAtFoundationModelsLimit,
-                        onToggle: { settings.toggleTool(tool.id) }
-                    )
-                }
-            } header: {
-                if isFoundationModels {
-                    Text("Enabled: \(settings.enabledCount)/\(maxToolsForFoundationModels)")
-                } else {
-                    Text("Built-in Tools")
-                }
-            } footer: {
-                if isFoundationModels {
-                    Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
-                } else {
-                    Text("Select which tools the assistant can use.")
-                }
-            }
-        }
-        .navigationTitle("Tools")
-    }
-}
+// MARK: - Tool Row
 
 /// Row for a single tool toggle
 private struct ToolRow: View {

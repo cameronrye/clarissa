@@ -30,17 +30,8 @@
     <key>com.apple.developer.weatherkit</key>
     <true/>
 
-    <!-- CarPlay Driving Task (requires Apple approval for distribution) -->
-    <key>com.apple.developer.carplay-driving-task</key>
-    <true/>
-
     <!-- Microphone access for voice mode (macOS sandbox requirement) -->
     <key>com.apple.security.device.audio-input</key>
-    <true/>
-
-    <!-- CarPlay entitlement (requires Apple approval for App Store) -->
-    <!-- Enabled for simulator testing - will need approval for device/distribution -->
-    <key>com.apple.developer.carplay-assistant</key>
     <true/>
 
     <!-- iCloud Key-Value Storage for memory sync across devices -->

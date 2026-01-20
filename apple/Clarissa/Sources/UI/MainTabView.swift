@@ -249,7 +249,8 @@ struct SidebarView: View {
     private var viewAllLink: some View {
         if sessions.count > 10 {
             NavigationLink {
-                HistoryTabContent(viewModel: viewModel)
+                // Pass embedded: true since this is pushed via NavigationLink within NavigationSplitView
+                HistoryTabContent(viewModel: viewModel, embedded: true)
             } label: {
                 Label("View All (\(sessions.count))", systemImage: "clock.arrow.circlepath")
             }
@@ -732,6 +733,9 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 struct HistoryTabContent: View {
     @ObservedObject var viewModel: ChatViewModel
+    /// When true, content is embedded in parent navigation (e.g., pushed via NavigationLink)
+    /// and should not wrap itself in NavigationStack to avoid nested navigation issues
+    let embedded: Bool
     @State private var sessions: [Session] = []
     @State private var currentSessionId: UUID?
     @State private var searchText = ""
@@ -742,6 +746,11 @@ struct HistoryTabContent: View {
     @State private var selectedSessions: Set<UUID> = []
     @State private var showDeleteConfirmation = false
     #endif
+
+    init(viewModel: ChatViewModel, embedded: Bool = false) {
+        self.viewModel = viewModel
+        self.embedded = embedded
+    }
 
     private var isEditing: Bool {
         #if os(iOS)
@@ -776,8 +785,15 @@ struct HistoryTabContent: View {
     }
 
     var body: some View {
-        NavigationStack {
-            historyList
+        // When embedded in parent navigation, use list directly to avoid nested NavigationStack
+        Group {
+            if embedded {
+                historyList
+            } else {
+                NavigationStack {
+                    historyList
+                }
+            }
         }
         .task {
             await loadData()

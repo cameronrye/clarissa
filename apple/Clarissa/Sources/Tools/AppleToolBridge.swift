@@ -99,15 +99,34 @@ private func getUserFriendlyError(_ error: Error) -> String {
 
 // MARK: - Native Tool Usage Tracker
 
+/// Represents a tool execution that was performed natively by Foundation Models
+public struct NativeToolExecution: Sendable {
+    public let name: String
+    public let arguments: String
+    public let result: String
+    public let timestamp: Date
+
+    public init(name: String, arguments: String, result: String) {
+        self.name = name
+        self.arguments = arguments
+        self.result = result
+        self.timestamp = Date()
+    }
+}
+
 /// Tracks tool usage for Foundation Models native tool calls
 /// Since Foundation Models handles tools opaquely, we track usage here
-/// to report accurate context stats in the UI
+/// to report accurate context stats in the UI and provide tool execution data
 @MainActor
-final class NativeToolUsageTracker {
-    static let shared = NativeToolUsageTracker()
+public final class NativeToolUsageTracker {
+    public static let shared = NativeToolUsageTracker()
 
     private(set) var totalToolTokens: Int = 0
     private(set) var toolCallCount: Int = 0
+
+    /// Stores tool executions for the current response
+    /// These are cleared when a new response starts
+    private(set) var currentExecutions: [NativeToolExecution] = []
 
     private init() {}
 
@@ -120,12 +139,29 @@ final class NativeToolUsageTracker {
         let resultTokens = max(1, result.count / 4)
         let nameTokens = max(1, name.count / 4)
         totalToolTokens += argTokens + resultTokens + nameTokens
+
+        // Store the execution for UI display
+        let execution = NativeToolExecution(name: name, arguments: arguments, result: result)
+        currentExecutions.append(execution)
+    }
+
+    /// Get and clear current executions (call after streaming completes)
+    public func consumeExecutions() -> [NativeToolExecution] {
+        let executions = currentExecutions
+        currentExecutions = []
+        return executions
     }
 
     /// Reset tracking (call when starting a new conversation)
     func reset() {
         totalToolTokens = 0
         toolCallCount = 0
+        currentExecutions = []
+    }
+
+    /// Clear only current executions (call before starting a new response)
+    public func clearCurrentExecutions() {
+        currentExecutions = []
     }
 }
 

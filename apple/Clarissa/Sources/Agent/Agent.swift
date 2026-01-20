@@ -312,6 +312,7 @@ public final class Agent: ObservableObject {
             // Get LLM response with streaming (with retry for rate limits)
             var fullContent = ""
             var toolCalls: [ToolCall] = []
+            var toolExecutions: [ToolExecution] = []
             var lastError: Error?
 
             // Retry loop for transient errors like rate limiting
@@ -319,6 +320,7 @@ public final class Agent: ObservableObject {
                 do {
                     fullContent = ""
                     toolCalls = []
+                    toolExecutions = []
 
                     for try await chunk in provider.streamComplete(messages: messages, tools: tools) {
                         // Check for task cancellation during streaming
@@ -332,6 +334,10 @@ public final class Agent: ObservableObject {
                         }
                         if let calls = chunk.toolCalls {
                             toolCalls = calls
+                        }
+                        // Collect tool executions from native providers
+                        if let executions = chunk.toolExecutions {
+                            toolExecutions.append(contentsOf: executions)
                         }
                     }
                     // Success - break out of retry loop
@@ -361,16 +367,36 @@ public final class Agent: ObservableObject {
                 fullContent,
                 toolCalls: toolCalls.isEmpty ? nil : toolCalls
             )
-            messages.append(assistantMessage)
-
             // For providers with native tool handling, skip manual tool execution
             // The LLM session has already executed tools and incorporated results
+            // Fire callbacks for any tool executions so UI can display tool result cards
             if nativeToolHandling {
-                ClarissaLogger.agent.info("Agent run completed (native tool handling)")
+                // Add tool messages BEFORE assistant message to maintain correct order
+                // This matches the UI display order: tool card appears before response
+                for execution in toolExecutions {
+                    callbacks?.onToolCall(name: execution.name, arguments: execution.arguments)
+                    callbacks?.onToolResult(name: execution.name, result: execution.result, success: execution.success)
+
+                    // Add tool message to history so it gets saved
+                    let toolMessage = Message.tool(
+                        callId: UUID().uuidString,
+                        name: execution.name,
+                        content: execution.result
+                    )
+                    messages.append(toolMessage)
+                }
+
+                // Add assistant message after tool messages
+                messages.append(assistantMessage)
+
+                ClarissaLogger.agent.info("Agent run completed (native tool handling, \(toolExecutions.count) tools executed)")
                 let finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
                 callbacks?.onResponse(content: finalContent)
                 return finalContent
             }
+
+            // For non-native providers, add assistant message first
+            messages.append(assistantMessage)
 
             // Check for tool calls (only for non-native providers like OpenRouter)
             if !toolCalls.isEmpty {

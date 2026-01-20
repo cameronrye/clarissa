@@ -160,12 +160,11 @@ struct WeatherResultView: View {
                     .font(.title.weight(.semibold))
             }
 
-            // Apple Weather attribution (required by WeatherKit)
+            // Apple Weather attribution (required by WeatherKit per App Store guideline 5.2.5)
             Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
-                HStack(spacing: 4) {
-                    Image(systemName: "apple.logo")
-                        .font(.caption2)
-                    Text("Weather")
+                HStack(spacing: 2) {
+                    // Use Apple logo character (\u{F8FF}) for proper trademark display
+                    Text("\u{F8FF} Weather")
                         .font(.caption2)
                 }
                 .foregroundStyle(.secondary)

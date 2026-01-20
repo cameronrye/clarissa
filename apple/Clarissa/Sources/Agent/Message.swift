@@ -69,10 +69,38 @@ public struct Message: Identifiable, Codable, Sendable {
     }
 }
 
+/// Represents a tool execution that was performed natively by the LLM provider
+public struct ToolExecution: Sendable {
+    public let name: String
+    public let arguments: String
+    public let result: String
+    public let success: Bool
+
+    public init(name: String, arguments: String, result: String, success: Bool = true) {
+        self.name = name
+        self.arguments = arguments
+        self.result = result
+        self.success = success
+    }
+}
+
 /// Represents a streaming chunk from the LLM
 public struct StreamChunk: Sendable {
     public let content: String?
     public let toolCalls: [ToolCall]?
+    public let toolExecutions: [ToolExecution]?  // For native tool handling providers
     public let isComplete: Bool
+
+    public init(
+        content: String? = nil,
+        toolCalls: [ToolCall]? = nil,
+        toolExecutions: [ToolExecution]? = nil,
+        isComplete: Bool = false
+    ) {
+        self.content = content
+        self.toolCalls = toolCalls
+        self.toolExecutions = toolExecutions
+        self.isComplete = isComplete
+    }
 }
 
