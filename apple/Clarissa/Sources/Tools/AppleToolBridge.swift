@@ -174,15 +174,17 @@ private func logToolCall(_ name: String, _ arguments: Any) {
 }
 
 /// Log tool result for debugging and track usage
+/// Note: This function is async to ensure tool tracking completes before streaming finishes
 @inline(__always)
-private func logToolResult(_ name: String, arguments: String, _ result: String) {
+private func logToolResult(_ name: String, arguments: String, _ result: String) async {
     #if DEBUG
     let truncated = result.count > 200 ? String(result.prefix(200)) + "..." : result
     toolLogger.debug("Tool '\(name)' returned: \(truncated)")
     #endif
 
     // Track tool usage for context stats (on MainActor)
-    Task { @MainActor in
+    // Must await to ensure tracking completes before consumeExecutions() is called
+    await MainActor.run {
         NativeToolUsageTracker.shared.recordToolCall(name: name, arguments: arguments, result: result)
     }
 }
@@ -239,7 +241,7 @@ struct AppleWeatherTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -279,7 +281,7 @@ struct AppleCalculatorTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -356,7 +358,7 @@ struct AppleCalendarTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -413,7 +415,7 @@ struct AppleContactsTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -486,7 +488,7 @@ struct AppleRemindersTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -526,7 +528,7 @@ struct AppleLocationTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -578,7 +580,7 @@ struct AppleWebFetchTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -618,7 +620,7 @@ struct AppleRememberTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
@@ -685,7 +687,7 @@ struct AppleImageAnalysisTool: Tool {
         let result = await safeToolExecution(name) {
             return try await tool.execute(arguments: jsonString)
         }
-        logToolResult(name, arguments: jsonString, result)
+        await logToolResult(name, arguments: jsonString, result)
         return result
     }
 }
