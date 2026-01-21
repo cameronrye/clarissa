@@ -6,6 +6,7 @@ struct ToolSettingsView: View {
     @State private var tools: [ToolInfo] = []
     @State private var enabledCount: Int = 0
     @State private var isAtLimit: Bool = false
+    @State private var isLoaded: Bool = false
     let onDismiss: (() -> Void)?
 
     init(onDismiss: (() -> Void)? = nil) {
@@ -44,38 +45,43 @@ struct ToolSettingsView: View {
 
             Divider()
 
-            // Tools list
-            List {
-                Section {
-                    ForEach(tools) { tool in
-                        ToolRow(
-                            tool: tool,
-                            isAtLimit: isFoundationModels && isAtLimit,
-                            onToggle: {
-                                ToolSettings.shared.toggleTool(tool.id)
-                                refreshTools()
-                            }
-                        )
+            // Tools list with loading state
+            if isLoaded && !tools.isEmpty {
+                List {
+                    Section {
+                        ForEach(tools) { tool in
+                            ToolRow(
+                                tool: tool,
+                                isAtLimit: isFoundationModels && isAtLimit,
+                                onToggle: {
+                                    ToolSettings.shared.toggleTool(tool.id)
+                                    refreshTools()
+                                }
+                            )
+                        }
+                    } header: {
+                        if isFoundationModels {
+                            Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
+                        } else {
+                            Text("Built-in Tools")
+                        }
+                    } footer: {
+                        if isFoundationModels {
+                            Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
+                        } else {
+                            Text("Select which tools the assistant can use.")
+                        }
                     }
-                } header: {
-                    if isFoundationModels {
-                        Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
-                    } else {
-                        Text("Built-in Tools")
-                    }
-                } footer: {
-                    if isFoundationModels {
-                        Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
-                    } else {
-                        Text("Select which tools the assistant can use.")
-                    }
-                }
 
-                Section {
-                    customToolsComingSoon
-                } header: {
-                    Text("Custom Tools")
+                    Section {
+                        customToolsComingSoon
+                    } header: {
+                        Text("Custom Tools")
+                    }
                 }
+            } else {
+                ProgressView("Loading tools...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 400, minHeight: 400)
@@ -112,36 +118,44 @@ struct ToolSettingsView: View {
     }
 
     private var toolsList: some View {
-        List {
-            Section {
-                ForEach(tools) { tool in
-                    ToolRow(
-                        tool: tool,
-                        isAtLimit: isFoundationModels && isAtLimit,
-                        onToggle: {
-                            ToolSettings.shared.toggleTool(tool.id)
-                            refreshTools()
+        Group {
+            if isLoaded && !tools.isEmpty {
+                List {
+                    Section {
+                        ForEach(tools) { tool in
+                            ToolRow(
+                                tool: tool,
+                                isAtLimit: isFoundationModels && isAtLimit,
+                                onToggle: {
+                                    ToolSettings.shared.toggleTool(tool.id)
+                                    refreshTools()
+                                }
+                            )
                         }
-                    )
-                }
-            } header: {
-                if isFoundationModels {
-                    Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
-                } else {
-                    Text("Built-in Tools")
-                }
-            } footer: {
-                if isFoundationModels {
-                    Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
-                } else {
-                    Text("Select which tools the assistant can use.")
-                }
-            }
+                    } header: {
+                        if isFoundationModels {
+                            Text("Enabled: \(enabledCount)/\(maxToolsForFoundationModels)")
+                        } else {
+                            Text("Built-in Tools")
+                        }
+                    } footer: {
+                        if isFoundationModels {
+                            Text("Apple Intelligence works best with \(maxToolsForFoundationModels) or fewer tools.")
+                        } else {
+                            Text("Select which tools the assistant can use.")
+                        }
+                    }
 
-            Section {
-                customToolsComingSoon
-            } header: {
-                Text("Custom Tools")
+                    Section {
+                        customToolsComingSoon
+                    } header: {
+                        Text("Custom Tools")
+                    }
+                }
+            } else {
+                // Loading state to prevent empty list flash
+                ProgressView("Loading tools...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle("Tools")
@@ -151,9 +165,12 @@ struct ToolSettingsView: View {
 
     @MainActor
     private func refreshTools() {
-        tools = ToolSettings.shared.allTools
-        enabledCount = ToolSettings.shared.enabledCount
-        isAtLimit = ToolSettings.shared.isAtFoundationModelsLimit
+        // Defensive loading of tool settings to prevent crashes
+        let settings = ToolSettings.shared
+        tools = settings.allTools
+        enabledCount = settings.enabledCount
+        isAtLimit = settings.isAtFoundationModelsLimit
+        isLoaded = true
     }
 
     @ViewBuilder

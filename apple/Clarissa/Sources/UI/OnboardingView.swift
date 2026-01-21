@@ -139,6 +139,10 @@ public struct OnboardingView: View {
 
     // MARK: - Glass Buttons Section (iOS/macOS 26+)
 
+    // MARK: - Glass Buttons Section (iOS/macOS 26+)
+    // Skip button removed entirely per App Store guideline 5.1.1
+    // Users must proceed through all onboarding pages including permissions
+
     @available(iOS 26.0, macOS 26.0, *)
     private var glassButtonsSection: some View {
         GlassEffectContainer(spacing: 20) {
@@ -149,11 +153,6 @@ public struct OnboardingView: View {
                 } else {
                     continueButton
                         .glassEffectID("primaryButton", in: onboardingNamespace)
-
-                    // Hide skip on permissions page per App Store guideline 5.1.1
-                    if !pages[currentPage].isPermissionsPage {
-                        skipButton
-                    }
                 }
             }
             .padding(.horizontal, 24)
@@ -169,31 +168,10 @@ public struct OnboardingView: View {
                 getStartedButton
             } else {
                 continueButton
-
-                // Hide skip on permissions page per App Store guideline 5.1.1
-                if !pages[currentPage].isPermissionsPage {
-                    skipButton
-                }
             }
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
-    }
-
-    // MARK: - Skip Button
-
-    private var skipButton: some View {
-        Button {
-            HapticManager.shared.lightTap()
-            appState.completeOnboarding()
-        } label: {
-            Text("Skip")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Skip")
-        .accessibilityHint("Double-tap to skip onboarding and start using Clarissa")
     }
 
     // MARK: - Button Components with Glass Effects

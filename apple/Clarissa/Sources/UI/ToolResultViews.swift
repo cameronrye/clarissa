@@ -161,15 +161,17 @@ struct WeatherResultView: View {
             }
 
             // Apple Weather attribution (required by WeatherKit per App Store guideline 5.2.5)
+            // Must display Apple Weather trademark and legal attribution link
             Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
-                HStack(spacing: 2) {
-                    // Use Apple logo character (\u{F8FF}) for proper trademark display
-                    Text("\u{F8FF} Weather")
-                        .font(.caption2)
+                HStack(spacing: 4) {
+                    Image(systemName: "apple.logo")
+                        .font(.caption)
+                    Text("Weather")
+                        .font(.caption.weight(.medium))
                 }
                 .foregroundStyle(.secondary)
             }
-            .accessibilityLabel("Apple Weather. Tap for legal attribution.")
+            .accessibilityLabel("Data provided by Apple Weather. Tap for legal attribution.")
         }
         .accessibilityElement(children: .contain)
     }
