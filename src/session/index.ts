@@ -1,6 +1,6 @@
 import { join } from "path";
 import { homedir } from "os";
-import { mkdir, readdir, rm } from "fs/promises";
+import { mkdir, readdir, rm, rename } from "fs/promises";
 import { z } from "zod";
 import type { Message } from "../llm/types.ts";
 
@@ -97,7 +97,8 @@ class SessionManager {
   }
 
   /**
-   * Save current session to disk
+   * Save current session to disk using atomic write
+   * Writes to temp file first, then renames to prevent corruption from concurrent saves
    */
   async save(): Promise<void> {
     if (!this.currentSession) return;
@@ -106,7 +107,11 @@ class SessionManager {
     this.currentSession.updatedAt = new Date().toISOString();
 
     const path = this.getPath(this.currentSession.id);
-    await Bun.write(path, JSON.stringify(this.currentSession, null, 2));
+    const tempPath = `${path}.tmp.${Date.now()}`;
+
+    // Write to temp file first, then atomically rename
+    await Bun.write(tempPath, JSON.stringify(this.currentSession, null, 2));
+    await rename(tempPath, path);
   }
 
   /**

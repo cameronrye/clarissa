@@ -11,7 +11,7 @@
  *   @package.json:1-50      -> Lines 1-50 only
  */
 
-import { resolve, isAbsolute } from "path";
+import { validatePathWithinBase } from "../tools/security.ts";
 
 /**
  * Result of expanding file references
@@ -111,10 +111,11 @@ export async function expandFileReferences(
 
     const { path: filePath, startLine, endLine } = parseReference(reference);
 
-    // Resolve path
-    const absolutePath = isAbsolute(filePath) ? filePath : resolve(cwd, filePath);
-
     try {
+      // Security: validate path is within the working directory to prevent path traversal
+      // This blocks attempts like @/etc/passwd or @../../../etc/passwd
+      const absolutePath = validatePathWithinBase(filePath, cwd);
+
       const content = await readFileContents(absolutePath, startLine, endLine);
       const lineInfo = startLine ? `:${startLine}${endLine && endLine !== startLine ? `-${endLine}` : ""}` : "";
 

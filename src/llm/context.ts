@@ -155,28 +155,25 @@ class ContextManager {
     result.push(...systemMessages);
     totalTokens = this.estimateConversationTokens(systemMessages);
 
-    // Group messages into atomic units (user, assistant+tool_results, etc.)
-    // Tool results must stay with their corresponding assistant message
+    // Group messages into atomic units that must stay together:
+    // - User message starts a new group
+    // - Assistant messages and tool results stay with their preceding user message
+    // This ensures tool_calls and their results are never separated
     const messageGroups: Message[][] = [];
     let currentGroup: Message[] = [];
 
     for (const msg of nonSystemMessages) {
       if (msg.role === "user") {
-        // User messages start a new group
+        // User messages always start a new group
         if (currentGroup.length > 0) {
           messageGroups.push(currentGroup);
         }
         currentGroup = [msg];
-      } else if (msg.role === "assistant") {
-        // Assistant messages start a new group (but include in current if empty)
-        if (currentGroup.length > 0 && currentGroup[0]?.role !== "user") {
-          messageGroups.push(currentGroup);
-          currentGroup = [msg];
-        } else {
-          currentGroup.push(msg);
-        }
-      } else if (msg.role === "tool") {
-        // Tool results must stay with their assistant message
+      } else if (currentGroup.length === 0) {
+        // Edge case: assistant/tool message without preceding user message
+        currentGroup = [msg];
+      } else {
+        // Assistant and tool messages stay with current group
         currentGroup.push(msg);
       }
     }

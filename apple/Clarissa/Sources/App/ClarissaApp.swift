@@ -24,13 +24,12 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
 #if os(iOS)
 import BackgroundTasks
-import CarPlay
 import UIKit
 
 /// Background task identifier for memory sync
 private let backgroundMemorySyncTaskId = "dev.rye.Clarissa.memorySync"
 
-/// App delegate to handle CarPlay scene configuration and background tasks
+/// App delegate to handle background tasks
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
@@ -39,28 +38,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // Register background tasks
         registerBackgroundTasks()
         return true
-    }
-
-    func application(
-        _ application: UIApplication,
-        configurationForConnecting connectingSceneSession: UISceneSession,
-        options: UIScene.ConnectionOptions
-    ) -> UISceneConfiguration {
-        // Check if this is a CarPlay scene
-        if connectingSceneSession.role == .carTemplateApplication {
-            let config = UISceneConfiguration(
-                name: "CarPlay Configuration",
-                sessionRole: .carTemplateApplication
-            )
-            config.delegateClass = CarPlaySceneDelegate.self
-            return config
-        }
-
-        // Default configuration - SwiftUI handles the main app scene via WindowGroup
-        return UISceneConfiguration(
-            name: "Default Configuration",
-            sessionRole: connectingSceneSession.role
-        )
     }
 
     // MARK: - Background Tasks

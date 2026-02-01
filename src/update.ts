@@ -116,11 +116,15 @@ export async function checkForUpdates(): Promise<void> {
   }
 
   // Fetch in background - don't await, let it run async
-  fetchLatestVersion().then(async (latestVersion) => {
-    if (latestVersion) {
-      await saveUpdateCheck(latestVersion);
-    }
-  });
+  fetchLatestVersion()
+    .then(async (latestVersion) => {
+      if (latestVersion) {
+        await saveUpdateCheck(latestVersion);
+      }
+    })
+    .catch(() => {
+      // Silently ignore errors - update check is not critical
+    });
 }
 
 /**

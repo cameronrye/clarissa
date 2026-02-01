@@ -5,25 +5,75 @@ import { defineTool } from "./base.ts";
  * Dangerous command patterns that should be blocked for safety.
  * These patterns match commands that could cause severe system damage.
  */
-const DANGEROUS_PATTERNS = [
-  // Recursive deletion of root or important directories
-  /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?(-[a-zA-Z]*r[a-zA-Z]*\s+)?[\/~]\s*$/i,
-  /rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+)?(-[a-zA-Z]*f[a-zA-Z]*\s+)?[\/~]\s*$/i,
-  /rm\s+-rf\s+\/\s*$/i,
-  /rm\s+-rf\s+\/\*/i,
+const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  // Recursive deletion of root, home, or current directory
+  // Matches: rm -rf /, rm -rf ~, rm -rf ./, rm -rf ., etc.
+  {
+    pattern: /rm\s+(-[a-zA-Z]*\s+)*["']?([/~]|\.\.?\/?)["']?\s*$/i,
+    reason: "Recursive deletion of root, home, or current directory",
+  },
+  {
+    pattern: /rm\s+(-[a-zA-Z]*\s+)*["']?\/\*["']?/i,
+    reason: "Recursive deletion of root contents",
+  },
+  // rm -rf * or rm -rf ./* (deletes everything in current directory)
+  // Matches rm with -r flag (recursive) followed by wildcard
+  {
+    pattern: /rm\s+(-\w+\s+)*["']?\*["']?\s*$/i,
+    reason: "Deletion with wildcard - potentially dangerous",
+  },
   // Fork bomb patterns
-  /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;?\s*:/,
+  {
+    pattern: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;?\s*:/,
+    reason: "Fork bomb detected",
+  },
   // Overwriting boot records or critical system files
-  />\s*\/dev\/sd[a-z]/i,
-  /dd\s+.*of=\/dev\/sd[a-z]/i,
-  /mkfs\s+.*\/dev\/sd[a-z]/i,
-  // Chmod 777 on root
-  /chmod\s+(-[a-zA-Z]*R[a-zA-Z]*\s+)?777\s+\/\s*$/i,
-  // Dangerous redirects
-  />\s*\/dev\/null\s*2>&1\s*<\s*\/dev\/null/,
+  {
+    pattern: />\s*\/dev\/sd[a-z]/i,
+    reason: "Writing to block device",
+  },
+  {
+    pattern: /dd\s+.*of=\/dev\/sd[a-z]/i,
+    reason: "dd to block device",
+  },
+  {
+    pattern: /mkfs\s+.*\/dev\/sd[a-z]/i,
+    reason: "Formatting block device",
+  },
+  // Chmod 777 on root or recursive on sensitive paths
+  {
+    pattern: /chmod\s+(-[a-zA-Z]*\s+)*777\s+["']?[/~]["']?\s*$/i,
+    reason: "chmod 777 on root or home directory",
+  },
+  // Dangerous redirects that could hang the shell
+  {
+    pattern: />\s*\/dev\/null\s*2>&1\s*<\s*\/dev\/null/,
+    reason: "Dangerous redirect pattern",
+  },
   // Kill all processes
-  /kill\s+-9\s+-1/,
-  /killall\s+-9\s+/,
+  {
+    pattern: /kill\s+-9\s+-1/,
+    reason: "Killing all processes",
+  },
+  {
+    pattern: /killall\s+-9\s+/,
+    reason: "Killing all processes by name",
+  },
+  // Prevent sudo with dangerous commands
+  {
+    pattern: /sudo\s+rm\s+(-[a-zA-Z]*\s+)*["']?[/~]["']?\s*$/i,
+    reason: "sudo rm on root or home directory",
+  },
+  // Prevent overwriting /etc/passwd, /etc/shadow, etc.
+  {
+    pattern: />\s*\/etc\/(passwd|shadow|sudoers)/i,
+    reason: "Overwriting critical system file",
+  },
+  // Prevent writing to /boot or /sys
+  {
+    pattern: />\s*\/(boot|sys)\//i,
+    reason: "Writing to critical system directory",
+  },
 ];
 
 /**
@@ -32,11 +82,11 @@ const DANGEROUS_PATTERNS = [
 function isDangerousCommand(command: string): { dangerous: boolean; reason?: string } {
   const trimmed = command.trim();
 
-  for (const pattern of DANGEROUS_PATTERNS) {
+  for (const { pattern, reason } of DANGEROUS_PATTERNS) {
     if (pattern.test(trimmed)) {
       return {
         dangerous: true,
-        reason: `Command matches dangerous pattern: ${pattern.toString()}`,
+        reason,
       };
     }
   }

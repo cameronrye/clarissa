@@ -56,9 +56,14 @@ function tokenize(expr: string): Token[] {
     // Numbers (including decimals)
     if (/\d/.test(char) || (char === "." && i + 1 < expr.length && /\d/.test(expr[i + 1]!))) {
       let num = "";
+      let decimalCount = 0;
       while (i < expr.length && (/\d/.test(expr[i]!) || expr[i] === ".")) {
+        if (expr[i] === ".") decimalCount++;
         num += expr[i];
         i++;
+      }
+      if (decimalCount > 1) {
+        throw new Error(`Invalid number format: ${num}`);
       }
       tokens.push({ type: "number", value: parseFloat(num) });
       continue;
@@ -132,9 +137,9 @@ function tokenize(expr: string): Token[] {
  * Recursive descent parser for mathematical expressions
  * Grammar:
  *   expr    -> term (('+' | '-') term)*
- *   term    -> power (('*' | '/' | '%') power)*
- *   power   -> unary ('**' unary)*
- *   unary   -> ('-' | '+')? factor
+ *   term    -> unary (('*' | '/' | '%') unary)*
+ *   unary   -> ('-' | '+') unary | power   (recursive for consecutive unary ops)
+ *   power   -> factor ('**' unary)?   (right-associative, exponent allows unary)
  *   factor  -> NUMBER | CONSTANT | function '(' args ')' | '(' expr ')'
  *   args    -> expr (',' expr)*
  */
@@ -186,11 +191,11 @@ class ExpressionParser {
   }
 
   private parseTerm(): number {
-    let left = this.parsePower();
+    let left = this.parseUnary();
 
     while (this.peek()?.type === "operator" && ["*", "/", "%"].includes(this.peek()?.value as string)) {
       const op = this.consume().value as string;
-      const right = this.parsePower();
+      const right = this.parseUnary();
       if (op === "*") left = left * right;
       else if (op === "/") left = left / right;
       else left = left % right;
@@ -199,25 +204,27 @@ class ExpressionParser {
     return left;
   }
 
-  private parsePower(): number {
-    let base = this.parseUnary();
-
-    while (this.peek()?.type === "operator" && this.peek()?.value === "**") {
-      this.consume();
-      const exp = this.parseUnary();
-      base = Math.pow(base, exp);
-    }
-
-    return base;
-  }
-
   private parseUnary(): number {
     if (this.peek()?.type === "operator" && (this.peek()?.value === "-" || this.peek()?.value === "+")) {
       const op = this.consume().value as string;
-      const value = this.parseFactor();
+      const value = this.parseUnary(); // Recursive for consecutive unary ops like --3
       return op === "-" ? -value : value;
     }
-    return this.parseFactor();
+    return this.parsePower();
+  }
+
+  private parsePower(): number {
+    const base = this.parseFactor();
+
+    // Right-associative: 2^3^2 = 2^(3^2) = 512, not (2^3)^2 = 64
+    // Exponent allows unary ops so 2**-3 works
+    if (this.peek()?.type === "operator" && this.peek()?.value === "**") {
+      this.consume();
+      const exp = this.parseUnary();
+      return Math.pow(base, exp);
+    }
+
+    return base;
   }
 
   private parseFactor(): number {

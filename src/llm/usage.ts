@@ -75,11 +75,39 @@ class UsageTracker {
   }
 
   /**
-   * Estimate tokens from text (rough approximation)
-   * ~4 characters per token for English text
+   * Estimate tokens from text using improved heuristics.
+   * Based on analysis of BPE tokenization patterns:
+   * - Common English words: ~1 token per word
+   * - Numbers and punctuation: often separate tokens
+   * - Code: more tokens due to identifiers and symbols
+   * - Whitespace: typically not counted
    */
   estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
+    if (!text) return 0;
+
+    // Split into words (tokens often align with word boundaries)
+    const words = text.split(/\s+/).filter((w) => w.length > 0);
+
+    // Base: count words
+    let tokens = words.length;
+
+    // Add tokens for long words (they get split by BPE)
+    // Average token length is ~4 chars, so words > 8 chars likely become 2+ tokens
+    for (const word of words) {
+      if (word.length > 8) {
+        tokens += Math.floor(word.length / 6);
+      }
+    }
+
+    // Add tokens for punctuation and special characters
+    // These often become separate tokens
+    const specialChars = text.match(/[^\w\s]/g);
+    if (specialChars) {
+      tokens += Math.ceil(specialChars.length * 0.5);
+    }
+
+    // Add overhead for message structure (~4 tokens per message for role, separators)
+    return Math.max(1, tokens);
   }
 
   /**

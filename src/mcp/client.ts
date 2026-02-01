@@ -1,7 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool } from "../tools/base.ts";
 import { z } from "zod";
@@ -111,6 +110,28 @@ export interface MCPServerSseConfigInternal {
 
 export type MCPServerConfig = MCPServerStdioConfig | MCPServerSseConfigInternal;
 
+/**
+ * Maximum length for MCP tool results to prevent context overflow
+ */
+const MAX_RESULT_LENGTH = 50000;
+
+/**
+ * Sanitize MCP tool result to prevent prompt injection and limit size
+ * MCP servers are external and untrusted, so we need to be careful with their output
+ */
+function sanitizeMcpResult(result: string, serverName: string, toolName: string): string {
+  let sanitized = result;
+
+  // Truncate if too long
+  if (sanitized.length > MAX_RESULT_LENGTH) {
+    sanitized = sanitized.slice(0, MAX_RESULT_LENGTH) + `\n[Truncated - result exceeded ${MAX_RESULT_LENGTH} characters]`;
+  }
+
+  // Wrap in clear delimiters to indicate this is external tool output
+  // This helps the model understand the boundary of untrusted content
+  return `<mcp_result server="${serverName}" tool="${toolName}">\n${sanitized}\n</mcp_result>`;
+}
+
 interface MCPConnection {
   client: Client;
   transport: Transport;
@@ -123,6 +144,7 @@ interface MCPConnection {
  */
 class MCPClientManager {
   private connections: Map<string, MCPConnection> = new Map();
+  private cleanupHandlersRegistered = false;
 
   /**
    * Connect to an MCP server (stdio or SSE transport)
@@ -136,18 +158,14 @@ class MCPClientManager {
 
     if (config.transport === "sse") {
       // Remote HTTP/SSE server
-      // Try StreamableHTTPClientTransport first, fallback to SSEClientTransport for legacy servers
+      // Use StreamableHTTPClientTransport (modern MCP transport)
+      // Note: SSEClientTransport is available for legacy servers but requires explicit config
       const url = new URL(config.url);
       const requestInit: RequestInit = config.headers
         ? { headers: config.headers }
         : {};
 
-      try {
-        transport = new StreamableHTTPClientTransport(url, { requestInit });
-      } catch {
-        // Fallback to legacy SSE transport
-        transport = new SSEClientTransport(url, { requestInit });
-      }
+      transport = new StreamableHTTPClientTransport(url, { requestInit });
     } else {
       // Local stdio process (default)
       transport = new StdioClientTransport({
@@ -199,16 +217,20 @@ class MCPClientManager {
         });
 
         // Handle different result types
+        let rawResult: string;
         if (result.content && Array.isArray(result.content)) {
-          return result.content
+          rawResult = result.content
             .map((c) => {
               if (c.type === "text") return c.text;
               return JSON.stringify(c);
             })
             .join("\n");
+        } else {
+          rawResult = JSON.stringify(result);
         }
 
-        return JSON.stringify(result);
+        // Sanitize the result to prevent prompt injection and limit size
+        return sanitizeMcpResult(rawResult, serverName, mcpTool.name);
       },
     };
   }
@@ -326,8 +348,13 @@ class MCPClientManager {
 
   /**
    * Register cleanup handlers for process exit
+   * Only registers once to prevent memory leaks from duplicate listeners
    */
   registerCleanupHandlers(): void {
+    // Prevent registering duplicate handlers (memory leak)
+    if (this.cleanupHandlersRegistered) return;
+    this.cleanupHandlersRegistered = true;
+
     let isCleaningUp = false;
 
     const cleanup = async (): Promise<void> => {
