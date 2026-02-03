@@ -47,7 +47,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             forTaskWithIdentifier: backgroundMemorySyncTaskId,
             using: nil
         ) { task in
-            self.handleMemorySyncTask(task as! BGProcessingTask)
+            guard let processingTask = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleMemorySyncTask(processingTask)
         }
     }
 

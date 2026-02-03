@@ -166,9 +166,9 @@ Upgrade ImageAnalysisTool with Foundation Models vision capabilities.
 
 Enable Siri to answer without opening the app.
 
-- [ ] Create `ReturnsValue<String>` intents for inline responses
-- [ ] Add parameterized intents for common queries
-- [ ] Implement background Foundation Models inference
+- [x] Create `ReturnsValue<String>` intents for inline responses
+- [x] Add parameterized intents for common queries
+- [x] Implement background Foundation Models inference
 - [ ] Support follow-up questions in Siri
 
 **Why**: Current intents require opening the app. Inline responses provide a seamless Siri experience.
@@ -284,9 +284,9 @@ Explore MLX for advanced local model capabilities.
 
 ### watchOS
 
-- [ ] Companion app with voice-first interface
-- [ ] Complications for quick actions
-- [ ] Watch-to-phone handoff
+- [x] Companion app with voice-first interface
+- [x] Complications for quick actions (circular, corner, rectangular, inline)
+- [x] Watch-to-phone handoff
 - [ ] Standalone mode with on-device AI
 
 ### visionOS
@@ -298,17 +298,17 @@ Explore MLX for advanced local model capabilities.
 
 ### CarPlay
 
-- [ ] Dashboard quick actions
-- [ ] Voice-only interaction mode
+- [x] Dashboard quick actions
+- [x] Voice-only interaction mode
 - [ ] Navigation integration
-- [ ] Hands-free conversation
+- [x] Hands-free conversation
 
 ### Widgets & Extensions
 
-- [ ] Interactive widgets for quick questions
+- [x] Interactive widgets for quick questions (QuickAskWidget, ConversationWidget)
 - [ ] Share extension for web pages
-- [ ] Lock Screen widgets
-- [ ] Control Center button
+- [x] Lock Screen widgets (accessoryCircular, accessoryRectangular)
+- [x] Control Center button (iOS 18+)
 - [ ] Live Activities for long-running tasks
 
 ---
@@ -370,18 +370,18 @@ Explore MLX for advanced local model capabilities.
 
 ## Implementation Priority Matrix
 
-| Priority | Feature | Effort | Impact |
-|----------|---------|--------|--------|
-| 1 | SpeechAnalyzer upgrade | Medium | High |
-| 2 | Guided Generation (@Generable) | Low | High |
-| 3 | Content Tagging adapter | Low | Medium |
-| 4 | Enhanced Image Understanding | Medium | High |
-| 5 | Inline Siri responses | Medium | Medium |
-| 6 | Document OCR tool | Medium | Medium |
-| 7 | Streaming partial types | Low | Medium |
-| 8 | Private Cloud Compute | High | Medium |
-| 9 | Custom adapter training | High | Low |
-| 10 | BNNSGraph audio | Medium | Low |
+| Priority | Feature | Effort | Impact | Status |
+|----------|---------|--------|--------|--------|
+| 1 | SpeechAnalyzer upgrade | Medium | High | ✅ Done |
+| 2 | Guided Generation (@Generable) | Low | High | ✅ Done |
+| 3 | Content Tagging adapter | Low | Medium | ✅ Done |
+| 4 | Enhanced Image Understanding | Medium | High | ✅ Done |
+| 5 | Inline Siri responses | Medium | Medium | 🟡 Partial |
+| 6 | Document OCR tool | Medium | Medium | ✅ Done |
+| 7 | Streaming partial types | Low | Medium | ✅ Done |
+| 8 | Private Cloud Compute | High | Medium | ⬜ Planned |
+| 9 | Custom adapter training | High | Low | ⬜ Planned |
+| 10 | BNNSGraph audio | Medium | Low | ⬜ Planned |
 
 ---
 
@@ -392,9 +392,9 @@ Explore MLX for advanced local model capabilities.
 | iOS | Available | iOS 26.0 |
 | macOS | Available | macOS 26.0 |
 | iPadOS | Available | iPadOS 26.0 |
-| watchOS | Planned | watchOS 26.0 |
+| watchOS | Available (companion) | watchOS 26.0 |
 | visionOS | Future | visionOS 26.0 |
-| CarPlay | Planned | iOS 26.0 |
+| CarPlay | Available | iOS 26.0 |
 
 ---
 

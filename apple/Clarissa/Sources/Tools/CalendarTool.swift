@@ -186,9 +186,11 @@ final class CalendarTool: ClarissaTool, @unchecked Sendable {
         guard let query = args["query"] as? String else {
             throw ToolError.invalidArguments("Query is required for search")
         }
-        
-        let startDate = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
-        let endDate = Calendar.current.date(byAdding: .month, value: 6, to: Date())!
+
+        guard let startDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()),
+              let endDate = Calendar.current.date(byAdding: .month, value: 6, to: Date()) else {
+            throw ToolError.executionFailed("Unable to calculate date range for search")
+        }
         
         let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: nil)
         let events = eventStore.events(matching: predicate)
