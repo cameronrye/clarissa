@@ -2,6 +2,9 @@ import { z } from "zod";
 import { defineTool } from "./base.ts";
 import { getSecurePaths } from "./security.ts";
 
+/** Maximum file size to read (1MB) - prevents context window overflow from huge files */
+const MAX_FILE_SIZE = 1024 * 1024;
+
 /**
  * Read file tool - view files with line numbers and optional range
  */
@@ -36,6 +39,13 @@ export const readFileTool = defineTool({
 
       if (!exists) {
         throw new Error(`File not found: ${path}`);
+      }
+
+      // Check file size to prevent context window overflow
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(
+          `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is ${MAX_FILE_SIZE / 1024 / 1024}MB. Use startLine/endLine to read a portion.`
+        );
       }
 
       const content = await file.text();

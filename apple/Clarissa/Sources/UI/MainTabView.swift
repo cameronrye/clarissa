@@ -523,11 +523,9 @@ struct ChatTabContent: View {
             ShareSheet(items: [item.text])
         }
         .sheet(isPresented: $showHistorySheet) {
-            SessionHistoryView(viewModel: viewModel) {
-                showHistorySheet = false
-            }
-            .presentationDetents([.medium, .large])
-            .scrollContentBackground(.hidden)
+            SearchableHistoryView(viewModel: viewModel)
+                .presentationDetents([.medium, .large])
+                .scrollContentBackground(.hidden)
         }
         .sheet(isPresented: $showSettingsSheet) {
             SettingsView(onProviderChange: {

@@ -154,6 +154,7 @@ public actor MemoryManager {
 
     /// Add a new memory
     /// Automatically tags memories with topics using ContentTagger on iOS 26+
+    /// Uses both exact-match and semantic deduplication
     func add(_ content: String) async {
         await ensureLoaded()
 
@@ -164,10 +165,16 @@ public actor MemoryManager {
             return
         }
 
-        // Check for duplicate content
+        // Check for exact duplicate content
         let normalizedContent = sanitizedContent.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if memories.contains(where: { $0.content.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == normalizedContent }) {
-            logger.info("Skipping duplicate memory")
+            logger.info("Skipping duplicate memory (exact match)")
+            return
+        }
+
+        // Check for semantic duplicates (substring or high similarity)
+        if memories.contains(where: { areSemanticallyDuplicate($0.content, sanitizedContent) }) {
+            logger.info("Skipping duplicate memory (semantic match)")
             return
         }
 
@@ -264,6 +271,92 @@ public actor MemoryManager {
         await ensureLoaded()
         memories.removeAll { $0.id == id }
         await save()
+    }
+
+    // MARK: - Relevance Ranking
+
+    /// Get memories ranked by relevance to the current conversation topics
+    /// Returns the most relevant memories formatted for the system prompt
+    func getRelevantForConversation(topics conversationTopics: [String]) async -> String? {
+        await ensureLoaded()
+
+        guard !memories.isEmpty, !conversationTopics.isEmpty else {
+            return await getForPrompt()
+        }
+
+        let conversationTopicSet = Set(conversationTopics.map { $0.lowercased() })
+
+        // Score each memory by topic overlap
+        var scored: [(memory: Memory, score: Double)] = []
+        for memory in memories {
+            if let memTopics = memory.topics, !memTopics.isEmpty {
+                let memTopicSet = Set(memTopics.map { $0.lowercased() })
+                let overlap = conversationTopicSet.intersection(memTopicSet)
+                let score = Double(overlap.count) / Double(conversationTopicSet.count)
+                scored.append((memory, score))
+            } else {
+                // Memories without topics get a small base score
+                scored.append((memory, 0.1))
+            }
+        }
+
+        // Sort by relevance (highest first), take top 10
+        let topMemories = scored
+            .sorted { $0.score > $1.score }
+            .prefix(10)
+            .map { $0.memory }
+
+        guard !topMemories.isEmpty else { return nil }
+
+        let memoryList = topMemories.map { memory -> String in
+            if let topics = memory.topics, !topics.isEmpty {
+                let topicStr = topics.joined(separator: ", ")
+                return "- \(memory.content) [\(topicStr)]"
+            }
+            return "- \(memory.content)"
+        }.joined(separator: "\n")
+
+        logger.info("getRelevantForConversation: Including \(topMemories.count) relevant memories")
+
+        return """
+        USER FACTS:
+        \(memoryList)
+        """
+    }
+
+    // MARK: - Staleness Detection
+
+    /// Get memories older than the stale threshold for user review
+    func getStaleMemories() async -> [Memory] {
+        await ensureLoaded()
+
+        guard let threshold = Calendar.current.date(
+            byAdding: .day,
+            value: -ClarissaConstants.memoryStaleThresholdDays,
+            to: Date()
+        ) else { return [] }
+
+        return memories.filter { $0.createdAt < threshold }
+    }
+
+    /// Count of stale memories for badge display
+    func staleMemoryCount() async -> Int {
+        let stale = await getStaleMemories()
+        return stale.count
+    }
+
+    // MARK: - Duplicate Management
+
+    /// Run semantic deduplication across all memories
+    func mergeDuplicates() async {
+        await ensureLoaded()
+        let before = memories.count
+        memories = deduplicateMemories(memories)
+        let removed = before - memories.count
+        if removed > 0 {
+            logger.info("Merged \(removed) duplicate memories")
+            await save()
+        }
     }
 
     /// Force reload memories from all sources (useful for CLI sync)
@@ -363,29 +456,110 @@ public actor MemoryManager {
     }
     #endif
 
-    /// Merge memories from multiple sources, deduplicating by content
+    /// Merge memories from multiple sources, deduplicating by content (exact + semantic)
     private func mergeMemories(_ sources: [Memory]...) -> [Memory] {
-        var seen = Set<String>()
-        var merged: [Memory] = []
-
         // Flatten and sort by date (newest first for deduplication priority)
         let all = sources.flatMap { $0 }.sorted { $0.createdAt > $1.createdAt }
+        let merged = deduplicateMemories(all)
+        return merged
+    }
 
-        for memory in all {
+    /// Deduplicate memories using exact match and semantic similarity
+    private func deduplicateMemories(_ input: [Memory]) -> [Memory] {
+        var seen = Set<String>()
+        var deduplicated: [Memory] = []
+
+        for memory in input {
             let normalized = memory.content.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            if !seen.contains(normalized) {
-                seen.insert(normalized)
-                merged.append(memory)
+
+            // Exact match dedup
+            if seen.contains(normalized) {
+                continue
             }
+
+            // Semantic dedup: check topic overlap + content similarity
+            let hasSemantic = deduplicated.contains { existing in
+                // Check topic overlap first (cheap)
+                if let memTopics = memory.topics, !memTopics.isEmpty,
+                   let existingTopics = existing.topics, !existingTopics.isEmpty {
+                    let overlap = Set(memTopics).intersection(Set(existingTopics))
+                    let overlapRatio = Double(overlap.count) / Double(min(memTopics.count, existingTopics.count))
+                    if overlapRatio >= ClarissaConstants.memoryTopicOverlapThreshold {
+                        return areSemanticallyDuplicate(memory.content, existing.content)
+                    }
+                }
+                // If no topics, still check content similarity
+                return areSemanticallyDuplicate(memory.content, existing.content)
+            }
+
+            if hasSemantic {
+                continue
+            }
+
+            seen.insert(normalized)
+            deduplicated.append(memory)
         }
 
         // Sort by date (oldest first) and limit to max
-        merged.sort { $0.createdAt < $1.createdAt }
-        if merged.count > Self.maxMemories {
-            merged = Array(merged.suffix(Self.maxMemories))
+        deduplicated.sort { $0.createdAt < $1.createdAt }
+        if deduplicated.count > Self.maxMemories {
+            deduplicated = Array(deduplicated.suffix(Self.maxMemories))
         }
 
-        return merged
+        return deduplicated
+    }
+
+    /// Check if two memory contents are semantically duplicate
+    private func areSemanticallyDuplicate(_ content1: String, _ content2: String) -> Bool {
+        let lower1 = content1.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower2 = content2.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Substring check: one contains the other
+        if lower1.contains(lower2) || lower2.contains(lower1) {
+            return true
+        }
+
+        // Skip Levenshtein for very different length strings (can't be similar)
+        let lenRatio = Double(min(lower1.count, lower2.count)) / Double(max(lower1.count, lower2.count))
+        if lenRatio < 0.5 {
+            return false
+        }
+
+        // Levenshtein distance for content similarity
+        let distance = levenshteinDistance(lower1, lower2)
+        let maxLen = max(lower1.count, lower2.count)
+        guard maxLen > 0 else { return true }
+        let similarity = 1.0 - (Double(distance) / Double(maxLen))
+
+        return similarity >= ClarissaConstants.memorySimilarityThreshold
+    }
+
+    /// Levenshtein edit distance between two strings
+    private func levenshteinDistance(_ str1: String, _ str2: String) -> Int {
+        let s1 = Array(str1)
+        let s2 = Array(str2)
+        let m = s1.count
+        let n = s2.count
+
+        if m == 0 { return n }
+        if n == 0 { return m }
+
+        var last = Array(0...n)
+        var cur = [Int](repeating: 0, count: n + 1)
+
+        for i in 1...m {
+            cur[0] = i
+            for j in 1...n {
+                if s1[i - 1] == s2[j - 1] {
+                    cur[j] = last[j - 1]
+                } else {
+                    cur[j] = min(last[j - 1], last[j], cur[j - 1]) + 1
+                }
+            }
+            last = cur
+        }
+
+        return last[n]
     }
 
     /// Migrate memories from legacy file storage to Keychain

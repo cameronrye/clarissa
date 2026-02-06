@@ -148,6 +148,10 @@ public final class Agent: ObservableObject {
     private let toolRegistry: ToolRegistry
     private var provider: (any LLMProvider)?
     private var trimmedCount: Int = 0
+    /// Summary of trimmed conversation for context preservation
+    private var conversationSummary: String?
+    /// Guard to prevent concurrent summarization requests
+    private var isSummarizing: Bool = false
 
     public weak var callbacks: AgentCallbacks?
 
@@ -212,8 +216,41 @@ public final class Agent: ObservableObject {
             """
         }
 
-        // Add memories if any (sanitized in MemoryManager)
-        if let memoriesPrompt = await MemoryManager.shared.getForPrompt() {
+        // Add conversation summary if previous messages were trimmed
+        if let summary = conversationSummary {
+            prompt += "\n\nCONVERSATION SUMMARY (earlier context):\n\(summary)"
+        }
+
+        // Add memories, using relevance ranking when possible
+        var memoriesPrompt: String? = nil
+
+        // Extract topics from recent user messages for relevance ranking
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let recentUserContent = messages
+                .filter { $0.role == .user }
+                .suffix(3)
+                .map { $0.content }
+                .joined(separator: " ")
+
+            if !recentUserContent.isEmpty {
+                let topics = (try? await MainActor.run {
+                    Task { try await ContentTagger.shared.extractTopics(from: recentUserContent) }
+                }.value) ?? []
+
+                if !topics.isEmpty {
+                    memoriesPrompt = await MemoryManager.shared.getRelevantForConversation(topics: topics)
+                }
+            }
+        }
+        #endif
+
+        // Fall back to recency-based memories
+        if memoriesPrompt == nil {
+            memoriesPrompt = await MemoryManager.shared.getForPrompt()
+        }
+
+        if let memoriesPrompt = memoriesPrompt {
             prompt += "\n\nCONTEXT:\n\(memoriesPrompt)"
             ClarissaLogger.agent.info("System prompt includes memories: \(memoriesPrompt.prefix(200), privacy: .public)...")
         } else {
@@ -224,7 +261,8 @@ public final class Agent: ObservableObject {
     }
     
     /// Trim conversation history to fit within token budget
-    /// Keeps system prompt and at least the last user message
+    /// Uses priority-based trimming: user messages first, then assistant, tool results last
+    /// Triggers summarization when approaching the context limit
     private func trimHistoryIfNeeded() {
         // Don't trim if we only have system + 1 message
         guard messages.count > 2 else { return }
@@ -233,20 +271,37 @@ public final class Agent: ObservableObject {
         let historyMessages = messages.filter { $0.role != .system }
         var tokenCount = TokenBudget.estimate(historyMessages)
 
-        // Safety guard: limit iterations to prevent infinite loop
-        // Max iterations = initial message count (can't remove more than we have)
+        // Check if approaching limit — trigger summarization
+        // Guard with isSummarizing to prevent duplicate concurrent summarization tasks
+        let usageRatio = Double(tokenCount) / Double(TokenBudget.maxHistoryTokens)
+        if usageRatio >= ClarissaConstants.summarizationThreshold && conversationSummary == nil && !isSummarizing {
+            let messagesToSummarize = messages
+                .filter { $0.role != .system }
+                .dropLast(4) // Keep recent 4 messages out of summary
+                .map { "\($0.role == .user ? "User" : "Assistant"): \($0.content)" }
+                .joined(separator: "\n")
+
+            if !messagesToSummarize.isEmpty {
+                isSummarizing = true
+                Task { @MainActor [weak self] in
+                    await self?.summarizeOldMessages(messagesToSummarize)
+                    self?.isSummarizing = false
+                }
+            }
+        }
+
+        // Priority-based trimming
         let maxIterations = messages.count
         var iterations = 0
         var removedThisPass = 0
 
-        // Trim from the beginning (oldest first) until within budget
-        // Keep at least the last 2 messages (user + response pair)
         while tokenCount > TokenBudget.maxHistoryTokens && messages.count > 3 && iterations < maxIterations {
             iterations += 1
 
-            // Find first non-system message to remove
-            if let firstNonSystemIndex = messages.firstIndex(where: { $0.role != .system }) {
-                let removed = messages.remove(at: firstNonSystemIndex)
+            // Find lowest priority message to remove (skip system messages and last 2)
+            // Priority: system (never) > tool (highest) > assistant > user (lowest)
+            if let index = findLowestPriorityMessage() {
+                let removed = messages.remove(at: index)
                 tokenCount -= TokenBudget.estimate(removed.content)
                 removedThisPass += 1
             } else {
@@ -257,12 +312,63 @@ public final class Agent: ObservableObject {
         // Track cumulative trimmed count
         trimmedCount += removedThisPass
         if removedThisPass > 0 {
-            ClarissaLogger.agent.info("Trimmed \(removedThisPass) messages, total trimmed: \(self.trimmedCount)")
+            ClarissaLogger.agent.info("Trimmed \(removedThisPass) messages (priority-based), total trimmed: \(self.trimmedCount)")
         }
 
         if iterations >= maxIterations {
             ClarissaLogger.agent.warning("Token trimming reached max iterations, stopping to prevent infinite loop")
         }
+    }
+
+    /// Find the index of the lowest priority non-system message to trim
+    /// Prefers removing older user messages first, then assistant, then tool results
+    /// Always keeps the last 2 non-system messages
+    private func findLowestPriorityMessage() -> Int? {
+        let nonSystemIndices = messages.indices.filter { messages[$0].role != .system }
+        // Keep at least the last 2 non-system messages
+        let trimmable = nonSystemIndices.dropLast(2)
+        guard !trimmable.isEmpty else { return nil }
+
+        // Find first user message (lowest priority)
+        if let idx = trimmable.first(where: { messages[$0].role == .user }) {
+            return idx
+        }
+        // Then assistant messages
+        if let idx = trimmable.first(where: { messages[$0].role == .assistant }) {
+            return idx
+        }
+        // Then tool messages (highest priority among trimmable)
+        if let idx = trimmable.first(where: { messages[$0].role == .tool }) {
+            return idx
+        }
+        return nil
+    }
+
+    /// Summarize older conversation messages for context preservation
+    private func summarizeOldMessages(_ text: String) async {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            do {
+                let model = SystemLanguageModel()
+                let session = LanguageModelSession(
+                    model: model,
+                    instructions: Instructions("""
+                    Summarize this conversation in 2-3 sentences.
+                    Focus on key topics, decisions, and facts mentioned.
+                    Be concise and factual.
+                    """)
+                )
+
+                let response = try await session.respond(to: Prompt(text))
+                // Limit summary to stay within token budget
+                let summary = String(response.content.prefix(500))
+                conversationSummary = summary
+                ClarissaLogger.agent.info("Created conversation summary (\(summary.count) chars)")
+            } catch {
+                ClarissaLogger.agent.error("Failed to create conversation summary: \(error.localizedDescription)")
+            }
+        }
+        #endif
     }
 
     /// Run the agent with a user message
@@ -501,6 +607,8 @@ public final class Agent: ObservableObject {
         let systemMessage = messages.first { $0.role == .system }
         messages = systemMessage.map { [$0] } ?? []
         trimmedCount = 0
+        conversationSummary = nil
+        isSummarizing = false
         // Reset native tool usage tracking
         NativeToolUsageTracker.shared.reset()
     }

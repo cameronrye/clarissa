@@ -141,6 +141,17 @@ struct ChatView: View {
                 )
             }
 
+            // Shared content banner
+            #if os(iOS)
+            if let result = viewModel.pendingSharedResult {
+                SharedResultBanner(result: result) {
+                    viewModel.insertSharedResult(result)
+                } onDismiss: {
+                    viewModel.dismissSharedResult()
+                }
+            }
+            #endif
+
             // Input area with glass effects
             inputAreaView
             } // end else (provider ready)
@@ -152,6 +163,12 @@ struct ChatView: View {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .alert("Enable Private Cloud Compute?", isPresented: $viewModel.showPCCConsent) {
+            Button("Enable") { viewModel.grantPCCConsent() }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("This conversation exceeds on-device capacity. Private Cloud Compute can handle longer conversations while maintaining Apple's privacy guarantees — your data is never stored and is protected by end-to-end encryption.")
         }
         #if os(iOS)
         .modifier(CameraCaptureModifier(viewModel: viewModel))

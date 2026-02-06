@@ -90,6 +90,38 @@ public enum ClarissaConstants {
     /// Maximum session count to display (shows "99+" for higher)
     public static let maxDisplayedSessionCount = 99
 
+    // MARK: - Memory Management
+
+    /// Number of days before a memory is considered stale
+    public static let memoryStaleThresholdDays = 30
+
+    /// Similarity threshold for semantic deduplication (0.0-1.0)
+    public static let memorySimilarityThreshold = 0.85
+
+    /// Topic overlap threshold for considering memories related (0.0-1.0)
+    public static let memoryTopicOverlapThreshold = 0.7
+
+    // MARK: - Context Summarization
+
+    /// Percentage of context budget at which summarization triggers
+    public static let summarizationThreshold = 0.8
+
+    /// Maximum tokens reserved for the conversation summary
+    public static let summaryMaxTokens = 150
+
+    // MARK: - Siri Session
+
+    /// Siri conversation session expiry in seconds
+    public static let siriSessionExpirySeconds: TimeInterval = 300
+
+    /// Maximum messages to keep in a Siri conversation session
+    public static let siriSessionMaxMessages = 10
+
+    // MARK: - Shared Storage
+
+    /// Key for shared results from share extension
+    public static let sharedResultsKey = "clarissa_shared_results"
+
     // MARK: - Accessibility
 
     /// Minimum touch target size for accessibility (44pt per Apple HIG)
@@ -97,6 +129,13 @@ public enum ClarissaConstants {
 
     /// Minimum contrast ratio for text (WCAG AA standard)
     public static let minimumContrastRatio: Double = 4.5
+}
+
+// MARK: - Cross-Platform Notifications
+
+public extension Notification.Name {
+    /// Posted when app returns to foreground to check for shared content from Share Extension
+    static let checkSharedResults = Notification.Name("clarissa.checkSharedResults")
 }
 
 // MARK: - macOS Menu Command Notifications

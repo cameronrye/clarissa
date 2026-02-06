@@ -26,6 +26,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     @Published var isSwitchingSession: Bool = false
     /// Incremented when sessions are created, deleted, or modified to trigger history view refreshes
     @Published var sessionVersion: Int = 0
+    @Published var showPCCConsent: Bool = false
+    @Published var pendingSharedResult: SharedResult?
 
     // MARK: - Enhancement Properties
     @Published var isEnhancing: Bool = false
@@ -55,6 +57,7 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     private var initTask: Task<Void, Never>?
     private(set) var voiceManager: VoiceManager?
     private var voiceCancellables = Set<AnyCancellable>()
+    private var sharedResultCancellable: AnyCancellable?
     #if os(macOS)
     private var menuCommandCancellables = Set<AnyCancellable>()
     #endif
@@ -81,6 +84,15 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Set up menu command observers on macOS
         #if os(macOS)
         setupMenuCommandObservers()
+        #endif
+
+        // Listen for shared content from Share Extension
+        #if os(iOS)
+        sharedResultCancellable = NotificationCenter.default.publisher(for: .checkSharedResults)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.checkForSharedResults()
+            }
         #endif
     }
 
@@ -134,13 +146,22 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             .store(in: &menuCommandCancellables)
     }
 
-    /// Clear the current conversation without starting a new session
+    /// Clear the current conversation and reset agent state
     private func clearConversation() {
+        cancelGeneration()
         messages.removeAll()
         streamingContent = ""
+        errorMessage = nil
         contextStats = .empty
         thinkingStatus = .idle
-        cancelGeneration()
+
+        // Reset agent AND provider session to prevent context bleeding
+        Task {
+            await agent.resetForNewConversation()
+            _ = await SessionManager.shared.startNewSession()
+            updateContextStats()
+            sessionVersion += 1
+        }
     }
     #endif
 
@@ -277,7 +298,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Default: try Foundation Models first
         if #available(iOS 26.0, *) {
-            let provider = FoundationModelsProvider()
+            let pccAllowed = UserDefaults.standard.bool(forKey: "pccConsentGiven")
+            let provider = FoundationModelsProvider(allowPCC: pccAllowed)
             if await provider.isAvailable {
                 agent.setProvider(provider)
                 currentProvider = provider.name
@@ -473,6 +495,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         canCancel = false
         streamingContent = ""
         thinkingStatus = .idle
+
+        // End any active Live Activity and reset tool call tracking
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            if toolCallCount >= 2 {
+                LiveActivityManager.shared.endActivity()
+            }
+        }
+        #endif
+        toolCallCount = 0
     }
 
     /// Retry the last user message
@@ -600,6 +632,12 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     private func saveCurrentSession() async {
         let messagesToSave = agent.getMessagesForSave()
         await SessionManager.shared.updateCurrentSession(messages: messagesToSave)
+
+        // Tag session with topics for search/filtering
+        if let sessionId = await SessionManager.shared.getCurrentSessionId() {
+            await SessionManager.shared.tagSession(id: sessionId)
+        }
+
         // Notify history views to refresh (session may have new title or content)
         sessionVersion += 1
     }
@@ -621,6 +659,39 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         }
 
         return markdown
+    }
+
+    // MARK: - Share Extension
+
+    /// Check for shared content from the Share Extension
+    func checkForSharedResults() {
+        let results = SharedResultStore.load()
+        guard let latest = results.last else { return }
+        pendingSharedResult = latest
+        SharedResultStore.clear()
+    }
+
+    /// Insert shared content into the conversation
+    func insertSharedResult(_ result: SharedResult) {
+        let content: String
+        switch result.type {
+        case .text:
+            content = "I shared some text with you. Here's the analysis:\n\n\(result.analysis)"
+        case .url:
+            content = "I shared a link (\(result.originalContent)) with you. Here's what I found:\n\n\(result.analysis)"
+        case .image:
+            content = "I shared an image with you. \(result.analysis)"
+        }
+
+        // Add as an assistant message showing the analysis
+        let message = ChatMessage(role: .assistant, content: content)
+        messages.append(message)
+        pendingSharedResult = nil
+    }
+
+    /// Dismiss the shared result banner
+    func dismissSharedResult() {
+        pendingSharedResult = nil
     }
 
     /// Switch to a different session
@@ -652,14 +723,28 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Reset provider session to clear cached context from previous conversation
         await agent.resetForNewConversation()
 
-        // Load messages from session into UI
+        // Load messages from session into UI (including tool messages for result cards)
         var loadedCount = 0
         for message in session.messages {
-            if message.role == .user || message.role == .assistant {
+            switch message.role {
+            case .user, .assistant:
                 var chatMessage = ChatMessage(role: message.role, content: message.content)
                 chatMessage.imageData = message.imageData
                 messages.append(chatMessage)
                 loadedCount += 1
+            case .tool:
+                // Restore tool messages with their results for tool result cards
+                var chatMessage = ChatMessage(
+                    role: .tool,
+                    content: formatToolDisplayName(message.toolName ?? "tool"),
+                    toolName: message.toolName,
+                    toolStatus: .completed
+                )
+                chatMessage.toolResult = message.content
+                messages.append(chatMessage)
+                loadedCount += 1
+            case .system:
+                break
             }
         }
 
@@ -725,6 +810,9 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     // MARK: - AgentCallbacks
 
+    /// Track tool call count for Live Activity triggering
+    private var toolCallCount = 0
+
     func onThinking() {
         // Clear streaming content for each new ReAct iteration
         streamingContent = ""
@@ -742,15 +830,41 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             toolStatus: .running
         )
         messages.append(toolMessage)
+
+        // Live Activity: start on 2nd tool call (multi-tool detection)
+        #if os(iOS)
+        toolCallCount += 1
+        if #available(iOS 16.1, *) {
+            if toolCallCount == 2 {
+                let question = messages.last(where: { $0.role == .user })?.content ?? "Working..."
+                LiveActivityManager.shared.startActivity(question: question, currentTool: displayName)
+            } else if toolCallCount > 2 {
+                LiveActivityManager.shared.updateTool(name: displayName)
+            }
+        }
+        #endif
     }
 
     func onToolResult(name: String, result: String, success: Bool) {
-        if let index = messages.lastIndex(where: { $0.toolName == name }) {
+        // Match on both tool name AND running status to avoid overwriting
+        // the wrong message when the same tool is called multiple times
+        if let index = messages.lastIndex(where: { $0.toolName == name && $0.toolStatus == .running }) {
+            messages[index].toolStatus = success ? .completed : .failed
+            messages[index].toolResult = result
+        } else if let index = messages.lastIndex(where: { $0.toolName == name }) {
+            // Fallback: match by name only (for native tool handling where status may vary)
             messages[index].toolStatus = success ? .completed : .failed
             messages[index].toolResult = result
         }
         // After tool completes, we're processing the result
         thinkingStatus = .processing
+
+        // Live Activity: mark step complete
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            LiveActivityManager.shared.completeStep()
+        }
+        #endif
     }
 
     /// Format tool name for display
@@ -792,6 +906,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     func onResponse(content: String) {
         thinkingStatus = .idle
 
+        // End Live Activity
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            if toolCallCount >= 2 {
+                LiveActivityManager.shared.endActivity()
+            }
+        }
+        toolCallCount = 0
+        #endif
+
         let assistantMessage = ChatMessage(role: .assistant, content: content)
         messages.append(assistantMessage)
 
@@ -827,7 +951,33 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     func onError(error: Error) {
         thinkingStatus = .idle
+
+        // End Live Activity on error
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            if toolCallCount >= 2 {
+                LiveActivityManager.shared.endActivity()
+            }
+        }
+        toolCallCount = 0
+        #endif
+
+        // Check if this is a context window exceeded error and PCC isn't enabled
+        if let fmError = error as? FoundationModelsError,
+           case .contextWindowExceeded = fmError,
+           !UserDefaults.standard.bool(forKey: "pccConsentGiven") {
+            showPCCConsent = true
+            return
+        }
+
         errorMessage = error.localizedDescription
+    }
+
+    /// Grant PCC consent and recreate the provider
+    func grantPCCConsent() {
+        UserDefaults.standard.set(true, forKey: "pccConsentGiven")
+        showPCCConsent = false
+        refreshProvider()
     }
 
     // MARK: - Context Stats

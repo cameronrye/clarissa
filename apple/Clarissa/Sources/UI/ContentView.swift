@@ -70,11 +70,9 @@ public struct ContentView: View {
                     .scrollContentBackground(.hidden)  // Glass compatibility
                 }
                 .sheet(isPresented: $showSessionHistory) {
-                    SessionHistoryView(viewModel: chatViewModel) {
-                        showSessionHistory = false
-                    }
-                    .presentationDetents([.medium, .large])
-                    .scrollContentBackground(.hidden)  // Glass compatibility
+                    SearchableHistoryView(viewModel: chatViewModel)
+                        .presentationDetents([.medium, .large])
+                        .scrollContentBackground(.hidden)  // Glass compatibility
                 }
                 .sheet(isPresented: $showContextDetails) {
                     ContextDetailSheet(stats: chatViewModel.contextStats)

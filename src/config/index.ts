@@ -256,7 +256,7 @@ let loadedPreferences: SavedPreferences = {};
 function loadPreferencesFile(): SavedPreferences {
   try {
     if (!existsSync(PREFERENCES_FILE)) return {};
-    const content = require(PREFERENCES_FILE);
+    const content = JSON.parse(readFileSync(PREFERENCES_FILE, "utf-8"));
     return {
       lastProvider: content?.lastProvider,
       lastModel: content?.lastModel,
@@ -278,9 +278,8 @@ export function getPreferences(): SavedPreferences {
  */
 function loadConfigFile(): ConfigFile | null {
   try {
-    const file = Bun.file(CONFIG_FILE);
-    if (!file.size) return null;
-    const content = require(CONFIG_FILE);
+    if (!existsSync(CONFIG_FILE)) return null;
+    const content = JSON.parse(readFileSync(CONFIG_FILE, "utf-8"));
     const result = configFileSchema.safeParse(content);
     if (result.success) {
       // Store MCP servers for later access

@@ -164,12 +164,12 @@ struct WeatherResultView: View {
             // Must display Apple Weather trademark and legal attribution link
             Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
                 HStack(spacing: 4) {
-                    Image(systemName: "apple.logo")
-                        .font(.caption)
-                    Text("Weather")
-                        .font(.caption.weight(.medium))
+                    Text("\u{F8FF} Weather")
+                        .font(.footnote.weight(.medium))
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.caption2)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.6))
             }
             .accessibilityLabel("Data provided by Apple Weather. Tap for legal attribution.")
         }

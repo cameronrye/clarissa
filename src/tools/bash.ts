@@ -37,7 +37,7 @@ const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
     reason: "dd to block device",
   },
   {
-    pattern: /mkfs\s+.*\/dev\/sd[a-z]/i,
+    pattern: /mkfs(\.\w+)?\s+.*\/dev\/sd[a-z]/i,
     reason: "Formatting block device",
   },
   // Chmod 777 on root or recursive on sensitive paths

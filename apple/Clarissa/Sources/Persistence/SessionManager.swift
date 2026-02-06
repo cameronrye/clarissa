@@ -128,6 +128,52 @@ actor SessionManager {
         await save()
     }
 
+    /// Tag a session with topics extracted from user messages
+    func tagSession(id: UUID) async {
+        await ensureLoaded()
+
+        guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
+
+        // Skip if already tagged
+        if sessions[index].topics != nil { return }
+
+        // Collect first 3 user messages for topic extraction
+        let userContent = sessions[index].messages
+            .filter { $0.role == .user }
+            .prefix(3)
+            .map { $0.content }
+            .joined(separator: " ")
+
+        guard !userContent.isEmpty else { return }
+
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            do {
+                let topics = try await MainActor.run {
+                    Task { try await ContentTagger.shared.extractTopics(from: userContent) }
+                }.value
+                sessions[index].topics = topics.isEmpty ? nil : topics
+                await save()
+                ClarissaLogger.persistence.info("Tagged session with topics: \(topics)")
+            } catch {
+                ClarissaLogger.persistence.warning("Failed to tag session: \(error.localizedDescription)")
+            }
+        }
+        #endif
+    }
+
+    /// Get all unique topics across all sessions for filter UI
+    func getAllTopics() async -> [String] {
+        await ensureLoaded()
+        var topicSet = Set<String>()
+        for session in sessions {
+            if let topics = session.topics {
+                topicSet.formUnion(topics)
+            }
+        }
+        return topicSet.sorted()
+    }
+
     /// Get the current session ID
     func getCurrentSessionId() async -> UUID? {
         await ensureLoaded()
@@ -232,19 +278,23 @@ struct Session: Identifiable, Codable {
     var messages: [Message]
     let createdAt: Date
     var updatedAt: Date
+    /// Topics extracted via ContentTagger for search/filtering
+    var topics: [String]?
 
     init(
         id: UUID = UUID(),
         title: String = "New Conversation",
         messages: [Message] = [],
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        topics: [String]? = nil
     ) {
         self.id = id
         self.title = title
         self.messages = messages
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.topics = topics
     }
 
     /// Generate a title from the first user message

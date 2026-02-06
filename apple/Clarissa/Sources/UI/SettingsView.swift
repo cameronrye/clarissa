@@ -32,6 +32,7 @@ public struct SettingsView: View {
     @AppStorage("voiceOutputEnabled") private var voiceOutputEnabled: Bool = true
     @AppStorage("selectedVoiceIdentifier") private var selectedVoiceIdentifier: String = ""
     @AppStorage("speechRate") private var speechRate: Double = 0.5
+    @AppStorage("pccConsentGiven") private var pccConsentGiven: Bool = false
 
     @State private var openRouterApiKey: String = ""
     @State private var showingApiKey = false
@@ -39,6 +40,7 @@ public struct SettingsView: View {
     @State private var showMemories = false
     @State private var showingSaveConfirmation = false
     @State private var showingClearMemoriesConfirmation = false
+    @State private var staleMemoryCount: Int = 0
     @State private var availableVoices: [AVSpeechSynthesisVoice] = []
     @StateObject private var voiceTester = VoiceTester()
     private var isTestingVoice: Bool { voiceTester.isSpeaking }
@@ -96,6 +98,7 @@ public struct SettingsView: View {
     private func loadInitialData() async {
         memories = await MemoryManager.shared.getAll()
         memorySyncStatus = await MemoryManager.shared.getSyncStatus()
+        staleMemoryCount = await MemoryManager.shared.staleMemoryCount()
         openRouterApiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
         loadAvailableVoices()
     }
@@ -204,6 +207,20 @@ public struct SettingsView: View {
             }
 
             Section {
+                Toggle(isOn: $pccConsentGiven) {
+                    HStack {
+                        Image(systemName: "cloud.fill")
+                            .foregroundStyle(ClarissaTheme.purple)
+                        Text("Private Cloud Compute")
+                    }
+                }
+            } header: {
+                Text("Privacy")
+            } footer: {
+                Text("When enabled, complex requests may be processed using Apple's Private Cloud Compute. Your data is never stored on Apple servers and is protected by end-to-end encryption.")
+            }
+
+            Section {
                 NavigationLink {
                     MemoryListView(memories: $memories)
                 } label: {
@@ -214,6 +231,25 @@ public struct SettingsView: View {
                         Spacer()
                         Text("\(memories.count)")
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                NavigationLink {
+                    MemoryReviewView()
+                } label: {
+                    HStack {
+                        Image(systemName: "clock.badge.exclamationmark")
+                            .foregroundStyle(.orange)
+                        Text("Review Stale Memories")
+                        Spacer()
+                        if staleMemoryCount > 0 {
+                            Text("\(staleMemoryCount)")
+                                .font(.caption)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(.orange))
+                        }
                     }
                 }
 
@@ -464,6 +500,20 @@ public struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle(isOn: $pccConsentGiven) {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundStyle(ClarissaTheme.purple)
+                            Text("Private Cloud Compute")
+                        }
+                    }
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("When enabled, complex requests may be processed using Apple's Private Cloud Compute. Your data is never stored on Apple servers and is protected by end-to-end encryption.")
+                }
+
+                Section {
                     NavigationLink {
                         MemoryListView(memories: $memories)
                     } label: {
@@ -474,6 +524,25 @@ public struct SettingsView: View {
                             Spacer()
                             Text("\(memories.count)")
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    NavigationLink {
+                        MemoryReviewView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "clock.badge.exclamationmark")
+                                .foregroundStyle(.orange)
+                            Text("Review Stale Memories")
+                            Spacer()
+                            if staleMemoryCount > 0 {
+                                Text("\(staleMemoryCount)")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(.orange))
+                            }
                         }
                     }
 

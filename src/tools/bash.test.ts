@@ -94,6 +94,99 @@ describe("bash tool", () => {
     });
   });
 
+  describe("dangerous command blocking", () => {
+    test("blocks rm -rf /", async () => {
+      const result = await bashTool.execute({ command: "rm -rf /", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks rm -rf ~", async () => {
+      const result = await bashTool.execute({ command: "rm -rf ~", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks rm -rf /*", async () => {
+      const result = await bashTool.execute({ command: "rm -rf /*", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks rm with wildcard", async () => {
+      const result = await bashTool.execute({ command: "rm -rf *", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks fork bomb", async () => {
+      const result = await bashTool.execute({ command: ":(){ :|:& };:", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks dd to block device", async () => {
+      const result = await bashTool.execute({ command: "dd if=/dev/zero of=/dev/sda", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks mkfs on block device", async () => {
+      const result = await bashTool.execute({ command: "mkfs.ext4 /dev/sda", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks chmod 777 on root", async () => {
+      const result = await bashTool.execute({ command: "chmod -R 777 /", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks kill -9 -1", async () => {
+      const result = await bashTool.execute({ command: "kill -9 -1", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks sudo rm on root", async () => {
+      const result = await bashTool.execute({ command: "sudo rm -rf /", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks overwriting /etc/passwd", async () => {
+      const result = await bashTool.execute({ command: "echo x > /etc/passwd", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks writing to /boot/", async () => {
+      const result = await bashTool.execute({ command: "echo x > /boot/grub.cfg", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("blocks redirect to block device", async () => {
+      const result = await bashTool.execute({ command: "echo x > /dev/sda", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toContain("blocked for safety");
+    });
+
+    test("allows safe rm commands", async () => {
+      // rm on a specific file should not be blocked
+      const result = await bashTool.execute({ command: "rm -f /tmp/test_nonexistent_file_12345", timeout: DEFAULT_TIMEOUT });
+      // Should not be blocked (may fail because file doesn't exist, but not safety-blocked)
+      expect(result.stderr).not.toContain("blocked for safety");
+    });
+
+    test("allows safe echo commands", async () => {
+      const result = await bashTool.execute({ command: "echo hello", timeout: DEFAULT_TIMEOUT });
+      expect(result.success).toBe(true);
+      expect(result.stderr).not.toContain("blocked for safety");
+    });
+  });
+
 	  describe("availability helper", () => {
 	    test("isBashAvailable returns true when bash is present", async () => {
 	      const available = await isBashAvailable();

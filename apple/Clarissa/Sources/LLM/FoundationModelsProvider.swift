@@ -27,6 +27,9 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Access to the tool registry for native tool calling
     private let toolRegistry: ToolRegistry
 
+    /// Whether to allow Private Cloud Compute for complex requests
+    private let allowPCC: Bool
+
     /// Track which tools were used to create the current session
     /// Session is invalidated if this changes (e.g., user enables/disables tools)
     private var currentToolSet: Set<String>?
@@ -35,8 +38,9 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Community insight: "Don't call respond(to:) on a session again before it returns - this causes a crash"
     private var isProcessing = false
 
-    public init(toolRegistry: ToolRegistry = .shared) {
+    public init(toolRegistry: ToolRegistry = .shared, allowPCC: Bool = false) {
         self.toolRegistry = toolRegistry
+        self.allowPCC = allowPCC
     }
 
     public var isAvailable: Bool {

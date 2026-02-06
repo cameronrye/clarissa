@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7E968D0A2F365E22009C206E /* ClarissaShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E968D002F365E22009C206E /* ClarissaShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A0000001 /* ClarissaKit in Frameworks */ = {isa = PBXBuildFile; productRef = A0000002 /* ClarissaKit */; };
 		W0000001 /* ClarissaKit in Frameworks */ = {isa = PBXBuildFile; productRef = W0000002 /* ClarissaKit */; };
 		W0000010 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = W0000011 /* WidgetKit.framework */; };
@@ -16,6 +17,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		7E968D082F365E22009C206E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A000000B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7E968CFF2F365E22009C206E;
+			remoteInfo = ClarissaShareExtension;
+		};
 		7EECC06D2EFB0BE8006BB322 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A000000B /* Project object */;
@@ -53,6 +61,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
+				7E968D0A2F365E22009C206E /* ClarissaShareExtension.appex in Embed Foundation Extensions */,
 				W0000020 /* ClarissaWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
@@ -72,6 +81,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7E968D002F365E22009C206E /* ClarissaShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ClarissaShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7EECC0672EFB0BE8006BB322 /* ClarissaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClarissaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A0000003 /* Clarissa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clarissa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		W0000003 /* ClarissaWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ClarissaWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +116,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		7E968D012F365E22009C206E /* ClarissaShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ClarissaShareExtension;
+			sourceTree = "<group>";
+		};
 		7EECC0682EFB0BE8006BB322 /* ClarissaUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ClarissaUITests;
@@ -153,6 +168,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		7E968CFD2F365E22009C206E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7EECC0642EFB0BE8006BB322 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -205,6 +227,7 @@
 				WA000050 /* ClarissaWatch */,
 				7EECC0682EFB0BE8006BB322 /* ClarissaUITests */,
 				WT000050 /* ClarissaWatchUITests */,
+				7E968D012F365E22009C206E /* ClarissaShareExtension */,
 				W0000070 /* Frameworks */,
 				A0000008 /* Products */,
 			);
@@ -218,6 +241,7 @@
 				WA000002 /* ClarissaWatch.app */,
 				7EECC0672EFB0BE8006BB322 /* ClarissaUITests.xctest */,
 				WT000001 /* ClarissaWatchUITests.xctest */,
+				7E968D002F365E22009C206E /* ClarissaShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -234,6 +258,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		7E968CFF2F365E22009C206E /* ClarissaShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7E968D0D2F365E22009C206E /* Build configuration list for PBXNativeTarget "ClarissaShareExtension" */;
+			buildPhases = (
+				7E968CFC2F365E22009C206E /* Sources */,
+				7E968CFD2F365E22009C206E /* Frameworks */,
+				7E968CFE2F365E22009C206E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7E968D012F365E22009C206E /* ClarissaShareExtension */,
+			);
+			name = ClarissaShareExtension;
+			packageProductDependencies = (
+			);
+			productName = ClarissaShareExtension;
+			productReference = 7E968D002F365E22009C206E /* ClarissaShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		7EECC0662EFB0BE8006BB322 /* ClarissaUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7EECC0712EFB0BE8006BB322 /* Build configuration list for PBXNativeTarget "ClarissaUITests" */;
@@ -272,6 +318,7 @@
 			dependencies = (
 				W0000031 /* PBXTargetDependency */,
 				WA000011 /* PBXTargetDependency */,
+				7E968D092F365E22009C206E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A0000004 /* Sources/App */,
@@ -364,6 +411,10 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					7E968CFF2F365E22009C206E = {
+						CreatedOnToolsVersion = 26.2;
+						LastSwiftMigration = 2620;
+					};
 					7EECC0662EFB0BE8006BB322 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = A0000009;
@@ -405,11 +456,19 @@
 				WA000003 /* ClarissaWatch */,
 				7EECC0662EFB0BE8006BB322 /* ClarissaUITests */,
 				WT000002 /* ClarissaWatchUITests */,
+				7E968CFF2F365E22009C206E /* ClarissaShareExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		7E968CFE2F365E22009C206E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7EECC0652EFB0BE8006BB322 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -448,6 +507,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		7E968CFC2F365E22009C206E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7EECC0632EFB0BE8006BB322 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -486,6 +552,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		7E968D092F365E22009C206E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7E968CFF2F365E22009C206E /* ClarissaShareExtension */;
+			targetProxy = 7E968D082F365E22009C206E /* PBXContainerItemProxy */;
+		};
 		7EECC06E2EFB0BE8006BB322 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A0000009 /* Clarissa */;
@@ -510,6 +581,83 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		7E968D0B2F365E22009C206E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ClarissaShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ClarissaShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rye.clarissa.ClarissaShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "ClarissaShareExtension/ClarissaShareExtension-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7E968D0C2F365E22009C206E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ClarissaShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ClarissaShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rye.clarissa.ClarissaShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "ClarissaShareExtension/ClarissaShareExtension-Bridging-Header.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		7EECC06F2EFB0BE8006BB322 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -946,6 +1094,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		7E968D0D2F365E22009C206E /* Build configuration list for PBXNativeTarget "ClarissaShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7E968D0B2F365E22009C206E /* Debug */,
+				7E968D0C2F365E22009C206E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		7EECC0712EFB0BE8006BB322 /* Build configuration list for PBXNativeTarget "ClarissaUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

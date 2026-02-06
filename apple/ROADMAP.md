@@ -169,7 +169,7 @@ Enable Siri to answer without opening the app.
 - [x] Create `ReturnsValue<String>` intents for inline responses
 - [x] Add parameterized intents for common queries
 - [x] Implement background Foundation Models inference
-- [ ] Support follow-up questions in Siri
+- [x] Support follow-up questions in Siri
 
 **Why**: Current intents require opening the app. Inline responses provide a seamless Siri experience.
 
@@ -231,10 +231,10 @@ for try await partial in session.streamResponse(generating: TripPlan.self) {
 
 Integrate Apple's privacy-preserving server inference.
 
-- [ ] Detect when task exceeds on-device capabilities
-- [ ] Seamlessly route to Private Cloud Compute
-- [ ] Maintain privacy guarantees with PCC
-- [ ] Handle PCC availability gracefully
+- [x] Detect when task exceeds on-device capabilities
+- [x] Seamlessly route to Private Cloud Compute
+- [x] Maintain privacy guarantees with PCC
+- [x] Handle PCC availability gracefully
 
 **Why**: Complex reasoning tasks may exceed the 3B on-device model. PCC provides server-scale inference while maintaining Apple's privacy guarantees.
 
@@ -306,10 +306,10 @@ Explore MLX for advanced local model capabilities.
 ### Widgets & Extensions
 
 - [x] Interactive widgets for quick questions (QuickAskWidget, ConversationWidget)
-- [ ] Share extension for web pages
+- [x] Share extension for web pages
 - [x] Lock Screen widgets (accessoryCircular, accessoryRectangular)
 - [x] Control Center button (iOS 18+)
-- [ ] Live Activities for long-running tasks
+- [x] Live Activities for long-running tasks
 
 ---
 
@@ -376,10 +376,10 @@ Explore MLX for advanced local model capabilities.
 | 2 | Guided Generation (@Generable) | Low | High | ✅ Done |
 | 3 | Content Tagging adapter | Low | Medium | ✅ Done |
 | 4 | Enhanced Image Understanding | Medium | High | ✅ Done |
-| 5 | Inline Siri responses | Medium | Medium | 🟡 Partial |
+| 5 | Inline Siri responses | Medium | Medium | ✅ Done |
 | 6 | Document OCR tool | Medium | Medium | ✅ Done |
 | 7 | Streaming partial types | Low | Medium | ✅ Done |
-| 8 | Private Cloud Compute | High | Medium | ⬜ Planned |
+| 8 | Private Cloud Compute | High | Medium | ✅ Done |
 | 9 | Custom adapter training | High | Low | ⬜ Planned |
 | 10 | BNNSGraph audio | Medium | Low | ⬜ Planned |
 

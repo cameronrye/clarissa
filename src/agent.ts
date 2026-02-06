@@ -91,10 +91,19 @@ export class Agent {
   private cachedSystemPrompt: string | null = null;
   private cachedMemoryVersion = -1;
   private cachedToolNames: string[] = [];
+  private abortController: AbortController | null = null;
 
   constructor(callbacks: AgentCallbacks = {}) {
     this.callbacks = callbacks;
     // System prompt will be initialized on first run with correct tool names
+  }
+
+  /**
+   * Abort the currently running agent loop.
+   * Safe to call even if no run is in progress.
+   */
+  abort(): void {
+    this.abortController?.abort();
   }
 
   /**
@@ -126,6 +135,10 @@ export class Agent {
    * Run the agent with a user message
    */
   async run(userMessage: string): Promise<string> {
+    // Create a new AbortController for this run
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
     // Get provider's max tools capability and select appropriate tool set
     // Do this FIRST so we can build the system prompt with correct tool names
     const maxTools = await llmClient.getMaxTools();
@@ -161,6 +174,11 @@ export class Agent {
 
     // Run the agent loop
     for (let i = 0; i < agentConfig.maxIterations; i++) {
+      // Check if the run was aborted
+      if (signal.aborted) {
+        return "Request cancelled.";
+      }
+
       this.callbacks.onThinking?.();
 
       // Get LLM response with streaming
@@ -176,31 +194,61 @@ export class Agent {
 
       // Check if there are tool calls
       if (response.tool_calls && response.tool_calls.length > 0) {
-        // Execute each tool call
-        const toolResults: ToolResult[] = [];
+        // Separate tool calls into those needing confirmation and those that don't.
+        // Confirmation tools must run sequentially (user confirms one at a time),
+        // but auto-approved tools can run in parallel for better performance.
+        const needsConfirmation: typeof response.tool_calls = [];
+        const autoApproved: typeof response.tool_calls = [];
 
         for (const toolCall of response.tool_calls) {
+          const { name } = toolCall.function;
+          if (!agentConfig.autoApprove && toolRegistry.requiresConfirmation(name) && this.callbacks.onToolConfirmation) {
+            needsConfirmation.push(toolCall);
+          } else {
+            autoApproved.push(toolCall);
+          }
+        }
+
+        const toolResults: ToolResult[] = [];
+
+        // Check abort before executing tools
+        if (signal.aborted) {
+          return "Request cancelled.";
+        }
+
+        // Run auto-approved tools in parallel
+        if (autoApproved.length > 0) {
+          const parallelResults = await Promise.all(
+            autoApproved.map(async (toolCall) => {
+              const { name, arguments: args } = toolCall.function;
+              this.callbacks.onToolCall?.(name, args);
+              const result = await toolRegistry.execute(name, args);
+              result.tool_call_id = toolCall.id;
+              this.callbacks.onToolResult?.(name, result.content);
+              return result;
+            })
+          );
+          toolResults.push(...parallelResults);
+        }
+
+        // Run confirmation-required tools sequentially
+        for (const toolCall of needsConfirmation) {
           const { name, arguments: args } = toolCall.function;
 
           this.callbacks.onToolCall?.(name, args);
 
-          // Check if tool requires confirmation (skip if auto-approve is enabled)
-          if (!agentConfig.autoApprove && toolRegistry.requiresConfirmation(name) && this.callbacks.onToolConfirmation) {
-            const confirmed = await this.callbacks.onToolConfirmation(name, args);
-            if (!confirmed) {
-              // User rejected - add rejection message
-              toolResults.push({
-                tool_call_id: toolCall.id,
-                role: "tool",
-                name,
-                content: JSON.stringify({ rejected: true, message: "User rejected this tool execution" }),
-              });
-              this.callbacks.onToolResult?.(name, "Rejected by user");
-              continue;
-            }
+          const confirmed = await this.callbacks.onToolConfirmation!(name, args);
+          if (!confirmed) {
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              name,
+              content: JSON.stringify({ rejected: true, message: "User rejected this tool execution" }),
+            });
+            this.callbacks.onToolResult?.(name, "Rejected by user");
+            continue;
           }
 
-          // Execute the tool
           const result = await toolRegistry.execute(name, args);
           result.tool_call_id = toolCall.id;
 

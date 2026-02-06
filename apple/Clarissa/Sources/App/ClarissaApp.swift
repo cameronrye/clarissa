@@ -7,15 +7,36 @@ import FoundationModels
 #if os(macOS)
 import AppKit
 
-/// macOS App Delegate to handle dock icon clicks when window is closed
-final class MacAppDelegate: NSObject, NSApplicationDelegate {
-    /// Called when user clicks dock icon - reopen main window if none visible
+/// macOS App Delegate to handle dock icon clicks and window lifecycle
+/// Implements hide-on-close so the main window can always be re-opened
+/// via the Window menu or dock icon (App Store Guideline 4)
+final class MacAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    private weak var mainWindow: NSWindow?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // SwiftUI creates the window asynchronously, so defer setup
+        DispatchQueue.main.async { [weak self] in
+            self?.setupMainWindow()
+        }
+    }
+
+    @MainActor private func setupMainWindow() {
+        guard let window = NSApplication.shared.windows.first else { return }
+        mainWindow = window
+        window.delegate = self
+    }
+
+    /// Hide the window instead of closing it so it can be re-opened
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        return false
+    }
+
+    /// Called when user clicks dock icon - show the main window if hidden
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            // No visible windows - reopen the main window
-            if let window = sender.windows.first {
-                window.makeKeyAndOrderFront(nil)
-            }
+            mainWindow?.makeKeyAndOrderFront(nil)
+            sender.activate(ignoringOtherApps: true)
         }
         return true
     }
@@ -99,9 +120,12 @@ struct ClarissaApp: App {
     #endif
 
     // Use shared AppState so Intents, URL handling, and UI all share one source of truth
-    // Note: Using @ObservedObject since AppState.shared is already created elsewhere
-    // @StateObject would create ownership confusion with the shared singleton
-    @ObservedObject private var appState = AppState.shared
+    // @StateObject ensures stable observation lifecycle even if SwiftUI recreates the App struct
+    @StateObject private var appState = AppState.shared
+
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
 
     /// Check if the app is running in screenshot/demo mode (for App Store screenshots)
     private static var isScreenshotMode: Bool {
@@ -150,6 +174,12 @@ struct ClarissaApp: App {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
                 // Schedule background memory sync when app enters background
                 appDelegate.scheduleMemorySyncTask()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    // Check for content shared via Share Extension
+                    NotificationCenter.default.post(name: .checkSharedResults, object: nil)
+                }
             }
             #endif
         }
@@ -245,13 +275,11 @@ struct ClarissaApp: App {
                 .keyboardShortcut(".", modifiers: .command)
             }
 
-            // Window menu - add command to show main window
+            // Window menu - show/re-open main window (required by App Store Guideline 4)
             CommandGroup(before: .windowList) {
-                Button("Clarissa") {
+                Button("Show Main Window") {
                     NSApplication.shared.activate(ignoringOtherApps: true)
-                    if let window = NSApplication.shared.windows.first(where: { $0.title == "Clarissa" || $0.identifier?.rawValue.contains("main") == true }) {
-                        window.makeKeyAndOrderFront(nil)
-                    } else if let window = NSApplication.shared.windows.first {
+                    if let window = NSApplication.shared.windows.first {
                         window.makeKeyAndOrderFront(nil)
                     }
                 }

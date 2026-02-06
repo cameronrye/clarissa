@@ -52,7 +52,7 @@ export const webFetchTool = defineTool({
   name: "web_fetch",
   description: "Fetch content from a URL and return it as text. Useful for reading web pages, APIs, or documentation.",
   category: "utility",
-  requiresConfirmation: false,
+  requiresConfirmation: true,
   parameters: z.object({
     url: z.string().url().describe("The URL to fetch"),
     format: z

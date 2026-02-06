@@ -16,6 +16,9 @@ struct ClarissaWidgetsMain: WidgetBundle {
         ClarissaControlWidget()
         VoiceModeControlWidget()
         NewChatControlWidget()
+
+        // Live Activity for multi-tool execution
+        ClarissaLiveActivityWidget()
         #endif
     }
 }

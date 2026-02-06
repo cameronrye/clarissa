@@ -5,6 +5,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool } from "../tools/base.ts";
 import { z } from "zod";
 import { getMcpServers, type MCPServerFileConfig } from "../config/index.ts";
+import packageJson from "../../package.json";
 
 /**
  * Convert JSON Schema to Zod schema
@@ -176,7 +177,7 @@ class MCPClientManager {
     }
 
     const client = new Client(
-      { name: "clarissa", version: "1.0.0" },
+      { name: "clarissa", version: packageJson.version },
       { capabilities: {} }
     );
 

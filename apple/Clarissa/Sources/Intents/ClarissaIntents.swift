@@ -95,6 +95,7 @@ struct AskClarissaInlineIntent: AppIntent {
     static let openAppWhenRun: Bool = false
 
     /// Perform the intent and return the response for Siri to speak
+    /// Supports follow-up questions by maintaining conversation history
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
         #if canImport(FoundationModels)
@@ -123,6 +124,12 @@ struct AskClarissaInlineIntent: AppIntent {
                 systemPrompt += "\n\n\(memories)"
             }
 
+            // Include conversation history for follow-up questions
+            let siriSession = SiriConversationSession.shared
+            if let history = await siriSession.buildHistoryPrompt() {
+                systemPrompt += "\n\n\(history)\nThe user is asking a follow-up question. Use the conversation context above to provide a relevant answer."
+            }
+
             // Create a lightweight session for quick responses
             let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
             let session = LanguageModelSession(
@@ -133,6 +140,9 @@ struct AskClarissaInlineIntent: AppIntent {
             // Generate response (non-streaming for Siri)
             let response = try await session.respond(to: Prompt(question))
             let answer = response.content
+
+            // Save exchange to session for follow-ups
+            await siriSession.addExchange(question: question, answer: answer)
 
             return .result(
                 value: answer,
