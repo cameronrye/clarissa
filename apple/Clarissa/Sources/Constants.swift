@@ -101,6 +101,26 @@ public enum ClarissaConstants {
     /// Topic overlap threshold for considering memories related (0.0-1.0)
     public static let memoryTopicOverlapThreshold = 0.7
 
+    // MARK: - System Prompt Budget (per-section caps within tokenSystemReserve)
+
+    /// Maximum tokens for core instructions (non-negotiable base prompt)
+    public static let systemBudgetCore = 250
+
+    /// Maximum tokens for conversation summary (only if messages were trimmed)
+    public static let systemBudgetSummary = 100
+
+    /// Maximum tokens for memories injected into system prompt
+    public static let systemBudgetMemories = 80
+
+    /// Maximum tokens for proactive context (prefetched calendar/weather)
+    public static let systemBudgetProactive = 80
+
+    /// Maximum tokens for disabled tools list
+    public static let systemBudgetDisabledTools = 40
+
+    /// Maximum tokens for template focus text
+    public static let systemBudgetTemplate = 50
+
     // MARK: - Context Summarization
 
     /// Percentage of context budget at which summarization triggers

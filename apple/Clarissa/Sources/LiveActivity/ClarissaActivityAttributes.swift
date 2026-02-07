@@ -22,6 +22,9 @@ struct ClarissaActivityAttributes: ActivityAttributes {
 
         /// Whether the activity is still in progress
         var isProcessing: Bool
+
+        /// Ordered list of tool display names for plan preview
+        var planStepNames: [String]?
     }
 
     /// The user's original question

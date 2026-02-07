@@ -7,7 +7,7 @@ const base = import.meta.env.BASE_URL;
 <Docs title="Apple Apps - Getting Started" description="Get started with Clarissa for iOS and macOS">
   <h1>Getting Started with Clarissa for Apple</h1>
   <p>
-    Clarissa is available as a native iOS and macOS application, built with SwiftUI and 
+    Clarissa is available as a native iOS, macOS, and watchOS application, built with SwiftUI and
     featuring Apple's Liquid Glass design language. This guide will help you get up and running.
   </p>
 
@@ -15,6 +15,7 @@ const base = import.meta.env.BASE_URL;
   <ul>
     <li><strong>iOS 26+</strong> on iPhone or iPad</li>
     <li><strong>macOS 26+ (Tahoe)</strong> on Mac</li>
+    <li><strong>watchOS 26+</strong> on Apple Watch (companion app)</li>
     <li><strong>Apple Silicon</strong> device with Apple Intelligence enabled (for on-device AI)</li>
     <li>Xcode 26 beta (for building from source)</li>
   </ul>
@@ -65,8 +66,9 @@ open Package.swift</code></pre>
     <li>iOS 26+ or macOS 26+</li>
   </ul>
   <p>
-    <strong>Note:</strong> On-device AI supports up to 5 tools per session. For more complex 
-    workflows, consider using cloud providers.
+    <strong>Note:</strong> On-device AI supports up to 10 tools per session (best results with 4-5).
+    Clarissa intelligently prioritizes tools. For more complex workflows, consider using cloud providers.
+    If Foundation Models encounters an error, a banner will suggest switching to OpenRouter.
   </p>
 
   <h3>OpenRouter (Cloud)</h3>
@@ -85,21 +87,22 @@ open Package.swift</code></pre>
 
   <h2>Your First Conversation</h2>
   <p>
-    Once setup is complete:
+    Once setup is complete, you can start a conversation in several ways:
   </p>
   <ol>
-    <li>Tap the text field at the bottom of the screen</li>
-    <li>Type your message or tap the microphone for voice input</li>
-    <li>Press Send or Return to submit</li>
+    <li><strong>Type a message</strong> — Tap the text field and type your question</li>
+    <li><strong>Use voice input</strong> — Tap the microphone button and speak</li>
+    <li><strong>Pick a template</strong> — Choose from Morning Briefing, Meeting Prep, Research Mode, or Quick Math in the empty-state picker</li>
+    <li><strong>Share from another app</strong> — Use the Share Extension to send text, URLs, or images to Clarissa</li>
   </ol>
   <p>
-    Clarissa will respond with streaming text. If tools are required (like fetching a URL 
-    or running a calculation), you'll see the tool execution in real-time.
+    Clarissa will respond with streaming text. If tools are required (like fetching a URL
+    or checking your calendar), you'll see step-by-step progress in the chat and Dynamic Island.
   </p>
 
   <h2>Next Steps</h2>
   <ul>
-    <li>Explore <a href={`${base}docs/apple/features/`}>Features</a> to learn about voice input, Siri Shortcuts, and more</li>
+    <li>Explore <a href={`${base}docs/apple/features/`}>Features</a> to learn about templates, Siri Shortcuts, export, and more</li>
     <li>Check the <a href={`${base}docs/apple/faq/`}>FAQ</a> for troubleshooting and tips</li>
   </ul>
 </Docs>

@@ -102,7 +102,7 @@ public actor MemoryManager {
         logger.info("Started observing iCloud Key-Value Store changes")
     }
 
-    /// Handle external iCloud changes
+    /// Handle external iCloud changes with conflict detection
     private func handleICloudChange(reason: Int?, changedKeys: [String]) async {
         guard let changeReason = reason else { return }
 
@@ -110,8 +110,18 @@ public actor MemoryManager {
         case NSUbiquitousKeyValueStoreServerChange,
              NSUbiquitousKeyValueStoreInitialSyncChange:
             if changedKeys.contains(Self.iCloudMemoriesKey) || changedKeys.isEmpty {
-                logger.info("iCloud memories changed externally, reloading")
-                await reload()
+                logger.info("iCloud memories changed externally, merging")
+                // Load remote memories and merge with local
+                let remoteMemories = loadFromICloud()
+                let localMemories = self.memories
+                let merged = mergeMemories(localMemories, remoteMemories)
+                let changed = merged.count != localMemories.count ||
+                    zip(merged, localMemories).contains(where: { $0.id != $1.id || $0.content != $1.content })
+                self.memories = merged
+                if changed {
+                    logger.info("Merged iCloud changes: \(localMemories.count) local + \(remoteMemories.count) remote -> \(merged.count) merged")
+                    await save()
+                }
             }
         case NSUbiquitousKeyValueStoreQuotaViolationChange:
             logger.warning("iCloud Key-Value Store quota exceeded")
@@ -186,7 +196,8 @@ public actor MemoryManager {
         }
         #endif
 
-        let memory = Memory(content: sanitizedContent, topics: topics)
+        let (category, temporalType) = detectCategory(for: sanitizedContent)
+        let memory = Memory(content: sanitizedContent, topics: topics, category: category, temporalType: temporalType)
         memories.append(memory)
 
         // Trim old memories if needed
@@ -229,6 +240,115 @@ public actor MemoryManager {
         return syncStatus
     }
 
+    // MARK: - Category Detection
+
+    /// Heuristic category detection based on keyword patterns
+    private func detectCategory(for content: String) -> (MemoryCategory, MemoryTemporalType) {
+        let lower = content.lowercased()
+
+        let preferencePatterns = ["prefer", "like", "love", "hate", "favorite", "favourite",
+                                   "rather", "enjoy", "dislike", "don't like"]
+        if preferencePatterns.contains(where: { lower.contains($0) }) {
+            return (.preference, .permanent)
+        }
+
+        let routinePatterns = ["every", "always", "usually", "monday", "tuesday", "wednesday",
+                                "thursday", "friday", "saturday", "sunday", "weekly", "daily",
+                                "morning", "evening", "routine"]
+        if routinePatterns.contains(where: { lower.contains($0) }) {
+            return (.routine, .recurring)
+        }
+
+        let relationshipPatterns = ["wife", "husband", "partner", "daughter", "son", "mother",
+                                     "father", "sister", "brother", "friend", "boss", "colleague",
+                                     "'s name is", "married to"]
+        if relationshipPatterns.contains(where: { lower.contains($0) }) {
+            return (.relationship, .permanent)
+        }
+
+        let oneTimePatterns = ["appointment", "next week", "this weekend", "tomorrow", "deadline"]
+        if oneTimePatterns.contains(where: { lower.contains($0) }) {
+            return (.fact, .oneTime)
+        }
+
+        return (.fact, .permanent)
+    }
+
+    // MARK: - Confidence Tracking
+
+    /// Counter for debouncing confidence saves
+    private var confidenceUpdateCounter = 0
+
+    /// Apply confidence decay/boost to all memories based on which were accessed
+    private func updateConfidenceScores(accessedIds: Set<UUID>) {
+        let now = Date()
+        for i in memories.indices {
+            if accessedIds.contains(memories[i].id) {
+                memories[i].confidence = min(1.0, (memories[i].confidence ?? 0.5) + 0.05)
+                memories[i].lastAccessedAt = now
+                memories[i].accessCount = (memories[i].accessCount ?? 0) + 1
+                memories[i].modifiedAt = now
+                memories[i].deviceId = DeviceIdentifier.current
+            } else {
+                let current = memories[i].confidence ?? 0.5
+                memories[i].confidence = max(0.1, current - 0.01)
+            }
+        }
+
+        // Debounce saves — only save every 5th confidence update
+        confidenceUpdateCounter += 1
+        if confidenceUpdateCounter >= 5 {
+            confidenceUpdateCounter = 0
+            Task { await save() }
+        }
+    }
+
+    // MARK: - Relationships
+
+    /// Link two memories as related (bidirectional)
+    func linkMemories(_ id1: UUID, _ id2: UUID) async {
+        await ensureLoaded()
+        let now = Date()
+        if let i1 = memories.firstIndex(where: { $0.id == id1 }) {
+            var rels = memories[i1].relationships ?? []
+            if !rels.contains(id2) { rels.append(id2) }
+            memories[i1].relationships = rels
+            memories[i1].modifiedAt = now
+            memories[i1].deviceId = DeviceIdentifier.current
+        }
+        if let i2 = memories.firstIndex(where: { $0.id == id2 }) {
+            var rels = memories[i2].relationships ?? []
+            if !rels.contains(id1) { rels.append(id1) }
+            memories[i2].relationships = rels
+            memories[i2].modifiedAt = now
+            memories[i2].deviceId = DeviceIdentifier.current
+        }
+        await save()
+    }
+
+    /// Suggest relationships between memories with significant topic overlap
+    func suggestRelationships() async -> [(Memory, Memory)] {
+        await ensureLoaded()
+        var suggestions: [(Memory, Memory)] = []
+
+        for i in 0..<memories.count {
+            for j in (i+1)..<memories.count {
+                let mem1 = memories[i]
+                let mem2 = memories[j]
+                if let rels = mem1.relationships, rels.contains(mem2.id) { continue }
+                if let t1 = mem1.topics, !t1.isEmpty,
+                   let t2 = mem2.topics, !t2.isEmpty {
+                    let overlap = Set(t1).intersection(Set(t2))
+                    let ratio = Double(overlap.count) / Double(min(t1.count, t2.count))
+                    if ratio >= ClarissaConstants.memoryTopicOverlapThreshold {
+                        suggestions.append((mem1, mem2))
+                    }
+                }
+            }
+        }
+        return suggestions
+    }
+
     /// Get memories formatted for the system prompt
     /// Includes topic tags when available for better context
     /// Optimized for token efficiency while maintaining clarity
@@ -240,9 +360,15 @@ public actor MemoryManager {
             return nil
         }
 
-        // Take most recent memories first
-        let recentMemories = memories.suffix(20)
-        let memoryList = recentMemories.map { memory -> String in
+        // Sort by confidence (descending), then take top 20
+        let ranked = memories
+            .sorted { ($0.confidence ?? 0.5) > ($1.confidence ?? 0.5) }
+            .prefix(20)
+
+        let accessedIds = Set(ranked.map(\.id))
+        updateConfidenceScores(accessedIds: accessedIds)
+
+        let memoryList = ranked.map { memory -> String in
             if let topics = memory.topics, !topics.isEmpty {
                 let topicStr = topics.joined(separator: ", ")
                 return "- \(memory.content) [\(topicStr)]"
@@ -250,7 +376,7 @@ public actor MemoryManager {
             return "- \(memory.content)"
         }.joined(separator: "\n")
 
-        logger.info("getForPrompt: Including \(recentMemories.count) memories in system prompt")
+        logger.info("getForPrompt: Including \(ranked.count) memories in system prompt")
 
         // Concise format - the system prompt already instructs to use saved facts
         return """
@@ -286,18 +412,37 @@ public actor MemoryManager {
 
         let conversationTopicSet = Set(conversationTopics.map { $0.lowercased() })
 
-        // Score each memory by topic overlap
+        // Multi-factor scoring
         var scored: [(memory: Memory, score: Double)] = []
         for memory in memories {
+            var score: Double = 0.0
+
+            // Topic overlap (40%)
             if let memTopics = memory.topics, !memTopics.isEmpty {
                 let memTopicSet = Set(memTopics.map { $0.lowercased() })
                 let overlap = conversationTopicSet.intersection(memTopicSet)
-                let score = Double(overlap.count) / Double(conversationTopicSet.count)
-                scored.append((memory, score))
+                score += 0.4 * (Double(overlap.count) / Double(conversationTopicSet.count))
             } else {
-                // Memories without topics get a small base score
-                scored.append((memory, 0.1))
+                score += 0.04
             }
+
+            // Confidence (30%)
+            score += 0.3 * Double(memory.confidence ?? 0.5)
+
+            // Recency (20%) — decay over 90 days
+            let daysSinceAccess = Date().timeIntervalSince(memory.lastAccessedAt ?? memory.createdAt) / 86400
+            let recencyScore = max(0, 1.0 - (daysSinceAccess / 90.0))
+            score += 0.2 * recencyScore
+
+            // Category bonus (10%)
+            switch memory.category {
+            case .preference: score += 0.1
+            case .routine:    score += 0.08
+            case .relationship: score += 0.06
+            default: score += 0.02
+            }
+
+            scored.append((memory, score))
         }
 
         // Sort by relevance (highest first), take top 10
@@ -305,6 +450,10 @@ public actor MemoryManager {
             .sorted { $0.score > $1.score }
             .prefix(10)
             .map { $0.memory }
+
+        // Track confidence
+        let accessedIds = Set(topMemories.map(\.id))
+        updateConfidenceScores(accessedIds: accessedIds)
 
         guard !topMemories.isEmpty else { return nil }
 
@@ -456,12 +605,46 @@ public actor MemoryManager {
     }
     #endif
 
-    /// Merge memories from multiple sources, deduplicating by content (exact + semantic)
+    /// Merge memories from multiple sources with timestamp-based conflict resolution.
+    /// For memories with the same ID edited on different devices, latest-edit-wins.
+    /// Unique memories (different IDs) are unioned automatically.
     private func mergeMemories(_ sources: [Memory]...) -> [Memory] {
-        // Flatten and sort by date (newest first for deduplication priority)
-        let all = sources.flatMap { $0 }.sorted { $0.createdAt > $1.createdAt }
-        let merged = deduplicateMemories(all)
-        return merged
+        let all = sources.flatMap { $0 }
+
+        // Group by ID to detect same-memory conflicts
+        var byId: [UUID: [Memory]] = [:]
+        for memory in all {
+            byId[memory.id, default: []].append(memory)
+        }
+
+        var resolved: [Memory] = []
+        for (id, versions) in byId {
+            if versions.count == 1 {
+                resolved.append(versions[0])
+            } else {
+                // Multiple versions of same memory — latest modifiedAt wins
+                let winner = versions.max(by: {
+                    ($0.modifiedAt ?? $0.createdAt) < ($1.modifiedAt ?? $1.createdAt)
+                }) ?? versions[0]
+
+                // Detect near-simultaneous edits from different devices (within 5 min)
+                let sorted = versions.sorted { ($0.modifiedAt ?? $0.createdAt) > ($1.modifiedAt ?? $1.createdAt) }
+                if sorted.count >= 2,
+                   let t1 = sorted[0].modifiedAt ?? Optional(sorted[0].createdAt),
+                   let t2 = sorted[1].modifiedAt ?? Optional(sorted[1].createdAt),
+                   abs(t1.timeIntervalSince(t2)) < 300, // 5 minutes
+                   sorted[0].deviceId != sorted[1].deviceId,
+                   sorted[0].content != sorted[1].content {
+                    logger.warning("Conflict detected for memory \(id): edited on two devices within 5 minutes. Using latest edit.")
+                }
+
+                resolved.append(winner)
+            }
+        }
+
+        // Sort by date (newest first) for deduplication priority, then deduplicate
+        resolved.sort { $0.createdAt > $1.createdAt }
+        return deduplicateMemories(resolved)
     }
 
     /// Deduplicate memories using exact match and semantic similarity
@@ -591,6 +774,14 @@ public actor MemoryManager {
             let encoder = JSONEncoder()
             let data = try encoder.encode(memories)
 
+            // Monitor payload size for iCloud KVS limits (64KB per key)
+            let payloadKB = Double(data.count) / 1024.0
+            if payloadKB > 60 {
+                logger.error("Memory payload \(String(format: "%.1f", payloadKB))KB exceeds safe iCloud KVS limit (60KB). Risk of data loss!")
+            } else if payloadKB > 50 {
+                logger.warning("Memory payload \(String(format: "%.1f", payloadKB))KB approaching iCloud KVS limit (64KB per key). Consider pruning old memories.")
+            }
+
             guard let jsonString = String(data: data, encoding: .utf8) else {
                 logger.error("Failed to encode memories to string")
                 syncStatus = .error("Failed to encode memories")
@@ -668,6 +859,22 @@ private struct CLIMemory: Codable {
     let createdAt: String
 }
 
+/// Category of memory content
+enum MemoryCategory: String, Codable, CaseIterable {
+    case fact
+    case preference
+    case routine
+    case relationship
+    case uncategorized
+}
+
+/// Temporal type of memory
+enum MemoryTemporalType: String, Codable {
+    case permanent
+    case recurring
+    case oneTime
+}
+
 /// A single memory entry
 struct Memory: Identifiable, Codable {
     let id: UUID
@@ -677,11 +884,53 @@ struct Memory: Identifiable, Codable {
     /// Optional topics extracted by ContentTagger (iOS 26+)
     var topics: [String]?
 
-    init(id: UUID = UUID(), content: String, createdAt: Date = Date(), topics: [String]? = nil) {
+    // Memory intelligence fields (all Optional for backward-compatible Codable)
+    var category: MemoryCategory?
+    var temporalType: MemoryTemporalType?
+    var confidence: Float?
+    var relationships: [UUID]?
+    var lastAccessedAt: Date?
+    var accessCount: Int?
+
+    // Conflict resolution fields (Optional for backward compat with existing data)
+    /// Timestamp of the last modification (content edit, confidence update, etc.)
+    var modifiedAt: Date?
+    /// Identifier of the device that last modified this memory
+    var deviceId: String?
+
+    init(id: UUID = UUID(), content: String, createdAt: Date = Date(), topics: [String]? = nil,
+         category: MemoryCategory? = nil, temporalType: MemoryTemporalType? = nil) {
         self.id = id
         self.content = content
         self.createdAt = createdAt
         self.topics = topics
+        self.category = category
+        self.temporalType = temporalType
+        self.confidence = 1.0
+        self.lastAccessedAt = Date()
+        self.accessCount = 0
+        self.modifiedAt = Date()
+        self.deviceId = DeviceIdentifier.current
     }
+}
+
+/// Stable per-device identifier for conflict resolution.
+/// Uses identifierForVendor on iOS, a persisted UUID on macOS.
+enum DeviceIdentifier {
+    static let current: String = {
+        #if os(iOS) || os(watchOS)
+        if let vendorId = UIDevice.current.identifierForVendor?.uuidString {
+            return vendorId
+        }
+        #endif
+        // Fallback: persist a UUID in UserDefaults
+        let key = "clarissa_device_id"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let newId = UUID().uuidString
+        UserDefaults.standard.set(newId, forKey: key)
+        return newId
+    }()
 }
 

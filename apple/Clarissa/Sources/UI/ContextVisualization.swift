@@ -88,6 +88,7 @@ struct ContextIndicatorView: View {
 /// Detailed context breakdown sheet
 struct ContextDetailSheet: View {
     let stats: ContextStats
+    var onSummarize: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -293,6 +294,20 @@ struct ContextDetailSheet: View {
                 .padding()
                 .background(Color.gray.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            // Manual summarize button (show when enough messages to be useful)
+            if let onSummarize, stats.messageCount > 4 {
+                Button {
+                    onSummarize()
+                    dismiss()
+                } label: {
+                    Label("Summarize Conversation", systemImage: "arrow.trianglehead.2.counterclockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(ClarissaTheme.purple)
+                .padding(.top, 4)
             }
 
             // Stats summary (messageCount - 1 to exclude system message)

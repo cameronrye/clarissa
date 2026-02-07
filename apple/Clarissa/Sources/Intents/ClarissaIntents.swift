@@ -71,6 +71,47 @@ struct ClarissaShortcuts: AppShortcutsProvider {
             shortTitle: "Quick Question",
             systemImageName: "questionmark.bubble"
         )
+
+        // Template shortcuts
+        AppShortcut(
+            intent: StartTemplateIntent(templateId: "morning_briefing"),
+            phrases: [
+                "Morning briefing with \(.applicationName)",
+                "Start my day with \(.applicationName)"
+            ],
+            shortTitle: "Morning Briefing",
+            systemImageName: "sunrise"
+        )
+
+        AppShortcut(
+            intent: StartTemplateIntent(templateId: "meeting_prep"),
+            phrases: [
+                "Meeting prep with \(.applicationName)",
+                "Prepare for meeting with \(.applicationName)"
+            ],
+            shortTitle: "Meeting Prep",
+            systemImageName: "person.2"
+        )
+
+        AppShortcut(
+            intent: StartTemplateIntent(templateId: "research_mode"),
+            phrases: [
+                "Research mode with \(.applicationName)",
+                "Start research with \(.applicationName)"
+            ],
+            shortTitle: "Research Mode",
+            systemImageName: "magnifyingglass"
+        )
+
+        AppShortcut(
+            intent: StartTemplateIntent(templateId: "quick_math"),
+            phrases: [
+                "Quick math with \(.applicationName)",
+                "Calculator with \(.applicationName)"
+            ],
+            shortTitle: "Quick Math",
+            systemImageName: "function"
+        )
     }
 }
 
@@ -281,6 +322,40 @@ struct QuickQuestionIntent: AppIntent {
             dialog: "Opening Clarissa...",
             view: ShortcutResultView(question: question)
         )
+    }
+}
+
+// MARK: - Start Template Intent
+
+/// Intent for starting a conversation with a specific template
+@available(iOS 16.0, macOS 13.0, *)
+struct StartTemplateIntent: AppIntent {
+    static let title: LocalizedStringResource = "Start Template"
+    static let description = IntentDescription(
+        "Start a conversation with a specific template",
+        categoryName: "Assistant"
+    )
+
+    @Parameter(title: "Template ID")
+    var templateId: String
+
+    static let openAppWhenRun: Bool = true
+
+    init() {}
+
+    init(templateId: String) {
+        self.templateId = templateId
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let appState = AppState.shared
+        appState.pendingTemplateId = templateId
+        appState.pendingQuestionSource = .siriShortcut
+
+        // Find template name for dialog
+        let templateName = ConversationTemplate.bundled.first(where: { $0.id == templateId })?.name ?? "template"
+        return .result(dialog: "Starting \(templateName) with Clarissa")
     }
 }
 

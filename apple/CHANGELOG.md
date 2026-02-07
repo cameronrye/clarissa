@@ -5,6 +5,85 @@ All notable changes to the Clarissa Apple application will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-06
+
+### Added
+
+#### Smarter Context & Memory
+
+- **Token-budget session trimming** - Replaced hard 100-message limit with token-budget-based trimming that keeps messages until the budget is exceeded, then trims oldest non-system messages
+- **Error recovery UX** - Automatic summarization and retry when context window is exceeded, with a "conversation summarized" banner
+- **Manual summarize** - "Summarize conversation" button in the context indicator for proactive context management
+- **Memory intelligence** - Memories now have category (facts, preferences, routines, relationships), temporal type (permanent, recurring, one-time), confidence scores with decay/boost, and relationship links between related memories
+- **Multi-factor relevance ranking** - Memory retrieval weighted by topic (40%), confidence (30%), recency (20%), and category (10%)
+- **iCloud conflict resolution** - Timestamp-based merge with `modifiedAt` and `deviceId` fields instead of last-write-wins
+- **System prompt budget** - 6-priority budget enforcement (core instructions → summary → memories → proactive context → template → disabled tools) with per-section token caps
+
+#### Conversation UX
+
+- **Edit & Resend** - Long-press any user message to edit and resend from that point
+- **Regenerate** - Long-press any assistant message to regenerate the response
+- **Undo support** - One-level undo with ephemeral snapshot and banner after edit/regenerate
+- **Conversation templates** - 4 bundled templates (Morning Briefing, Meeting Prep, Research Mode, Quick Math) with specialized system prompts, tool sets, and response token hints
+- **Custom templates** - Create, edit, and manage your own conversation templates
+- **Template picker** - Empty-state grid in chat for quick template selection
+- **Conversation search** - Search and filter conversation history by date and topic
+- **Proactive intelligence** - Regex-based detection of weather, calendar, and schedule intents with parallel tool prefetch (2s timeout, FM-only, opt-in toggle)
+
+#### Richer Tool Results
+
+- **Expandable weather cards** - Tap to expand hourly/daily forecast with Swift Charts visualization
+- **Calendar deep links** - Tap events to open in Calendar.app, tap locations to open in Maps
+- **Contact actions** - Tap to call, message, or email directly from contact result cards
+- **Web preview cards** - Thumbnail preview with "Open in Browser" button
+- **Calculator history** - Copy results to clipboard with confirmation
+
+#### Export & Sharing
+
+- **PDF export** - Export conversations as styled PDF via WKWebView
+- **Share as image** - Share individual assistant responses as images (3x ImageRenderer)
+- **Code block copy** - Copy code blocks with syntax highlighting from MarkdownContentView
+
+#### Agent Visibility
+
+- **Agent plan preview** - Real-time tool execution plan inferred from tool calls as they happen
+- **Live Activity progress** - Dynamic Island shows step-by-step plan progress during multi-tool execution
+- **Tool plan view** - Step-by-step progress displayed inline in the chat UI
+
+#### Platform Integration
+
+- **Siri template shortcuts** - Start any bundled template via Siri ("Morning Briefing with Clarissa", etc.)
+- **Siri follow-up questions** - 5-minute conversation sessions for back-and-forth with Siri
+- **Watch template quick actions** - Morning Briefing and Meeting Prep as watch quick actions
+- **Watch template relay** - `templateId` in QueryRequest for Watch→iPhone template passing
+- **Share Extension** - Process shared text, URLs, and images via App Group storage
+- **Provider fallback banner** - Suggests OpenRouter when Foundation Models fails, with auto-dismiss
+
+#### AI Capabilities
+
+- **SpeechAnalyzer upgrade** - Replaced legacy Speech framework with SpeechAnalyzer for faster, more accurate transcription (15 languages)
+- **Guided generation** - `@Generable` structs with `@Guide` annotations for structured output with guaranteed correctness
+- **Content tagging** - Topic detection, entity extraction, and emotion/action detection via content tagging adapter
+- **Enhanced image understanding** - Foundation Models vision (ViTDet-L encoder) for multimodal image + text reasoning
+- **Document OCR** - Full-document text recognition, PDF extraction, handwriting recognition via Vision framework
+- **Private Cloud Compute** - Seamless fallback to Apple's privacy-preserving server inference with consent toggle
+- **Streaming partial generation** - `PartiallyGenerated` types for progressive UI updates during structured output
+
+### Changed
+
+- **ChatViewModel refactored** - Split from 1164 lines into facade pattern (761 lines) composing ProviderCoordinator, SessionCoordinator, and VoiceController
+- **Shared types extracted** - ToolStatus, ThinkingStatus, ChatMessage, and ToolDisplayNames moved to ChatTypes.swift
+- **AgentCallbacks** simplified as thin adapter on ChatViewModel updating @Published state + Live Activity
+
+### Technical
+
+- 55+ new unit tests (ProviderCoordinator, SessionCoordinator, ToolDisplayNames, ChatMessage export, context trimming edge cases, Share Extension round-trip, SystemPromptBudget overflow, memory conflict resolution, watch template queries)
+- iCloud KVS payload monitoring (warnings at 50KB, errors at 60KB)
+- DeviceIdentifier helper (identifierForVendor on iOS, persisted UUID on macOS)
+- Token budget overflow logging for future calibration
+
+---
+
 ## [1.0.0] - 2025-12-12
 
 ### Added

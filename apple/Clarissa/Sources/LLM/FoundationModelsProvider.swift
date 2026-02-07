@@ -27,6 +27,9 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Access to the tool registry for native tool calling
     private let toolRegistry: ToolRegistry
 
+    /// Per-request override for max response tokens (nil = use ClarissaConstants default)
+    var maxResponseTokensOverride: Int?
+
     /// Whether to allow Private Cloud Compute for complex requests
     private let allowPCC: Bool
 
@@ -221,7 +224,7 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
                     // Limited response tokens = concise responses for mobile UI
                     let options = GenerationOptions(
                         temperature: ClarissaConstants.foundationModelsTemperature,
-                        maximumResponseTokens: ClarissaConstants.foundationModelsMaxResponseTokens
+                        maximumResponseTokens: self.maxResponseTokensOverride ?? ClarissaConstants.foundationModelsMaxResponseTokens
                     )
 
                     // Check for cancellation before starting stream

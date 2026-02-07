@@ -1,4 +1,10 @@
 import SwiftUI
+import Charts
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 // MARK: - Tool Result Display Protocol
 
@@ -115,25 +121,10 @@ struct WeatherResult: ToolResultDisplayable {
 
 struct WeatherResultView: View {
     let result: WeatherResult
+    @State private var showForecast = false
 
     private var conditionIcon: String {
-        let condition = result.condition.lowercased()
-        if condition.contains("sun") || condition.contains("clear") {
-            return "sun.max.fill"
-        } else if condition.contains("cloud") && condition.contains("part") {
-            return "cloud.sun.fill"
-        } else if condition.contains("cloud") {
-            return "cloud.fill"
-        } else if condition.contains("rain") || condition.contains("shower") {
-            return "cloud.rain.fill"
-        } else if condition.contains("thunder") || condition.contains("storm") {
-            return "cloud.bolt.rain.fill"
-        } else if condition.contains("snow") {
-            return "cloud.snow.fill"
-        } else if condition.contains("fog") || condition.contains("mist") {
-            return "cloud.fog.fill"
-        }
-        return "cloud.fill"
+        weatherConditionIcon(for: result.condition)
     }
 
     var body: some View {
@@ -160,6 +151,34 @@ struct WeatherResultView: View {
                     .font(.title.weight(.semibold))
             }
 
+            // Expandable forecast section
+            if let forecast = result.forecast, !forecast.isEmpty {
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showForecast.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text("\(forecast.count)-day forecast")
+                            .font(.caption.weight(.medium))
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(showForecast ? 0 : -90))
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                if showForecast {
+                    ForecastChartView(days: forecast, unit: result.temperatureUnit)
+
+                    ForEach(forecast) { day in
+                        ForecastDayRow(day: day, unit: result.temperatureUnit)
+                    }
+                }
+            }
+
             // Apple Weather attribution (required by WeatherKit per App Store guideline 5.2.5)
             // Must display Apple Weather trademark and legal attribution link
             Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
@@ -175,6 +194,112 @@ struct WeatherResultView: View {
         }
         .accessibilityElement(children: .contain)
     }
+}
+
+// MARK: - Forecast Chart
+
+private struct ForecastChartView: View {
+    let days: [WeatherResult.ForecastDay]
+    let unit: String
+
+    var body: some View {
+        Chart {
+            ForEach(days) { day in
+                LineMark(
+                    x: .value("Day", day.date, unit: .day),
+                    y: .value("High", day.high)
+                )
+                .foregroundStyle(by: .value("Type", "High"))
+                .symbol(Circle())
+
+                LineMark(
+                    x: .value("Day", day.date, unit: .day),
+                    y: .value("Low", day.low)
+                )
+                .foregroundStyle(by: .value("Type", "Low"))
+                .symbol(Circle())
+
+                AreaMark(
+                    x: .value("Day", day.date, unit: .day),
+                    yStart: .value("Low", day.low),
+                    yEnd: .value("High", day.high)
+                )
+                .foregroundStyle(ClarissaTheme.gradient.opacity(0.1))
+            }
+        }
+        .chartForegroundStyleScale(["High": Color.orange, "Low": ClarissaTheme.cyan])
+        .chartLegend(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
+                AxisValueLabel {
+                    if let v = value.as(Int.self) {
+                        Text("\(v)\(unit)")
+                            .font(.caption2)
+                    }
+                }
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day)) { _ in
+                AxisValueLabel(format: .dateTime.weekday(.abbreviated))
+            }
+        }
+        .frame(height: 120)
+        .accessibilityLabel("Temperature forecast chart")
+    }
+}
+
+private struct ForecastDayRow: View {
+    let day: WeatherResult.ForecastDay
+    let unit: String
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE"
+        return f
+    }()
+
+    var body: some View {
+        HStack {
+            Text(Self.dayFormatter.string(from: day.date))
+                .font(.caption.weight(.medium))
+                .frame(width: 36, alignment: .leading)
+
+            Image(systemName: weatherConditionIcon(for: day.condition))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            if day.precipitationChance > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "drop.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                    Text("\(Int(day.precipitationChance * 100))%")
+                        .font(.caption2)
+                }
+            }
+
+            Text("\(Int(day.low))° / \(Int(day.high))°")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// Shared weather condition icon mapping
+private func weatherConditionIcon(for condition: String) -> String {
+    let c = condition.lowercased()
+    if c.contains("sun") || c.contains("clear") { return "sun.max.fill" }
+    if c.contains("cloud") && c.contains("part") { return "cloud.sun.fill" }
+    if c.contains("cloud") { return "cloud.fill" }
+    if c.contains("rain") || c.contains("shower") { return "cloud.rain.fill" }
+    if c.contains("thunder") || c.contains("storm") { return "cloud.bolt.rain.fill" }
+    if c.contains("snow") { return "cloud.snow.fill" }
+    if c.contains("fog") || c.contains("mist") { return "cloud.fog.fill" }
+    return "cloud.fill"
 }
 
 // MARK: - Calendar Events Result
@@ -281,6 +406,18 @@ struct CalendarResultView: View {
         return label
     }
 
+    private func openCalendarAtDate(_ date: Date) {
+        let timestamp = date.timeIntervalSinceReferenceDate
+        guard let url = URL(string: "calshow:\(timestamp)") else { return }
+        openSystemURL(url)
+    }
+
+    private func openInMaps(location: String) {
+        let encoded = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        guard let url = URL(string: "maps://?q=\(encoded)") else { return }
+        openSystemURL(url)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if result.isCreateResult, let event = result.createdEvent {
@@ -292,49 +429,68 @@ struct CalendarResultView: View {
                         .font(.subheadline.weight(.medium))
                 }
 
-                Text(event.title)
-                    .font(.headline)
+                Button { openCalendarAtDate(event.startDate) } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(event.title)
+                            .font(.headline)
 
-                HStack {
-                    Image(systemName: "calendar")
-                        .foregroundStyle(.secondary)
-                    Text(dateFormatter.string(from: event.startDate))
-                    Text("at")
-                        .foregroundStyle(.secondary)
-                    Text(timeFormatter.string(from: event.startDate))
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundStyle(.secondary)
+                            Text(dateFormatter.string(from: event.startDate))
+                            Text("at")
+                                .foregroundStyle(.secondary)
+                            Text(timeFormatter.string(from: event.startDate))
+                        }
+                        .font(.caption)
+
+                        Text("Open in Calendar")
+                            .font(.caption2)
+                            .foregroundStyle(ClarissaTheme.purple)
+                    }
                 }
-                .font(.caption)
+                .buttonStyle(.plain)
             } else {
                 // Events list
                 ForEach(result.events.prefix(5)) { event in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(event.title)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
+                    Button { openCalendarAtDate(event.startDate) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.title)
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(1)
+                                    .foregroundStyle(.primary)
 
-                            HStack(spacing: 4) {
-                                Text(dateFormatter.string(from: event.startDate))
-                                if !event.isAllDay {
-                                    Text(timeFormatter.string(from: event.startDate))
-                                        .foregroundStyle(.secondary)
+                                HStack(spacing: 4) {
+                                    Text(dateFormatter.string(from: event.startDate))
+                                    if !event.isAllDay {
+                                        Text(timeFormatter.string(from: event.startDate))
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        if let location = event.location, !location.isEmpty {
-                            Image(systemName: "location.fill")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if let location = event.location, !location.isEmpty {
+                                Button {
+                                    openInMaps(location: location)
+                                } label: {
+                                    Image(systemName: "map.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(ClarissaTheme.purple)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                     .padding(.vertical, 4)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(eventAccessibilityLabel(event))
+                    .accessibilityHint("Tap to open in Calendar")
                 }
 
                 if result.events.count > 5 {
@@ -525,24 +681,55 @@ struct CalculatorResult: ToolResultDisplayable {
 
 struct CalculatorResultView: View {
     let result: CalculatorResult
+    @State private var showCopied = false
 
     var body: some View {
-        HStack {
-            Image(systemName: "equal.circle.fill")
-                .font(.title3)
-                .foregroundStyle(ClarissaTheme.gradient)
+        Button {
+            let text = formatNumber(result.result)
+            #if os(iOS)
+            UIPasteboard.general.string = text
+            #elseif os(macOS)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            #endif
+            withAnimation { showCopied = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation { showCopied = false }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "equal.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(ClarissaTheme.gradient)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(result.expression)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.expression)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                Text(formatNumber(result.result))
-                    .font(.title3.weight(.semibold))
+                    Text(formatNumber(result.result))
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                if showCopied {
+                    Label("Copied", systemImage: "checkmark")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .transition(.opacity)
+                } else {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(result.expression) equals \(formatNumber(result.result))")
+        .accessibilityHint("Tap to copy result")
     }
 
     private func formatNumber(_ value: Double) -> String {
@@ -617,25 +804,53 @@ struct ContactsResultView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(result.contacts.prefix(3)) { contact in
-                HStack {
-                    Image(systemName: "person.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(ClarissaTheme.gradient)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Image(systemName: "person.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(ClarissaTheme.gradient)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(contact.name)
-                            .font(.subheadline.weight(.medium))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(contact.name)
+                                .font(.subheadline.weight(.medium))
 
-                        if let phone = contact.phoneNumbers.first {
-                            Text(phone)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else if let email = contact.emails.first {
-                            Text(email)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if let phone = contact.phoneNumbers.first {
+                                Text(phone)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if let email = contact.emails.first {
+                                Text(email)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+
+                    // Action buttons
+                    HStack(spacing: 12) {
+                        if let phone = contact.phoneNumbers.first {
+                            ContactActionButton(icon: "phone.fill", label: "Call", color: .green) {
+                                let cleaned = phone.replacingOccurrences(of: " ", with: "")
+                                if let url = URL(string: "tel:\(cleaned)") {
+                                    openSystemURL(url)
+                                }
+                            }
+                            ContactActionButton(icon: "message.fill", label: "Message", color: ClarissaTheme.cyan) {
+                                let cleaned = phone.replacingOccurrences(of: " ", with: "")
+                                if let url = URL(string: "sms:\(cleaned)") {
+                                    openSystemURL(url)
+                                }
+                            }
+                        }
+                        if let email = contact.emails.first {
+                            ContactActionButton(icon: "envelope.fill", label: "Email", color: ClarissaTheme.purple) {
+                                if let url = URL(string: "mailto:\(email)") {
+                                    openSystemURL(url)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 32)
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
@@ -650,6 +865,30 @@ struct ContactsResultView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(result.contacts.count) contacts found")
+    }
+}
+
+private struct ContactActionButton: View {
+    let icon: String
+    let label: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                Text(label)
+                    .font(.caption2)
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -879,6 +1118,11 @@ struct WebFetchResultView: View {
         return "\(result.characterCount)"
     }
 
+    private func openInBrowser() {
+        guard let url = URL(string: result.url) else { return }
+        openSystemURL(url)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -910,6 +1154,19 @@ struct WebFetchResultView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
                 .padding(.leading, 32)
+
+            // Open in browser button
+            Button { openInBrowser() } label: {
+                HStack(spacing: 4) {
+                    Text("Open in Browser")
+                        .font(.caption2.weight(.medium))
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption2)
+                }
+                .foregroundStyle(ClarissaTheme.purple)
+                .padding(.leading, 32)
+            }
+            .buttonStyle(.plain)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Web content from \(displayHost), \(result.characterCount) characters")
@@ -1186,6 +1443,17 @@ struct ImageAnalysisResultView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("PDF has \(pageCount) pages")
     }
+}
+
+// MARK: - URL Opening Helper
+
+/// Cross-platform helper to open URLs in the system browser/app
+private func openSystemURL(_ url: URL) {
+    #if os(iOS)
+    UIApplication.shared.open(url)
+    #elseif os(macOS)
+    NSWorkspace.shared.open(url)
+    #endif
 }
 
 // MARK: - Tool Result View Registry

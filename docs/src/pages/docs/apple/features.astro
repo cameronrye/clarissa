@@ -7,8 +7,8 @@ const base = import.meta.env.BASE_URL;
 <Docs title="Apple Apps - Features" description="Explore the features of Clarissa for iOS and macOS">
   <h1>Features</h1>
   <p>
-    Clarissa for Apple is designed to take full advantage of the platform, integrating deeply 
-    with iOS and macOS capabilities while maintaining the powerful AI assistant features 
+    Clarissa for Apple is designed to take full advantage of the platform, integrating deeply
+    with iOS, macOS, and watchOS capabilities while maintaining the powerful AI assistant features
     you expect.
   </p>
 
@@ -20,31 +20,81 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Privacy-first</strong> — All processing happens on your device</li>
     <li><strong>No internet required</strong> — Works offline after initial setup</li>
     <li><strong>Native tool calling</strong> — Tools execute through Apple's native API</li>
-    <li><strong>Fast responses</strong> — Optimized for Apple Silicon performance</li>
+    <li><strong>Fast responses</strong> — Optimized for Apple Silicon with model prewarming</li>
+    <li><strong>Private Cloud Compute</strong> — Seamless fallback to Apple's privacy-preserving server inference (with consent toggle)</li>
+    <li><strong>Provider fallback</strong> — Suggests OpenRouter when Foundation Models encounters an error</li>
+  </ul>
+
+  <h2>Conversation Templates</h2>
+  <p>
+    Pre-built conversation starters with specialized system prompts, pre-enabled tools, and response tuning:
+  </p>
+  <ul>
+    <li><strong>Morning Briefing</strong> — Weather + calendar + reminders summary for your day ahead</li>
+    <li><strong>Meeting Prep</strong> — Event details + attendee info for your next meeting</li>
+    <li><strong>Research Mode</strong> — Longer responses with web fetch and memory tools</li>
+    <li><strong>Quick Math</strong> — Minimal context, fast calculator answers</li>
+    <li><strong>Custom templates</strong> — Create your own with custom system prompts, tools, and response hints</li>
   </ul>
   <p>
-    The app automatically prewarms the AI model at launch for faster first responses.
+    Templates are available from the empty-state picker in chat, via Siri shortcuts
+    ("Morning Briefing with Clarissa"), and as Apple Watch quick actions.
   </p>
+
+  <h2>Proactive Intelligence</h2>
+  <p>
+    When enabled in Settings, Clarissa detects intent in your messages and prefetches relevant data
+    before the agent responds:
+  </p>
+  <ul>
+    <li><strong>Weather detection</strong> — Keywords like "cold", "rain", "weather" trigger a weather prefetch</li>
+    <li><strong>Schedule detection</strong> — Time patterns like "tomorrow", "at 3pm" trigger a calendar prefetch</li>
+    <li><strong>Parallel prefetch</strong> — Multiple intents detected simultaneously with a 2-second timeout</li>
+    <li><strong>FM-only</strong> — Only activates with on-device Foundation Models (no API cost)</li>
+  </ul>
+  <p>
+    <em>Note:</em> This feature is opt-in and disabled by default. Enable it in Settings under "Proactive Context."
+  </p>
+
+  <h2>Edit, Regenerate & Error Recovery</h2>
+  <p>
+    Easily recover from dead ends without starting over:
+  </p>
+  <ul>
+    <li><strong>Edit &amp; Resend</strong> — Long-press any user message to edit and resend from that point</li>
+    <li><strong>Regenerate</strong> — Long-press any assistant message to regenerate the response</li>
+    <li><strong>Undo</strong> — One-level undo with ephemeral snapshot and banner</li>
+    <li><strong>Auto error recovery</strong> — When the context window is exceeded, Clarissa automatically summarizes the conversation and retries</li>
+    <li><strong>Manual summarize</strong> — Tap "Summarize conversation" in the context indicator to proactively manage context</li>
+  </ul>
+
+  <h2>Agent Visibility</h2>
+  <p>
+    See exactly what Clarissa is doing during multi-tool execution:
+  </p>
+  <ul>
+    <li><strong>Tool plan view</strong> — Step-by-step progress displayed inline in chat</li>
+    <li><strong>Live Activity</strong> — Dynamic Island and Lock Screen show real-time plan progress</li>
+    <li><strong>Human-readable steps</strong> — Tool calls are translated to descriptions like "Checking your calendar..."</li>
+  </ul>
 
   <h2>Voice Input</h2>
   <p>
     Speak naturally to Clarissa using built-in speech recognition:
   </p>
   <ul>
+    <li><strong>SpeechAnalyzer</strong> (iOS 26+) — Dramatically faster and more accurate transcription</li>
     <li>Tap the <strong>microphone button</strong> to start dictation</li>
     <li>Speak your prompt naturally</li>
     <li>Tap again to stop and send</li>
+    <li><strong>Legacy fallback</strong> to SFSpeechRecognizer on older devices</li>
   </ul>
-  <p>
-    Voice input uses Apple's on-device speech recognition for privacy. Grant microphone 
-    permission when prompted for the best experience.
-  </p>
 
   <h2>Siri Shortcuts Integration</h2>
   <p>
     Clarissa exposes App Intents for use with Siri and the Shortcuts app:
   </p>
-  
+
   <h3>"Ask Clarissa"</h3>
   <p>Invoke Clarissa with your voice:</p>
   <ul>
@@ -52,16 +102,24 @@ const base = import.meta.env.BASE_URL;
     <li>"Hey Siri, talk to Clarissa"</li>
   </ul>
 
-  <h3>"New Conversation"</h3>
-  <p>Start fresh:</p>
+  <h3>Template Shortcuts</h3>
+  <p>Start a specific template via Siri:</p>
   <ul>
-    <li>"Hey Siri, start new conversation with Clarissa"</li>
-    <li>"Hey Siri, reset Clarissa"</li>
+    <li>"Hey Siri, Morning Briefing with Clarissa"</li>
+    <li>"Hey Siri, Meeting Prep with Clarissa"</li>
+    <li>"Hey Siri, Research Mode with Clarissa"</li>
+    <li>"Hey Siri, Quick Math with Clarissa"</li>
   </ul>
+
+  <h3>Follow-Up Conversations</h3>
+  <p>
+    Siri supports 5-minute follow-up sessions for back-and-forth conversation without
+    repeating the trigger phrase.
+  </p>
 
   <h3>Custom Shortcuts</h3>
   <p>
-    Build your own automations in the Shortcuts app. Chain Clarissa with other actions 
+    Build your own automations in the Shortcuts app. Chain Clarissa with other actions
     to create powerful workflows.
   </p>
 
@@ -70,37 +128,38 @@ const base = import.meta.env.BASE_URL;
     The Apple version includes tools deeply integrated with iOS and macOS frameworks:
   </p>
   <ul>
-    <li><strong>Calendar</strong> — Create, list, and search calendar events (EventKit)</li>
-    <li><strong>Contacts</strong> — Search and view contact information</li>
+    <li><strong>Calendar</strong> — Create, list, and search events with deep links to Calendar.app and Maps (EventKit)</li>
+    <li><strong>Contacts</strong> — Search and view contacts with tap-to-call, message, or email actions</li>
     <li><strong>Reminders</strong> — Create, list, and complete reminders (EventKit)</li>
-    <li><strong>Weather</strong> — Current conditions and 5-day forecast (WeatherKit)</li>
+    <li><strong>Weather</strong> — Current conditions and forecast with expandable hourly/daily charts (WeatherKit + Swift Charts)</li>
     <li><strong>Location</strong> — Get current position with reverse geocoding (CoreLocation)</li>
-    <li><strong>Web Fetch</strong> — Retrieve and parse web content</li>
-    <li><strong>Calculator</strong> — Perform mathematical calculations</li>
-    <li><strong>Remember</strong> — Store information for future conversations</li>
-    <li><strong>Image Analysis</strong> — OCR, object detection, and face detection (Vision)</li>
-    <li><strong>PDF Analysis</strong> — Text extraction and OCR for scanned documents (PDFKit + Vision)</li>
+    <li><strong>Web Fetch</strong> — Retrieve and parse web content with preview cards</li>
+    <li><strong>Calculator</strong> — Mathematical calculations with copy-to-clipboard</li>
+    <li><strong>Remember</strong> — Store information with auto-tagging, categories, and confidence scoring</li>
+    <li><strong>Image Analysis</strong> — OCR, object detection, face detection, AI descriptions (Vision + Foundation Models)</li>
+    <li><strong>Document OCR</strong> — Full-document recognition, PDF extraction, handwriting (Vision)</li>
   </ul>
-  <p>
-    <em>Note:</em> Apple Foundation Models work best with 4 or fewer tools active per session.
-    Configure which tools are enabled in Settings to optimize for your workflow.
-  </p>
 
-  <h2>Image and Document Analysis</h2>
+  <h2>Export & Sharing</h2>
   <p>
-    Clarissa can analyze images and PDF documents using Apple's Vision framework:
+    Share conversations in multiple formats:
   </p>
   <ul>
-    <li><strong>Text Recognition (OCR)</strong> — Extract text from photos, screenshots, and scanned documents</li>
-    <li><strong>Image Classification</strong> — Identify objects, scenes, and content in photos</li>
-    <li><strong>Face Detection</strong> — Detect and count faces in images</li>
-    <li><strong>Document Detection</strong> — Identify documents in photos for enhanced text extraction</li>
-    <li><strong>PDF Text Extraction</strong> — Extract text from PDF files, including OCR for scanned pages</li>
+    <li><strong>PDF export</strong> — Export conversations as styled PDF documents</li>
+    <li><strong>Share as image</strong> — Long-press any assistant message to share as an image</li>
+    <li><strong>Code block copy</strong> — Copy code blocks with syntax highlighting</li>
+    <li><strong>Markdown export</strong> — Export conversation history as Markdown text</li>
   </ul>
+
+  <h2>Share Extension</h2>
   <p>
-    To use image analysis, tap the <strong>attachment button</strong> to select an image or PDF from
-    your photo library. Clarissa will automatically analyze the content and include it in the conversation.
+    Share content from any app directly to Clarissa:
   </p>
+  <ul>
+    <li>Share text, URLs, or images from Safari, Notes, Mail, and more</li>
+    <li>Shared content appears in a new conversation for immediate processing</li>
+    <li>Uses App Group storage for seamless handoff to the main app</li>
+  </ul>
 
   <h2>Session Management</h2>
   <p>
@@ -110,23 +169,28 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Auto-save</strong> — Never lose a conversation</li>
     <li><strong>Title generation</strong> — AI-generated titles for easy browsing</li>
     <li><strong>History sidebar</strong> — Quick access to past conversations</li>
+    <li><strong>Search &amp; filter</strong> — Search conversation history by date and topic</li>
     <li><strong>Resume anytime</strong> — Pick up where you left off</li>
   </ul>
 
   <h2>Long-Term Memory</h2>
   <p>
-    Clarissa remembers important information across conversations:
+    Clarissa remembers important information across conversations with an intelligent memory system:
   </p>
   <ul>
-    <li>Facts you share are stored persistently</li>
-    <li>Context carries forward to future sessions</li>
-    <li>Manage memories in Settings</li>
+    <li><strong>Categories</strong> — Facts, preferences, routines, and relationships</li>
+    <li><strong>Confidence scoring</strong> — Memories decay when unused and boost when accessed</li>
+    <li><strong>Relationship linking</strong> — Related memories are connected for richer context</li>
+    <li><strong>Relevance ranking</strong> — Multi-factor retrieval weighted by topic, confidence, recency, and category</li>
+    <li><strong>iCloud sync</strong> — Memories sync across devices with timestamp-based conflict resolution</li>
+    <li><strong>Memory review</strong> — Manage memories in Settings with category badges and confidence indicators</li>
   </ul>
 
   <h2>Streaming Responses</h2>
   <p>
-    Watch responses appear in real-time as the AI generates them. Tool executions 
-    are displayed inline so you can see exactly what Clarissa is doing.
+    Watch responses appear in real-time as the AI generates them. Tool executions
+    are displayed inline so you can see exactly what Clarissa is doing, with step-by-step
+    progress in the chat UI and Dynamic Island.
   </p>
 
   <h2>Liquid Glass Design</h2>
@@ -138,6 +202,17 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Adaptive layout</strong> — Optimized for iPhone, iPad, and Mac</li>
     <li><strong>Dark mode</strong> — Full support for system appearance</li>
     <li><strong>Dynamic Type</strong> — Respects your text size preferences</li>
+  </ul>
+
+  <h2>Apple Watch Companion</h2>
+  <p>
+    A voice-first watchOS companion with:
+  </p>
+  <ul>
+    <li><strong>Voice queries</strong> — Ask questions directly from your wrist</li>
+    <li><strong>Quick actions</strong> — Morning Briefing and Meeting Prep templates</li>
+    <li><strong>Response history</strong> — View recent responses</li>
+    <li><strong>Complications</strong> — Quick launch from watch faces</li>
   </ul>
 
   <h2>macOS Features</h2>

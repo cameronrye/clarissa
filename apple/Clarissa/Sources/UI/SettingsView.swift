@@ -33,6 +33,7 @@ public struct SettingsView: View {
     @AppStorage("selectedVoiceIdentifier") private var selectedVoiceIdentifier: String = ""
     @AppStorage("speechRate") private var speechRate: Double = 0.5
     @AppStorage("pccConsentGiven") private var pccConsentGiven: Bool = false
+    @AppStorage(ProactiveContext.settingsKey) private var proactiveContextEnabled: Bool = false
 
     @State private var openRouterApiKey: String = ""
     @State private var showingApiKey = false
@@ -214,10 +215,29 @@ public struct SettingsView: View {
                         Text("Private Cloud Compute")
                     }
                 }
+                Toggle(isOn: $proactiveContextEnabled) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(ClarissaTheme.purple)
+                        Text("Proactive Context")
+                    }
+                }
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("When enabled, complex requests may be processed using Apple's Private Cloud Compute. Your data is never stored on Apple servers and is protected by end-to-end encryption.")
+                Text("Private Cloud Compute: complex requests may use Apple's servers (end-to-end encrypted).\nProactive Context: automatically fetches weather and calendar data when detected in your message (on-device only).")
+            }
+
+            Section("Templates") {
+                NavigationLink {
+                    CustomTemplateListView()
+                } label: {
+                    HStack {
+                        Image(systemName: "rectangle.stack")
+                            .foregroundStyle(ClarissaTheme.purple)
+                        Text("Manage Templates")
+                    }
+                }
             }
 
             Section {
@@ -507,10 +527,29 @@ public struct SettingsView: View {
                             Text("Private Cloud Compute")
                         }
                     }
+                    Toggle(isOn: $proactiveContextEnabled) {
+                        HStack {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(ClarissaTheme.purple)
+                            Text("Proactive Context")
+                        }
+                    }
                 } header: {
                     Text("Privacy")
                 } footer: {
-                    Text("When enabled, complex requests may be processed using Apple's Private Cloud Compute. Your data is never stored on Apple servers and is protected by end-to-end encryption.")
+                    Text("Private Cloud Compute: complex requests may use Apple's servers (end-to-end encrypted).\nProactive Context: automatically fetches weather and calendar data when detected in your message (on-device only).")
+                }
+
+                Section("Templates") {
+                    NavigationLink {
+                        CustomTemplateListView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "rectangle.stack")
+                                .foregroundStyle(ClarissaTheme.purple)
+                            Text("Manage Templates")
+                        }
+                    }
                 }
 
                 Section {

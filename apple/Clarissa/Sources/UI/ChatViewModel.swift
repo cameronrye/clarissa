@@ -23,11 +23,19 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     @Published var isSettingUpProvider: Bool = true
     @Published var showNewSessionConfirmation: Bool = false
     @Published var thinkingStatus: ThinkingStatus = .idle
+    @Published var planSteps: [PlanStep] = []
     @Published var isSwitchingSession: Bool = false
     /// Incremented when sessions are created, deleted, or modified to trigger history view refreshes
     @Published var sessionVersion: Int = 0
     @Published var showPCCConsent: Bool = false
     @Published var pendingSharedResult: SharedResult?
+    @Published var conversationSummarizedBanner: Bool = false
+    /// Suggests switching to OpenRouter after an FM failure
+    @Published var showProviderSuggestion: Bool = false
+
+    // MARK: - Undo State (ephemeral, does not survive app restart)
+    /// Stores replaced messages for one-level undo after edit/regenerate
+    private(set) var undoSnapshot: [ChatMessage]?
 
     // MARK: - Enhancement Properties
     @Published var isEnhancing: Bool = false
@@ -51,35 +59,43 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     @Published var showCameraCapture: Bool = false
     #endif
 
+    // MARK: - Coordinators & Internal State
+
     private var agent: Agent
     private var appState: AppState?
     private var currentTask: Task<Void, Never>?
     private var initTask: Task<Void, Never>?
-    private(set) var voiceManager: VoiceManager?
-    private var voiceCancellables = Set<AnyCancellable>()
-    private var sharedResultCancellable: AnyCancellable?
+    let providerCoordinator: ProviderCoordinator
+    let sessionCoordinator: SessionCoordinator
+    let voiceController: VoiceController
+    private var toolCallCount = 0
+    private var pendingProactiveLabels: [String]?
     #if os(macOS)
     private var menuCommandCancellables = Set<AnyCancellable>()
+    #endif
+    #if os(iOS)
+    private var sharedResultCancellable: AnyCancellable?
     #endif
 
     init() {
         self.agent = Agent()
+        self.providerCoordinator = ProviderCoordinator(agent: agent)
+        self.sessionCoordinator = SessionCoordinator(agent: agent)
+        self.voiceController = VoiceController()
         self.agent.callbacks = self
 
         // Set up provider (default to Foundation Models if available)
-        // Store reference so we can cancel if configure(with:) is called before completion
         initTask = Task {
-            await setupProvider()
+            currentProvider = await providerCoordinator.setupProvider(appState: nil)
 
-            // Check for cancellation before loading session (in case configure was called)
             guard !Task.isCancelled else { return }
 
-            await loadCurrentSession()
+            await loadSession()
             isSettingUpProvider = false
         }
 
         // Initialize voice manager on both platforms
-        setupVoiceManager()
+        setupVoiceCallbacks()
 
         // Set up menu command observers on macOS
         #if os(macOS)
@@ -100,27 +116,58 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     // Do NOT use Task in deinit - it's undefined behavior and may not complete
     // VoiceManager's own deinit handles NotificationCenter observer removal
 
+    // MARK: - Voice Setup
+
+    private func setupVoiceCallbacks() {
+        voiceController.onRecordingChanged = { [weak self] isRecording in
+            self?.isRecording = isRecording
+        }
+
+        voiceController.onTranscriptChanged = { [weak self] transcript in
+            guard let self else { return }
+            self.voiceTranscript = transcript
+            // Update input text while recording
+            if self.isRecording {
+                self.inputText = transcript
+            }
+        }
+
+        voiceController.onSpeakingChanged = { [weak self] speaking in
+            self?.isSpeaking = speaking
+        }
+
+        voiceController.onVoiceModeChanged = { [weak self] isActive in
+            self?.isVoiceModeActive = isActive
+        }
+
+        voiceController.onTranscriptReady = { [weak self] transcript in
+            guard let self else { return }
+            self.inputText = transcript
+            self.voiceTranscript = ""
+
+            // Auto-send in voice mode
+            if self.isVoiceModeActive {
+                self.sendMessage()
+            }
+        }
+
+        voiceController.setup()
+    }
+
     // MARK: - macOS Menu Command Observers
 
     #if os(macOS)
     private func setupMenuCommandObservers() {
-        // New conversation command
         NotificationCenter.default.publisher(for: .newConversation)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.requestNewSession()
-            }
+            .sink { [weak self] _ in self?.requestNewSession() }
             .store(in: &menuCommandCancellables)
 
-        // Clear conversation command
         NotificationCenter.default.publisher(for: .clearConversation)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.clearConversation()
-            }
+            .sink { [weak self] _ in self?.clearConversation() }
             .store(in: &menuCommandCancellables)
 
-        // Voice input toggle command
         NotificationCenter.default.publisher(for: .toggleVoiceInput)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -129,20 +176,14 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             }
             .store(in: &menuCommandCancellables)
 
-        // Speak last response command
         NotificationCenter.default.publisher(for: .speakLastResponse)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.speakLastResponse()
-            }
+            .sink { [weak self] _ in self?.speakLastResponse() }
             .store(in: &menuCommandCancellables)
 
-        // Stop speaking command
         NotificationCenter.default.publisher(for: .stopSpeaking)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.stopSpeaking()
-            }
+            .sink { [weak self] _ in self?.stopSpeaking() }
             .store(in: &menuCommandCancellables)
     }
 
@@ -157,75 +198,20 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Reset agent AND provider session to prevent context bleeding
         Task {
-            await agent.resetForNewConversation()
-            _ = await SessionManager.shared.startNewSession()
+            await sessionCoordinator.startNewSession()
             updateContextStats()
             sessionVersion += 1
         }
     }
     #endif
 
-    // MARK: - Voice Setup
-
-    private func setupVoiceManager() {
-        let manager = VoiceManager()
-        self.voiceManager = manager
-
-        // Handle transcript ready
-        manager.onTranscriptReady = { [weak self] transcript in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.inputText = transcript
-                self.voiceTranscript = ""
-
-                // Auto-send in voice mode
-                if self.isVoiceModeActive {
-                    self.sendMessage()
-                }
-            }
-        }
-
-        // Observe voice manager state using Combine
-        manager.speechRecognizer.$isRecording
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isListening in
-                self?.isRecording = isListening
-            }
-            .store(in: &voiceCancellables)
-
-        manager.speechRecognizer.$transcript
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] transcript in
-                guard let self else { return }
-                self.voiceTranscript = transcript
-                // Update input text while recording
-                if self.isRecording {
-                    self.inputText = transcript
-                }
-            }
-            .store(in: &voiceCancellables)
-
-        manager.speechSynthesizer.$isSpeaking
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] speaking in
-                self?.isSpeaking = speaking
-            }
-            .store(in: &voiceCancellables)
-
-        manager.$isVoiceModeActive
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isActive in
-                self?.isVoiceModeActive = isActive
-            }
-            .store(in: &voiceCancellables)
-    }
+    // MARK: - Provider Configuration
 
     /// Configure with AppState for provider switching
     func configure(with appState: AppState) {
         self.appState = appState
 
         // Cancel any in-progress init task and wait for it to complete
-        // This prevents race conditions where multiple initialization tasks run concurrently
         let previousTask = initTask
         initTask = nil
 
@@ -237,14 +223,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             isSettingUpProvider = true
             // Set up provider with fallback if persisted selection is unavailable
             await appState.setProviderWithFallback(appState.selectedProvider) { providerType in
-                await self.checkProviderAvailability(providerType)
+                await self.providerCoordinator.checkAvailability(providerType)
             }
 
             // Check for cancellation before continuing
             guard !Task.isCancelled else { return }
 
-            await setupProvider(for: appState.selectedProvider)
-            await loadCurrentSession()
+            currentProvider = await providerCoordinator.setupProvider(
+                for: appState.selectedProvider, appState: appState
+            )
+            await loadSession()
             isSettingUpProvider = false
         }
     }
@@ -252,99 +240,55 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Switch to a different provider
     func switchProvider(to providerType: LLMProviderType) async {
         isSettingUpProvider = true
-
-        // Reset agent to clear any cached context from the previous provider
-        // This prevents context bleeding between providers (e.g., Foundation Models session cache)
-        await agent.resetForNewConversation()
-
-        // Use fallback if the requested provider is unavailable
-        if let appState = appState {
-            await appState.setProviderWithFallback(providerType) { type in
-                await self.checkProviderAvailability(type)
-            }
-            await setupProvider(for: appState.selectedProvider)
-        } else {
-            await setupProvider(for: providerType)
-        }
-
+        currentProvider = await providerCoordinator.switchProvider(to: providerType, appState: appState)
         // Reload the current session into the new provider
-        await loadCurrentSession()
+        await loadSession()
         isSettingUpProvider = false
-    }
-
-    /// Check if a provider type is available
-    private func checkProviderAvailability(_ providerType: LLMProviderType) async -> Bool {
-        switch providerType {
-        case .foundationModels:
-            if #available(iOS 26.0, *) {
-                let provider = FoundationModelsProvider()
-                return await provider.isAvailable
-            }
-            return false
-        case .openRouter:
-            let apiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
-            return !apiKey.isEmpty
-        }
-    }
-
-    private func setupProvider(for providerType: LLMProviderType? = nil) async {
-        let selectedType = providerType ?? appState?.selectedProvider
-
-        // If OpenRouter is explicitly selected, use it
-        if selectedType == .openRouter {
-            setupOpenRouterProvider()
-            return
-        }
-
-        // Default: try Foundation Models first
-        if #available(iOS 26.0, *) {
-            let pccAllowed = UserDefaults.standard.bool(forKey: "pccConsentGiven")
-            let provider = FoundationModelsProvider(allowPCC: pccAllowed)
-            if await provider.isAvailable {
-                agent.setProvider(provider)
-                currentProvider = provider.name
-                // Prewarm the actual session with tools for faster first response
-                provider.prewarm(with: "Help me")
-                return
-            }
-        }
-
-        // Fall back to OpenRouter
-        setupOpenRouterProvider()
-    }
-
-    private func setupOpenRouterProvider() {
-        // Get API key from Keychain (secure storage)
-        let apiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
-        let model = UserDefaults.standard.string(forKey: "selectedModel") ?? "anthropic/claude-sonnet-4"
-
-        if !apiKey.isEmpty {
-            let provider = OpenRouterProvider(apiKey: apiKey, model: model)
-            agent.setProvider(provider)
-            currentProvider = "\(provider.name) (\(formatModelName(model)))"
-        } else {
-            currentProvider = "No provider configured"
-        }
-    }
-
-    /// Format model name for display (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
-    private func formatModelName(_ model: String) -> String {
-        let parts = model.split(separator: "/")
-        if parts.count == 2 {
-            return String(parts[1]).replacingOccurrences(of: "-", with: " ").capitalized
-        }
-        return model
     }
 
     /// Refresh provider with current settings
     func refreshProvider() {
         Task {
-            self.agent = Agent()
-            self.agent.callbacks = self
-            await setupProvider(for: appState?.selectedProvider)
+            await agent.resetForNewConversation()
+            currentProvider = await providerCoordinator.setupProvider(
+                for: appState?.selectedProvider, appState: appState
+            )
         }
     }
-    
+
+    /// Grant PCC consent and recreate the provider
+    func grantPCCConsent() {
+        providerCoordinator.grantPCCConsent()
+        showPCCConsent = false
+        refreshProvider()
+    }
+
+    // MARK: - Conversation Templates
+
+    /// Start a new conversation with a template
+    func startWithTemplate(_ template: ConversationTemplate) {
+        Task {
+            // Start a fresh session
+            await startNewSession()
+
+            // Apply the template to the agent
+            agent.applyTemplate(template)
+
+            // If the template has an initial prompt, send it
+            if let initialPrompt = template.initialPrompt {
+                inputText = initialPrompt
+                sendMessage()
+            }
+        }
+    }
+
+    /// Clear any active template (returns to default behavior)
+    func clearTemplate() {
+        agent.applyTemplate(nil)
+    }
+
+    // MARK: - Messaging
+
     func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasImage = attachedImageData != nil
@@ -381,21 +325,17 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         streamingContent = ""
 
         currentTask = Task {
+            // Build prompt for the agent (declared before do/catch so catch can reference it for retry)
+            var promptText = text.isEmpty ? "Analyze this image" : text
+
             do {
                 try Task.checkCancellation()
 
-                // Build prompt for the agent
-                var promptText = text.isEmpty ? "Analyze this image" : text
-
                 // Pre-process image BEFORE involving the LLM
-                // This is critical for Apple Foundation Models (4,096 token limit)
-                // Instead of passing base64 (~100KB = 25,000+ tokens), we pass
-                // extracted text/metadata (~500 chars = ~150 tokens)
                 if let imageData = imageData {
                     let processor = ImagePreProcessor()
                     let result = await processor.process(imageData: imageData)
 
-                    // Add extracted content to the prompt
                     promptText = """
                     \(promptText)
 
@@ -406,12 +346,51 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
                 // Pass image preview for persistence (not the full image)
                 _ = try await agent.run(promptText, imageData: imagePreview)
                 // Save session after successful response
-                await saveCurrentSession()
+                await sessionCoordinator.saveCurrentSession()
+                sessionVersion += 1
             } catch is CancellationError {
                 // User cancelled - don't show error
                 streamingContent = ""
             } catch {
-                errorMessage = ErrorMapper.userFriendlyMessage(for: error)
+                // Auto-recovery: if contextWindowExceeded, aggressively trim and retry once
+                let isContextOverflow: Bool
+                if let fmError = error as? FoundationModelsError,
+                   case .contextWindowExceeded = fmError {
+                    isContextOverflow = true
+                } else {
+                    isContextOverflow = false
+                }
+
+                if isContextOverflow {
+                    // Log token estimate at overflow for future calibration
+                    let stats = self.agent.getContextStats()
+                    ClarissaLogger.agent.warning("contextWindowExceeded: estimated \(stats.currentTokens) tokens (\(stats.messageCount) messages, \(stats.trimmedCount) already trimmed)")
+
+                    let didTrim = await self.agent.aggressiveTrim()
+                    if didTrim {
+                        self.conversationSummarizedBanner = true
+                        // Retry with compressed context
+                        do {
+                            _ = try await self.agent.run(promptText, imageData: imagePreview)
+                            await self.sessionCoordinator.saveCurrentSession()
+                            self.sessionVersion += 1
+                        } catch {
+                            // Recovery failed — show original error
+                            self.errorMessage = ErrorMapper.userFriendlyMessage(for: error)
+                        }
+                        // Auto-dismiss banner after a few seconds
+                        Task {
+                            try? await Task.sleep(for: .seconds(5))
+                            self.conversationSummarizedBanner = false
+                        }
+                    } else {
+                        self.errorMessage = ErrorMapper.userFriendlyMessage(for: error)
+                    }
+                } else {
+                    self.errorMessage = ErrorMapper.userFriendlyMessage(for: error)
+                    // Suggest OpenRouter if FM failed and OpenRouter is configured
+                    self.suggestProviderIfAppropriate(error: error)
+                }
             }
 
             isLoading = false
@@ -419,72 +398,6 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             streamingContent = ""
             currentTask = nil
         }
-    }
-
-    /// Attach an image for analysis
-    func attachImage(_ data: Data) {
-        attachedImageData = data
-        // Create a smaller preview for display
-        attachedImagePreview = createImagePreview(from: data)
-        HapticManager.shared.lightTap()
-    }
-
-    /// Remove the attached image
-    func removeAttachedImage() {
-        attachedImageData = nil
-        attachedImagePreview = nil
-        HapticManager.shared.lightTap()
-    }
-
-    // MARK: - Camera Methods
-
-    #if os(iOS)
-    /// Show the camera capture interface
-    func showCamera() {
-        showCameraCapture = true
-    }
-
-    /// Handle captured image from camera
-    func handleCameraCapture(_ capturedImage: CapturedImage) {
-        attachImage(capturedImage.imageData)
-        showCameraCapture = false
-    }
-
-    /// Dismiss camera without capturing
-    func dismissCamera() {
-        showCameraCapture = false
-    }
-    #endif
-
-    /// Create a thumbnail preview from image data
-    private func createImagePreview(from data: Data) -> Data? {
-        #if canImport(UIKit)
-        guard let image = UIImage(data: data) else { return nil }
-        let maxSize: CGFloat = 200
-        let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
-        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-
-        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-        let resized = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-
-        return resized?.jpegData(compressionQuality: 0.7)
-        #elseif canImport(AppKit)
-        guard let image = NSImage(data: data) else { return nil }
-        let maxSize: CGFloat = 200
-        let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
-        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-
-        let resized = NSImage(size: newSize)
-        resized.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: newSize))
-        resized.unlockFocus()
-
-        guard let tiffData = resized.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
-        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
-        #endif
     }
 
     /// Cancel the current generation
@@ -522,15 +435,161 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         sendMessage()
     }
 
+    // MARK: - Edit & Regenerate
+
+    /// Edit a user message and resend from that point
+    /// Truncates conversation from the edit point, populates the input field for editing
+    func editAndResend(messageId: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageId && $0.role == .user }) else { return }
+
+        // Save undo snapshot (one level)
+        undoSnapshot = messages
+
+        let originalContent = messages[index].content
+        // Remove [with image] suffix from display content if present
+        let editableContent = originalContent.replacingOccurrences(of: " [with image]", with: "")
+
+        // Truncate conversation from edit point onward
+        messages.removeSubrange(index...)
+
+        // Populate input field for editing
+        inputText = editableContent
+
+        // Sync trimmed agent state
+        syncAgentMessages()
+
+        HapticManager.shared.lightTap()
+    }
+
+    /// Regenerate the assistant response for a given message
+    /// Removes the assistant message and everything after it, then re-runs the agent
+    func regenerateResponse(messageId: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageId && $0.role == .assistant }) else { return }
+
+        // Save undo snapshot (one level)
+        undoSnapshot = messages
+
+        // Find the user message that preceded this assistant response
+        let precedingUserMessage = messages[..<index].last(where: { $0.role == .user })
+
+        // Remove assistant message and everything after it
+        messages.removeSubrange(index...)
+
+        // Sync agent state
+        syncAgentMessages()
+
+        // Re-run with the same user input
+        guard let userMessage = precedingUserMessage else { return }
+        inputText = userMessage.content.replacingOccurrences(of: " [with image]", with: "")
+
+        // Remove the user message too (sendMessage will re-add it)
+        if let userIndex = messages.lastIndex(where: { $0.role == .user }) {
+            messages.removeSubrange(userIndex...)
+            syncAgentMessages()
+        }
+
+        sendMessage()
+    }
+
+    /// Undo the last edit/regenerate operation (one level)
+    func undoEditOrRegenerate() {
+        guard let snapshot = undoSnapshot else { return }
+        messages = snapshot
+        undoSnapshot = nil
+        syncAgentMessages()
+        HapticManager.shared.lightTap()
+    }
+
+    /// Whether an undo is available
+    var canUndo: Bool { undoSnapshot != nil }
+
+    /// Sync agent's internal message history with current UI messages
+    private func syncAgentMessages() {
+        // Convert ChatMessages back to agent Messages for context
+        let agentMessages: [Message] = messages.compactMap { chat in
+            switch chat.role {
+            case .user:
+                return .user(chat.content, imageData: chat.imageData)
+            case .assistant:
+                return .assistant(chat.content)
+            case .tool:
+                return .tool(callId: UUID().uuidString, name: chat.toolName ?? "tool", content: chat.toolResult ?? chat.content)
+            case .system:
+                return nil  // System message rebuilt on each run()
+            }
+        }
+        agent.loadMessages(agentMessages)
+    }
+
+    // MARK: - Image Attachment
+
+    /// Attach an image for analysis
+    func attachImage(_ data: Data) {
+        attachedImageData = data
+        // Create a smaller preview for display
+        attachedImagePreview = createImagePreview(from: data)
+        HapticManager.shared.lightTap()
+    }
+
+    /// Remove the attached image
+    func removeAttachedImage() {
+        attachedImageData = nil
+        attachedImagePreview = nil
+        HapticManager.shared.lightTap()
+    }
+
+    // MARK: - Camera Methods
+
+    #if os(iOS)
+    func showCamera() { showCameraCapture = true }
+
+    func handleCameraCapture(_ capturedImage: CapturedImage) {
+        attachImage(capturedImage.imageData)
+        showCameraCapture = false
+    }
+
+    func dismissCamera() { showCameraCapture = false }
+    #endif
+
+    /// Create a thumbnail preview from image data
+    private func createImagePreview(from data: Data) -> Data? {
+        #if canImport(UIKit)
+        guard let image = UIImage(data: data) else { return nil }
+        let maxSize: CGFloat = 200
+        let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
+        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let resized = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        return resized?.jpegData(compressionQuality: 0.7)
+        #elseif canImport(AppKit)
+        guard let image = NSImage(data: data) else { return nil }
+        let maxSize: CGFloat = 200
+        let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
+        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        let resized = NSImage(size: newSize)
+        resized.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: newSize))
+        resized.unlockFocus()
+
+        guard let tiffData = resized.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
+        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+        #endif
+    }
+
+    // MARK: - Session Management
+
     /// Request to start a new session (may show confirmation if messages exist)
     func requestNewSession() {
-        // If there are messages, show confirmation first
         if !messages.isEmpty {
             showNewSessionConfirmation = true
         } else {
-            Task {
-                await startNewSession()
-            }
+            Task { await startNewSession() }
         }
     }
 
@@ -548,150 +607,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         messages.removeAll()
         streamingContent = ""
         errorMessage = nil
+        undoSnapshot = nil
 
-        // Reset agent AND provider session to prevent context bleeding
-        // This is critical for Foundation Models which cache the LanguageModelSession
-        await agent.resetForNewConversation()
-        _ = await SessionManager.shared.startNewSession()
+        // Clear any active template
+        clearTemplate()
+
+        await sessionCoordinator.startNewSession()
         updateContextStats()
 
         // Notify history views to refresh
         sessionVersion += 1
-    }
-
-    /// Load the current session from persistence
-    private func loadCurrentSession() async {
-        // In screenshot mode, load demo data instead of real session
-        // Only available in DEBUG builds for App Store screenshots
-        #if DEBUG
-        if DemoData.isScreenshotMode {
-            loadDemoData()
-            return
-        }
-        #endif
-
-        let session = await SessionManager.shared.getCurrentSession()
-        let savedMessages = session.messages
-
-        ClarissaLogger.ui.info(
-            "Loading current session '\(session.title, privacy: .public)' with \(savedMessages.count) messages"
-        )
-
-        // Convert saved messages to ChatMessages for display
-        var loadedCount = 0
-        for message in savedMessages {
-            switch message.role {
-            case .user, .assistant:
-                var chatMessage = ChatMessage(role: message.role, content: message.content)
-                chatMessage.imageData = message.imageData
-                messages.append(chatMessage)
-                loadedCount += 1
-            case .tool:
-                // Restore tool messages with their results for tool result cards
-                var chatMessage = ChatMessage(
-                    role: .tool,
-                    content: formatToolDisplayName(message.toolName ?? "tool"),
-                    toolName: message.toolName,
-                    toolStatus: .completed
-                )
-                chatMessage.toolResult = message.content  // content contains the tool result
-                messages.append(chatMessage)
-                loadedCount += 1
-            case .system:
-                break  // Skip system messages in UI
-            }
-        }
-
-        ClarissaLogger.ui.info("Loaded \(loadedCount) UI messages on startup")
-
-        // Load into agent
-        agent.loadMessages(savedMessages)
-        updateContextStats()
-
-        // Refresh widgets with current session data
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
-    }
-
-    /// Load demo data for screenshot mode based on current scenario
-    /// Only available in DEBUG builds for App Store screenshots
-    #if DEBUG
-    private func loadDemoData() {
-        let scenario = DemoData.currentScenario
-        messages = DemoData.getMessagesForScenario(scenario)
-
-        // Set demo context stats for context visualizer scenario
-        if scenario == .context {
-            contextStats = DemoData.demoContextStats
-        }
-    }
-    #endif
-
-    /// Save the current session
-    private func saveCurrentSession() async {
-        let messagesToSave = agent.getMessagesForSave()
-        await SessionManager.shared.updateCurrentSession(messages: messagesToSave)
-
-        // Tag session with topics for search/filtering
-        if let sessionId = await SessionManager.shared.getCurrentSessionId() {
-            await SessionManager.shared.tagSession(id: sessionId)
-        }
-
-        // Notify history views to refresh (session may have new title or content)
-        sessionVersion += 1
-    }
-
-    /// Export conversation as markdown text
-    func exportConversation() -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .short
-
-        var markdown = "# Clarissa Conversation\n\n"
-        markdown += "_Exported on \(dateFormatter.string(from: Date()))_\n\n"
-        markdown += "---\n\n"
-
-        for message in messages {
-            if message.role != .system {
-                markdown += "\(message.toMarkdown())\n\n"
-            }
-        }
-
-        return markdown
-    }
-
-    // MARK: - Share Extension
-
-    /// Check for shared content from the Share Extension
-    func checkForSharedResults() {
-        let results = SharedResultStore.load()
-        guard let latest = results.last else { return }
-        pendingSharedResult = latest
-        SharedResultStore.clear()
-    }
-
-    /// Insert shared content into the conversation
-    func insertSharedResult(_ result: SharedResult) {
-        let content: String
-        switch result.type {
-        case .text:
-            content = "I shared some text with you. Here's the analysis:\n\n\(result.analysis)"
-        case .url:
-            content = "I shared a link (\(result.originalContent)) with you. Here's what I found:\n\n\(result.analysis)"
-        case .image:
-            content = "I shared an image with you. \(result.analysis)"
-        }
-
-        // Add as an assistant message showing the analysis
-        let message = ChatMessage(role: .assistant, content: content)
-        messages.append(message)
-        pendingSharedResult = nil
-    }
-
-    /// Dismiss the shared result banner
-    func dismissSharedResult() {
-        pendingSharedResult = nil
     }
 
     /// Switch to a different session
@@ -708,283 +633,109 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         defer { isSwitchingSession = false }
 
         // Save current session before switching
-        await saveCurrentSession()
+        await sessionCoordinator.saveCurrentSession()
+        sessionVersion += 1
 
-        guard let session = await SessionManager.shared.switchToSession(id: id) else {
-            ClarissaLogger.ui.error("Failed to switch to session: \(id.uuidString, privacy: .public)")
-            return
-        }
+        guard let chatMessages = await sessionCoordinator.switchToSession(id: id) else { return }
 
-        ClarissaLogger.ui.info("Switching to session: \(session.title, privacy: .public) with \(session.messages.count) messages")
-
-        // Clear UI messages first
-        messages.removeAll()
-
-        // Reset provider session to clear cached context from previous conversation
-        await agent.resetForNewConversation()
-
-        // Load messages from session into UI (including tool messages for result cards)
-        var loadedCount = 0
-        for message in session.messages {
-            switch message.role {
-            case .user, .assistant:
-                var chatMessage = ChatMessage(role: message.role, content: message.content)
-                chatMessage.imageData = message.imageData
-                messages.append(chatMessage)
-                loadedCount += 1
-            case .tool:
-                // Restore tool messages with their results for tool result cards
-                var chatMessage = ChatMessage(
-                    role: .tool,
-                    content: formatToolDisplayName(message.toolName ?? "tool"),
-                    toolName: message.toolName,
-                    toolStatus: .completed
-                )
-                chatMessage.toolResult = message.content
-                messages.append(chatMessage)
-                loadedCount += 1
-            case .system:
-                break
-            }
-        }
-
-        ClarissaLogger.ui.info("Loaded \(loadedCount) UI messages from session")
-
-        // Load into agent for context
-        agent.loadMessages(session.messages)
+        // Clear UI messages first, then load new ones
+        messages = chatMessages
         updateContextStats()
-
-        // Refresh widgets after session switch
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
-    }
-
-    /// Get all sessions for history display
-    func getAllSessions() async -> [Session] {
-        await SessionManager.shared.getAllSessions()
-    }
-
-    /// Get the current session ID
-    func getCurrentSessionId() async -> UUID? {
-        await SessionManager.shared.getCurrentSessionId()
     }
 
     /// Delete a session
     func deleteSession(id: UUID) async {
-        // Check if we're deleting the active conversation
-        let currentId = await SessionManager.shared.getCurrentSessionId()
-        let isDeletingActiveConversation = currentId == id
+        let isDeletingActive = await sessionCoordinator.deleteSession(id: id)
 
-        await SessionManager.shared.deleteSession(id: id)
-
-        // If we deleted the active conversation, clear chat and show new conversation screen
-        if isDeletingActiveConversation {
-            // Cancel any running task first
+        // If we deleted the active conversation, clear chat
+        if isDeletingActive {
             currentTask?.cancel()
             currentTask = nil
             isLoading = false
             canCancel = false
 
-            // Clear UI state immediately
             messages.removeAll()
             streamingContent = ""
             errorMessage = nil
-
-            // Reset agent AND provider session, then create new session synchronously
-            await agent.resetForNewConversation()
-            _ = await SessionManager.shared.startNewSession()
             updateContextStats()
         }
 
-        // Notify history views to refresh
         sessionVersion += 1
     }
 
     /// Rename a session
     func renameSession(id: UUID, newTitle: String) async {
-        await SessionManager.shared.renameSession(id: id, newTitle: newTitle)
-        // Notify history views to refresh
+        await sessionCoordinator.renameSession(id: id, newTitle: newTitle)
         sessionVersion += 1
     }
 
-    // MARK: - AgentCallbacks
-
-    /// Track tool call count for Live Activity triggering
-    private var toolCallCount = 0
-
-    func onThinking() {
-        // Clear streaming content for each new ReAct iteration
-        streamingContent = ""
-        thinkingStatus = .thinking
+    /// Get all sessions for history display
+    func getAllSessions() async -> [Session] {
+        await sessionCoordinator.getAllSessions()
     }
 
-    func onToolCall(name: String, arguments: String) {
-        let displayName = formatToolDisplayName(name)
-        thinkingStatus = .usingTool(displayName)
+    /// Get the current session ID
+    func getCurrentSessionId() async -> UUID? {
+        await sessionCoordinator.getCurrentSessionId()
+    }
 
-        let toolMessage = ChatMessage(
-            role: .tool,
-            content: displayName,
-            toolName: name,
-            toolStatus: .running
-        )
-        messages.append(toolMessage)
+    /// Export conversation as markdown text
+    func exportConversation() -> String {
+        sessionCoordinator.exportConversation(from: messages)
+    }
 
-        // Live Activity: start on 2nd tool call (multi-tool detection)
-        #if os(iOS)
-        toolCallCount += 1
-        if #available(iOS 16.1, *) {
-            if toolCallCount == 2 {
-                let question = messages.last(where: { $0.role == .user })?.content ?? "Working..."
-                LiveActivityManager.shared.startActivity(question: question, currentTool: displayName)
-            } else if toolCallCount > 2 {
-                LiveActivityManager.shared.updateTool(name: displayName)
-            }
-        }
+    /// Export conversation as PDF data
+    func exportConversationAsPDF() async -> Data? {
+        #if canImport(WebKit)
+        await sessionCoordinator.exportConversationAsPDF(from: messages)
+        #else
+        nil
         #endif
     }
 
-    func onToolResult(name: String, result: String, success: Bool) {
-        // Match on both tool name AND running status to avoid overwriting
-        // the wrong message when the same tool is called multiple times
-        if let index = messages.lastIndex(where: { $0.toolName == name && $0.toolStatus == .running }) {
-            messages[index].toolStatus = success ? .completed : .failed
-            messages[index].toolResult = result
-        } else if let index = messages.lastIndex(where: { $0.toolName == name }) {
-            // Fallback: match by name only (for native tool handling where status may vary)
-            messages[index].toolStatus = success ? .completed : .failed
-            messages[index].toolResult = result
-        }
-        // After tool completes, we're processing the result
-        thinkingStatus = .processing
+    // MARK: - Share Extension
 
-        // Live Activity: mark step complete
-        #if os(iOS)
-        if #available(iOS 16.1, *) {
-            LiveActivityManager.shared.completeStep()
-        }
-        #endif
-    }
-
-    /// Format tool name for display
-    private func formatToolDisplayName(_ name: String) -> String {
-        switch name {
-        case "weather":
-            return "Fetching weather"
-        case "location":
-            return "Getting location"
-        case "calculator":
-            return "Calculating"
-        case "web_fetch":
-            return "Fetching web content"
-        case "calendar":
-            return "Checking calendar"
-        case "contacts":
-            return "Searching contacts"
-        case "reminders":
-            return "Managing reminders"
-        case "remember":
-            return "Saving to memory"
-        default:
-            // Convert snake_case to Title Case
-            return name.split(separator: "_")
-                .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-                .joined(separator: " ")
+    /// Check for shared content from the Share Extension
+    func checkForSharedResults() {
+        if let result = sessionCoordinator.checkForSharedResults() {
+            pendingSharedResult = result
         }
     }
 
-    func onStreamChunk(chunk: String) {
-        streamingContent += chunk
-        // Only hide thinking indicator once we have visible content to show
-        // This prevents a visual gap when first chunks are empty
-        if thinkingStatus.isActive && !streamingContent.isEmpty {
-            thinkingStatus = .idle
-        }
+    /// Insert shared content into the conversation
+    func insertSharedResult(_ result: SharedResult) {
+        messages.append(sessionCoordinator.buildSharedResultMessage(result))
+        pendingSharedResult = nil
     }
 
-    func onResponse(content: String) {
-        thinkingStatus = .idle
-
-        // End Live Activity
-        #if os(iOS)
-        if #available(iOS 16.1, *) {
-            if toolCallCount >= 2 {
-                LiveActivityManager.shared.endActivity()
-            }
-        }
-        toolCallCount = 0
-        #endif
-
-        let assistantMessage = ChatMessage(role: .assistant, content: content)
-        messages.append(assistantMessage)
-
-        // Update context stats
-        updateContextStats()
-
-        // Update widget data with last conversation
-        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
-            WidgetDataManager.shared.updateLastConversation(
-                message: lastUserMessage.content,
-                response: content
-            )
-        }
-
-        // Speak response in voice mode
-        if isVoiceModeActive, let voiceManager = voiceManager {
-            // Read voice output setting - default to true to match @AppStorage default in SettingsView
-            // Note: UserDefaults.bool(forKey:) returns false if key doesn't exist,
-            // so we need to check if the key exists first
-            let voiceOutputEnabled: Bool
-            if UserDefaults.standard.object(forKey: "voiceOutputEnabled") == nil {
-                // Key not set yet, use default of true
-                voiceOutputEnabled = true
-            } else {
-                voiceOutputEnabled = UserDefaults.standard.bool(forKey: "voiceOutputEnabled")
-            }
-
-            if voiceOutputEnabled {
-                voiceManager.speak(content)
-            }
-        }
+    /// Dismiss the shared result banner
+    func dismissSharedResult() {
+        pendingSharedResult = nil
     }
 
-    func onError(error: Error) {
-        thinkingStatus = .idle
+    // MARK: - Voice Control Methods
 
-        // End Live Activity on error
-        #if os(iOS)
-        if #available(iOS 16.1, *) {
-            if toolCallCount >= 2 {
-                LiveActivityManager.shared.endActivity()
-            }
-        }
-        toolCallCount = 0
-        #endif
+    func toggleVoiceInput() async { await voiceController.toggleVoiceInput() }
+    func startVoiceInput() async { await voiceController.startVoiceInput() }
+    func stopVoiceInputAndSend() { voiceController.stopVoiceInputAndSend() }
+    func toggleVoiceMode() async { await voiceController.toggleVoiceMode() }
+    func stopSpeaking() { voiceController.stopSpeaking() }
+    func speak(text: String) { voiceController.speak(text) }
 
-        // Check if this is a context window exceeded error and PCC isn't enabled
-        if let fmError = error as? FoundationModelsError,
-           case .contextWindowExceeded = fmError,
-           !UserDefaults.standard.bool(forKey: "pccConsentGiven") {
-            showPCCConsent = true
-            return
-        }
-
-        errorMessage = error.localizedDescription
+    /// Speak the last assistant response using text-to-speech
+    func speakLastResponse() {
+        guard let lastAssistant = messages.last(where: { $0.role == .assistant }) else { return }
+        voiceController.speak(lastAssistant.content)
     }
 
-    /// Grant PCC consent and recreate the provider
-    func grantPCCConsent() {
-        UserDefaults.standard.set(true, forKey: "pccConsentGiven")
-        showPCCConsent = false
-        refreshProvider()
+    /// Check if there's an assistant message that can be spoken
+    var canSpeakLastResponse: Bool {
+        messages.contains(where: { $0.role == .assistant })
     }
 
-    // MARK: - Context Stats
-
-    /// Update context statistics from the agent
-    private func updateContextStats() {
-        contextStats = agent.getContextStats()
+    /// Check if voice features are authorized
+    func requestVoiceAuthorization() async -> Bool {
+        await voiceController.requestAuthorization()
     }
 
     // MARK: - Prompt Enhancement
@@ -994,8 +745,7 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isEnhancing else { return }
 
-        // Get the current provider, checking availability
-        guard let provider = await getAvailableProvider() else {
+        guard let provider = await providerCoordinator.getAvailableProvider() else {
             errorMessage = "No provider available for enhancement"
             return
         }
@@ -1022,143 +772,226 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         isEnhancing = false
     }
 
-    /// Get an available LLM provider, checking availability asynchronously
-    private func getAvailableProvider() async -> (any LLMProvider)? {
-        // Try Foundation Models first, but check availability
-        if #available(iOS 26.0, *) {
-            let provider = FoundationModelsProvider()
-            if await provider.isAvailable {
-                return provider
+    // MARK: - Context Stats
+
+    /// Manually summarize the conversation to free up context space
+    func manualSummarize() {
+        Task {
+            let didTrim = await agent.aggressiveTrim()
+            if didTrim {
+                conversationSummarizedBanner = true
+                updateContextStats()
+                HapticManager.shared.success()
+                // Auto-dismiss banner after 5 seconds
+                Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    conversationSummarizedBanner = false
+                }
             }
         }
-
-        // Fall back to OpenRouter
-        let apiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
-        let model = UserDefaults.standard.string(forKey: "selectedModel") ?? "anthropic/claude-sonnet-4"
-        guard !apiKey.isEmpty else { return nil }
-        return OpenRouterProvider(apiKey: apiKey, model: model)
     }
 
-    // MARK: - Voice Control Methods
+    /// Suggest switching to OpenRouter when the current provider (FM) fails
+    /// Only shown when: using FM, OpenRouter is configured, error is not context overflow
+    private func suggestProviderIfAppropriate(error: Error) {
+        guard appState?.selectedProvider == .foundationModels else { return }
+        // Don't suggest if OpenRouter isn't configured
+        let hasApiKey = !(KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? "").isEmpty
+        guard hasApiKey else { return }
 
-    /// Toggle voice input recording
-    func toggleVoiceInput() async {
-        guard let voiceManager = voiceManager else { return }
-        await voiceManager.toggleListening()
+        showProviderSuggestion = true
+        // Auto-dismiss after 8 seconds
+        Task {
+            try? await Task.sleep(for: .seconds(8))
+            showProviderSuggestion = false
+        }
     }
 
-    /// Start voice input recording
-    func startVoiceInput() async {
-        guard let voiceManager = voiceManager else { return }
-        await voiceManager.startListening()
+    /// Switch to OpenRouter when user taps the provider suggestion banner
+    func switchToOpenRouter() {
+        showProviderSuggestion = false
+        Task {
+            let name = await providerCoordinator.switchProvider(to: .openRouter, appState: appState)
+            currentProvider = name
+        }
     }
 
-    /// Stop voice input and send message
-    func stopVoiceInputAndSend() {
-        guard let voiceManager = voiceManager else { return }
-        voiceManager.stopListening()
+    /// Update context statistics from the agent
+    private func updateContextStats() {
+        contextStats = agent.getContextStats()
     }
 
-    /// Toggle voice mode (hands-free conversation)
-    func toggleVoiceMode() async {
-        guard let voiceManager = voiceManager else { return }
-        await voiceManager.toggleVoiceMode()
+    // MARK: - Private Helpers
+
+    /// Load the current session (handles demo mode for screenshots)
+    private func loadSession() async {
+        // In screenshot mode, load demo data instead of real session
+        #if DEBUG
+        if DemoData.isScreenshotMode {
+            messages = DemoData.getMessagesForScenario(DemoData.currentScenario)
+            if DemoData.currentScenario == .context {
+                contextStats = DemoData.demoContextStats
+            }
+            return
+        }
+        #endif
+
+        messages = await sessionCoordinator.loadCurrentSession()
+        updateContextStats()
     }
 
-    /// Stop any ongoing speech
-    func stopSpeaking() {
-        voiceManager?.stopSpeaking()
+    // MARK: - AgentCallbacks
+
+    func onThinking() {
+        // Clear streaming content for each new ReAct iteration
+        streamingContent = ""
+        thinkingStatus = .thinking
     }
 
-    /// Speak arbitrary text using text-to-speech
-    func speak(text: String) {
-        voiceManager?.speak(text)
+    func onToolCall(name: String, arguments: String) {
+        let displayName = ToolDisplayNames.format(name)
+        thinkingStatus = .usingTool(displayName)
+
+        // Update plan steps: mark previous running step as completed
+        if let runningIndex = planSteps.firstIndex(where: { $0.status == .running }) {
+            planSteps[runningIndex].status = .completed
+        }
+        planSteps.append(PlanStep(toolName: name, displayName: displayName, status: .running))
+
+        let toolMessage = ChatMessage(
+            role: .tool,
+            content: displayName,
+            toolName: name,
+            toolStatus: .running
+        )
+        messages.append(toolMessage)
+
+        // Live Activity: start on 2nd tool call (multi-tool detection)
+        #if os(iOS)
+        toolCallCount += 1
+        if #available(iOS 16.1, *) {
+            let stepNames = planSteps.map(\.displayName)
+            if toolCallCount == 2 {
+                let question = messages.last(where: { $0.role == .user })?.content ?? "Working..."
+                LiveActivityManager.shared.startActivity(question: question, currentTool: displayName)
+            } else if toolCallCount > 2 {
+                LiveActivityManager.shared.updateTool(name: displayName, planStepNames: stepNames)
+            }
+        }
+        #endif
     }
 
-    /// Speak the last assistant response using text-to-speech
-    func speakLastResponse() {
-        guard let voiceManager = voiceManager else { return }
+    func onToolResult(name: String, result: String, success: Bool) {
+        // Match on both tool name AND running status to avoid overwriting
+        // the wrong message when the same tool is called multiple times
+        if let index = messages.lastIndex(where: { $0.toolName == name && $0.toolStatus == .running }) {
+            messages[index].toolStatus = success ? .completed : .failed
+            messages[index].toolResult = result
+        } else if let index = messages.lastIndex(where: { $0.toolName == name }) {
+            // Fallback: match by name only (for native tool handling where status may vary)
+            messages[index].toolStatus = success ? .completed : .failed
+            messages[index].toolResult = result
+        }
 
-        // Find the last assistant message
-        guard let lastAssistantMessage = messages.last(where: { $0.role == .assistant }) else {
+        // Update plan step status
+        if let stepIndex = planSteps.lastIndex(where: { $0.toolName == name && $0.status == .running }) {
+            planSteps[stepIndex].status = success ? .completed : .failed
+        }
+
+        // After tool completes, we're processing the result
+        thinkingStatus = .processing
+
+        // Live Activity: mark step complete
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            LiveActivityManager.shared.completeStep()
+        }
+        #endif
+    }
+
+    func onStreamChunk(chunk: String) {
+        streamingContent += chunk
+        // Only hide thinking indicator once we have visible content to show
+        if thinkingStatus.isActive && !streamingContent.isEmpty {
+            thinkingStatus = .idle
+        }
+    }
+
+    func onProactiveContext(labels: [String]) {
+        pendingProactiveLabels = labels
+    }
+
+    func onResponse(content: String) {
+        thinkingStatus = .idle
+        planSteps = []
+
+        // End Live Activity
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            if toolCallCount >= 2 {
+                LiveActivityManager.shared.endActivity()
+            }
+        }
+        toolCallCount = 0
+        #endif
+
+        var assistantMessage = ChatMessage(role: .assistant, content: content)
+        // Attach proactive context labels if any were used for this response
+        if let labels = pendingProactiveLabels {
+            assistantMessage.proactiveLabels = labels
+            pendingProactiveLabels = nil
+        }
+        messages.append(assistantMessage)
+
+        // Update context stats
+        updateContextStats()
+
+        // Update widget data with last conversation
+        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
+            WidgetDataManager.shared.updateLastConversation(
+                message: lastUserMessage.content,
+                response: content
+            )
+        }
+
+        // Speak response in voice mode
+        if isVoiceModeActive, let voiceManager = voiceController.voiceManager {
+            // Read voice output setting - default to true to match @AppStorage default in SettingsView
+            let voiceOutputEnabled: Bool
+            if UserDefaults.standard.object(forKey: "voiceOutputEnabled") == nil {
+                voiceOutputEnabled = true
+            } else {
+                voiceOutputEnabled = UserDefaults.standard.bool(forKey: "voiceOutputEnabled")
+            }
+
+            if voiceOutputEnabled {
+                voiceManager.speak(content)
+            }
+        }
+    }
+
+    func onError(error: Error) {
+        thinkingStatus = .idle
+        planSteps = []
+
+        // End Live Activity on error
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            if toolCallCount >= 2 {
+                LiveActivityManager.shared.endActivity()
+            }
+        }
+        toolCallCount = 0
+        #endif
+
+        // Check if this is a context window exceeded error and PCC isn't enabled
+        if let fmError = error as? FoundationModelsError,
+           case .contextWindowExceeded = fmError,
+           !UserDefaults.standard.bool(forKey: "pccConsentGiven") {
+            showPCCConsent = true
             return
         }
 
-        voiceManager.speak(lastAssistantMessage.content)
-    }
-
-    /// Check if there's an assistant message that can be spoken
-    var canSpeakLastResponse: Bool {
-        messages.contains(where: { $0.role == .assistant })
-    }
-
-    /// Check if voice features are authorized
-    func requestVoiceAuthorization() async -> Bool {
-        guard let voiceManager = voiceManager else { return false }
-        return await voiceManager.requestAuthorization()
-    }
-}
-
-/// Status of a tool execution
-enum ToolStatus {
-    case running
-    case completed
-    case failed
-}
-
-/// Current thinking/processing status for the typing indicator
-enum ThinkingStatus: Equatable {
-    case idle
-    case thinking
-    case usingTool(String)
-    case processing
-
-    /// Display text for the status
-    var displayText: String {
-        switch self {
-        case .idle:
-            return ""
-        case .thinking:
-            return "Thinking"
-        case .usingTool(let toolName):
-            return toolName
-        case .processing:
-            return "Processing"
-        }
-    }
-
-    /// Whether the status is active (should show indicator)
-    var isActive: Bool {
-        self != .idle
-    }
-}
-
-/// A message in the chat UI
-struct ChatMessage: Identifiable {
-    let id = UUID()
-    var role: MessageRole
-    var content: String
-    var toolName: String?
-    var toolStatus: ToolStatus?
-    var toolResult: String?  // JSON result from tool execution
-    var imageData: Data?  // Optional attached image preview
-    let timestamp = Date()
-
-    /// Export message as markdown
-    func toMarkdown() -> String {
-        switch role {
-        case .user:
-            // Only add image note if not already in content and we have image data
-            let hasImageNote = content.contains("[with image]")
-            let imageNote = (imageData != nil && !hasImageNote) ? " [with image]" : ""
-            return "**You:** \(content)\(imageNote)"
-        case .assistant:
-            return "**Clarissa:** \(content)"
-        case .system:
-            return "_System: \(content)_"
-        case .tool:
-            let status = toolStatus == .completed ? "completed" : (toolStatus == .failed ? "failed" : "running")
-            return "> Tool: \(toolName ?? "unknown") (\(status))"
-        }
+        errorMessage = error.localizedDescription
     }
 }

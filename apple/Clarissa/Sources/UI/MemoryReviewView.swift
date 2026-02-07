@@ -45,16 +45,52 @@ struct MemoryReviewView: View {
                                 .font(.body)
 
                             HStack(spacing: 8) {
+                                // Category badge
+                                if let category = memory.category, category != .uncategorized {
+                                    Text(category.rawValue.capitalized)
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(categoryColor(category).opacity(0.15))
+                                        .foregroundStyle(categoryColor(category))
+                                        .clipShape(Capsule())
+                                }
+
+                                // Confidence indicator
+                                if let confidence = memory.confidence {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "brain")
+                                            .font(.caption2)
+                                        Text("\(Int(confidence * 100))%")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(confidenceColor(confidence))
+                                }
+
+                                // Relationship count
+                                if let relationships = memory.relationships, !relationships.isEmpty {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "link")
+                                            .font(.caption2)
+                                        Text("\(relationships.count)")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
                                 Text(memory.createdAt, style: .date)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                            }
 
-                                if let topics = memory.topics, !topics.isEmpty {
-                                    Text(topics.joined(separator: ", "))
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                        .lineLimit(1)
-                                }
+                            if let topics = memory.topics, !topics.isEmpty {
+                                Text(topics.joined(separator: ", "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -131,5 +167,21 @@ struct MemoryReviewView: View {
             await MemoryManager.shared.remove(id: memory.id)
             staleMemories.removeAll { $0.id == memory.id }
         }
+    }
+
+    private func categoryColor(_ category: MemoryCategory) -> Color {
+        switch category {
+        case .fact: return .blue
+        case .preference: return ClarissaTheme.purple
+        case .routine: return .orange
+        case .relationship: return .pink
+        case .uncategorized: return .gray
+        }
+    }
+
+    private func confidenceColor(_ confidence: Float) -> Color {
+        if confidence >= 0.7 { return .green }
+        if confidence >= 0.4 { return .orange }
+        return .red
     }
 }

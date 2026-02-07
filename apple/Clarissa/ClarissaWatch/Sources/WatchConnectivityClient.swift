@@ -37,21 +37,23 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     }
     
     /// Send a query to the iPhone for processing
-    /// - Parameter text: The user's query text
+    /// - Parameters:
+    ///   - text: The user's query text
+    ///   - templateId: Optional template ID to apply on the iPhone side
     /// - Returns: The request ID for tracking
     @discardableResult
-    func sendQuery(_ text: String) -> UUID? {
+    func sendQuery(_ text: String, templateId: String? = nil) -> UUID? {
         guard let session = session else {
             lastError = "Watch connectivity not initialized"
             return nil
         }
-        
+
         guard session.isReachable else {
             lastError = "iPhone not reachable"
             return nil
         }
-        
-        let request = QueryRequest(text: text)
+
+        let request = QueryRequest(text: text, templateId: templateId)
         pendingRequest = request
         
         do {

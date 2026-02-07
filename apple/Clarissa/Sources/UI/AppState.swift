@@ -30,6 +30,9 @@ public final class AppState: ObservableObject {
     /// Request to start voice mode (from Shortcut)
     @Published public var requestVoiceMode: Bool = false
 
+    /// Pending template ID from Siri Shortcut (triggers template start on next configure)
+    @Published public var pendingTemplateId: String?
+
     /// Source of the pending question for analytics/logging
     @Published public var pendingQuestionSource: QuestionSource = .direct
 
@@ -90,6 +93,14 @@ public final class AppState: ObservableObject {
             // Handle voice mode: clarissa://voice
             requestVoiceMode = true
             pendingQuestionSource = .urlScheme
+
+        case "template":
+            // Handle template start: clarissa://template?id=morning_briefing
+            if let templateId = queryItems.first(where: { $0.name == "id" })?.value,
+               !templateId.isEmpty {
+                pendingTemplateId = templateId
+                pendingQuestionSource = .urlScheme
+            }
 
         case "memory":
             // Handle memory commands: clarissa://memory?action=sync

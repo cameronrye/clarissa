@@ -51,10 +51,15 @@ struct ChatView: View {
             } else if viewModel.messages.isEmpty && viewModel.streamingContent.isEmpty && !viewModel.isLoading {
                 // Empty state with suggestions - wrapped in ScrollView for keyboard avoidance
                 ScrollView {
-                    EmptyStateView(onSuggestionTap: { suggestion in
-                        viewModel.inputText = suggestion
-                        viewModel.sendMessage()
-                    })
+                    EmptyStateView(
+                        onSuggestionTap: { suggestion in
+                            viewModel.inputText = suggestion
+                            viewModel.sendMessage()
+                        },
+                        onTemplateTap: { template in
+                            viewModel.startWithTemplate(template)
+                        }
+                    )
                 }
                 .scrollDismissesKeyboard(.interactively)
 
@@ -73,6 +78,8 @@ struct ChatView: View {
                                 onRetry: message.role == .assistant ? { viewModel.retryLastMessage() } : nil,
                                 onSpeak: message.role == .assistant ? { text in viewModel.speak(text: text) } : nil,
                                 onStopSpeaking: { viewModel.stopSpeaking() },
+                                onEdit: message.role == .user ? { viewModel.editAndResend(messageId: message.id) } : nil,
+                                onRegenerate: message.role == .assistant ? { viewModel.regenerateResponse(messageId: message.id) } : nil,
                                 isSpeaking: viewModel.isSpeaking
                             )
                             .id(message.id)
@@ -85,6 +92,13 @@ struct ChatView: View {
                         }
                         .animation(.easeOut(duration: 0.25), value: viewModel.messages.count)
                         
+                        // Plan step preview (shows inferred execution plan during multi-tool runs)
+                        if viewModel.planSteps.count > 1 {
+                            ToolPlanView(steps: viewModel.planSteps)
+                                .id("plan")
+                                .transition(.opacity)
+                        }
+
                         // Streaming content with typing indicator
                         if !viewModel.streamingContent.isEmpty {
                             StreamingMessageBubble(content: viewModel.streamingContent)
@@ -139,6 +153,85 @@ struct ChatView: View {
                         Task { await viewModel.toggleVoiceMode() }
                     }
                 )
+            }
+
+            // Conversation summarized banner
+            if viewModel.conversationSummarizedBanner {
+                HStack(spacing: 8) {
+                    Image(systemName: "text.badge.checkmark")
+                        .foregroundStyle(ClarissaTheme.purple)
+                    Text("Context was getting long — conversation summarized to continue")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        viewModel.conversationSummarizedBanner = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            // Provider suggestion banner
+            if viewModel.showProviderSuggestion {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(.orange)
+                    Text("This might work better with OpenRouter")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Switch") {
+                        viewModel.switchToOpenRouter()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.mini)
+                    Button {
+                        viewModel.showProviderSuggestion = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            // Undo banner after edit/regenerate
+            if viewModel.canUndo {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .foregroundStyle(ClarissaTheme.purple)
+                    Text("Messages replaced")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        viewModel.undoEditOrRegenerate()
+                    } label: {
+                        Text("Undo")
+                            .font(.caption.bold())
+                            .foregroundStyle(ClarissaTheme.purple)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             // Shared content banner
@@ -563,12 +656,16 @@ struct MessageBubble: View {
     var onRetry: (() -> Void)? = nil
     var onSpeak: ((String) -> Void)? = nil
     var onStopSpeaking: (() -> Void)? = nil
+    var onEdit: (() -> Void)? = nil
+    var onRegenerate: (() -> Void)? = nil
     var isSpeaking: Bool = false
 
     @State private var showCopied = false
     @State private var isHovered = false
     #if os(iOS)
     @State private var showShareSheet = false
+    @State private var showImageShareSheet = false
+    @State private var shareImage: UIImage?
     #endif
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -607,6 +704,13 @@ struct MessageBubble: View {
                         .contextMenu {
                             copyButton
                             shareButton
+                            if let onEdit = onEdit {
+                                Button {
+                                    onEdit()
+                                } label: {
+                                    Label("Edit & Resend", systemImage: "pencil")
+                                }
+                            }
                         }
                         #if os(iOS)
                         .sheet(isPresented: $showShareSheet) {
@@ -634,7 +738,21 @@ struct MessageBubble: View {
                         .contextMenu {
                             copyButton
                             shareButton
+                            #if os(iOS)
+                            Button {
+                                shareAsImage()
+                            } label: {
+                                Label("Share as Image", systemImage: "photo")
+                            }
+                            #endif
                             speakButton
+                            if let onRegenerate = onRegenerate {
+                                Button {
+                                    onRegenerate()
+                                } label: {
+                                    Label("Regenerate", systemImage: "arrow.trianglehead.2.counterclockwise")
+                                }
+                            }
                             if let onRetry = onRetry {
                                 Button {
                                     onRetry()
@@ -647,6 +765,11 @@ struct MessageBubble: View {
                         .sheet(isPresented: $showShareSheet) {
                             ActivityViewController(activityItems: [message.content])
                         }
+                        .sheet(isPresented: $showImageShareSheet) {
+                            if let image = shareImage {
+                                ActivityViewController(activityItems: [image])
+                            }
+                        }
                         #endif
                         .accessibilityLabel("Clarissa said: \(message.content)")
                 }
@@ -657,6 +780,23 @@ struct MessageBubble: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .transition(.opacity)
+                }
+
+                // Proactive context indicator
+                if let labels = message.proactiveLabels, !labels.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.caption2)
+                        ForEach(labels, id: \.self) { label in
+                            Text(label.capitalized)
+                                .font(.caption2)
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
                 }
             }
 
@@ -709,6 +849,18 @@ struct MessageBubble: View {
         }
     }
 
+    #if os(iOS)
+    private func shareAsImage() {
+        let renderView = MessageImageRenderer(content: message.content)
+        let renderer = ImageRenderer(content: renderView)
+        renderer.scale = 3.0
+        if let uiImage = renderer.uiImage {
+            shareImage = uiImage
+            showImageShareSheet = true
+        }
+    }
+    #endif
+
     private func copyToClipboard() {
         #if os(iOS)
         UIPasteboard.general.string = message.content
@@ -731,8 +883,8 @@ struct MessageBubble: View {
     @ViewBuilder
     private var messageContent: some View {
         if message.role == .assistant {
-            // Render Markdown for assistant messages
-            Text(markdownAttributedString)
+            // Render Markdown with code block support
+            MarkdownContentView(content: message.content)
         } else {
             // User messages with optional image
             VStack(alignment: .trailing, spacing: 8) {
@@ -757,14 +909,6 @@ struct MessageBubble: View {
                 }
                 Text(message.content)
             }
-        }
-    }
-
-    private var markdownAttributedString: AttributedString {
-        do {
-            return try AttributedString(markdown: message.content, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
-        } catch {
-            return AttributedString(message.content)
         }
     }
 
@@ -909,13 +1053,265 @@ private struct TypingDotsView: View {
     }
 }
 
+// MARK: - Message Image Renderer
+
+/// Standalone view for rendering a message as a shareable image
+#if os(iOS)
+private struct MessageImageRenderer: View {
+    let content: String
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .foregroundStyle(.purple)
+                Text("Clarissa")
+                    .font(.headline.bold())
+                    .foregroundStyle(.purple)
+                Spacer()
+            }
+
+            Divider()
+
+            // Message content
+            Text(attributedContent)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Timestamp
+            Text(Self.dateFormatter.string(from: Date()))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(width: 375)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var attributedContent: AttributedString {
+        (try? AttributedString(markdown: content, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(content)
+    }
+}
+#endif
+
+// MARK: - Markdown Content with Code Block Support
+
+/// Renders markdown content with interactive code blocks that have copy buttons
+struct MarkdownContentView: View {
+    let content: String
+
+    /// Parsed segments of the content: alternating text and code blocks
+    private var segments: [ContentSegment] {
+        parseContent(content)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .text(let text):
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(markdownAttributedString(from: text))
+                            .textSelection(.enabled)
+                    }
+                case .code(let language, let code):
+                    CodeBlockView(language: language, code: code)
+                }
+            }
+        }
+    }
+
+    private func markdownAttributedString(from text: String) -> AttributedString {
+        do {
+            return try AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
+        } catch {
+            return AttributedString(text)
+        }
+    }
+}
+
+private enum ContentSegment {
+    case text(String)
+    case code(language: String, code: String)
+}
+
+/// Parse markdown content into text and code block segments
+private func parseContent(_ content: String) -> [ContentSegment] {
+    // If no code blocks, return the whole thing as text
+    guard content.contains("```") else {
+        return [.text(content)]
+    }
+
+    var segments: [ContentSegment] = []
+    var remaining = content[...]
+
+    while let openRange = remaining.range(of: "```") {
+        // Text before the code block
+        let textBefore = String(remaining[remaining.startIndex..<openRange.lowerBound])
+        if !textBefore.isEmpty {
+            segments.append(.text(textBefore))
+        }
+
+        // Skip past the opening ```
+        var afterOpen = remaining[openRange.upperBound...]
+
+        // Extract language hint (text until newline)
+        var language = ""
+        if let newlineRange = afterOpen.range(of: "\n") {
+            language = String(afterOpen[afterOpen.startIndex..<newlineRange.lowerBound])
+                .trimmingCharacters(in: .whitespaces)
+            afterOpen = afterOpen[newlineRange.upperBound...]
+        }
+
+        // Find the closing ```
+        if let closeRange = afterOpen.range(of: "```") {
+            let code = String(afterOpen[afterOpen.startIndex..<closeRange.lowerBound])
+                .trimmingCharacters(in: .newlines)
+            segments.append(.code(language: language, code: code))
+            remaining = afterOpen[closeRange.upperBound...]
+        } else {
+            // No closing — treat rest as code
+            let code = String(afterOpen).trimmingCharacters(in: .newlines)
+            segments.append(.code(language: language, code: code))
+            remaining = ""[...]
+        }
+    }
+
+    // Trailing text
+    let trailingText = String(remaining)
+    if !trailingText.isEmpty {
+        segments.append(.text(trailingText))
+    }
+
+    return segments
+}
+
+/// A code block with language label and copy button
+struct CodeBlockView: View {
+    let language: String
+    let code: String
+    @State private var showCopied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header with language and copy button
+            HStack {
+                if !language.isEmpty {
+                    Text(language)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    #if os(iOS)
+                    UIPasteboard.general.string = code
+                    #elseif os(macOS)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(code, forType: .string)
+                    #endif
+                    withAnimation { showCopied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation { showCopied = false }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                        Text(showCopied ? "Copied" : "Copy")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(showCopied ? .green : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.12))
+
+            // Code content
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(10)
+            }
+        }
+        .background(Color.secondary.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// MARK: - Tool Plan Progress View
+
+/// Shows the inferred execution plan during multi-tool agent runs
+struct ToolPlanView: View {
+    let steps: [PlanStep]
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(steps) { step in
+                    HStack(spacing: 8) {
+                        Group {
+                            switch step.status {
+                            case .pending:
+                                Circle()
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 2)
+                                    .frame(width: 16, height: 16)
+                            case .running:
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .frame(width: 16, height: 16)
+                            case .completed:
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                            case .failed:
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.red)
+                                    .font(.caption)
+                            }
+                        }
+                        .frame(width: 16)
+
+                        Text(step.displayName)
+                            .font(.caption)
+                            .foregroundStyle(step.status == .completed ? .secondary : .primary)
+                            .strikethrough(step.status == .completed, color: .secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(ClarissaTheme.assistantBubble)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Spacer(minLength: 60)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent execution plan: \(steps.count) steps")
+    }
+}
+
 /// Empty state view with logo and suggested prompts based on enabled tools
 struct EmptyStateView: View {
     let onSuggestionTap: (String) -> Void
+    var onTemplateTap: ((ConversationTemplate) -> Void)? = nil
 
     @Namespace private var suggestionsNamespace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ObservedObject private var toolSettings = ToolSettings.shared
+    @State private var allTemplates: [ConversationTemplate] = ConversationTemplate.bundled
+    @State private var showTemplateEditor = false
 
     /// Example prompts for each tool, keyed by tool ID
     private static let toolPrompts: [String: [String]] = [
@@ -1013,6 +1409,63 @@ struct EmptyStateView: View {
                     .padding(.top, 8)
             }
 
+            // Quick Start Templates
+            if let onTemplateTap = onTemplateTap {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quick Start")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(allTemplates) { template in
+                            Button {
+                                onTemplateTap(template)
+                            } label: {
+                                templateCard(template)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // New Template button
+                        Button {
+                            showTemplateEditor = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus")
+                                    .foregroundStyle(ClarissaTheme.purple)
+                                    .frame(width: 20)
+                                Text("New Template")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(reduceTransparency ? Color(ClarissaTheme.secondarySystemBackground) : ClarissaTheme.assistantBubble)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(ClarissaTheme.purple.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+                .task {
+                    allTemplates = await ConversationTemplate.allTemplates()
+                }
+                .sheet(isPresented: $showTemplateEditor) {
+                    TemplateEditorView { newTemplate in
+                        Task {
+                            try? await TemplateStore.shared.add(newTemplate)
+                            allTemplates = await ConversationTemplate.allTemplates()
+                        }
+                    }
+                }
+            }
+
             Spacer()
 
             // Suggested prompts
@@ -1032,6 +1485,29 @@ struct EmptyStateView: View {
             .padding(.bottom, 8)
         }
         .frame(maxWidth: 500)
+    }
+
+    private func templateCard(_ template: ConversationTemplate) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: template.icon)
+                .foregroundStyle(ClarissaTheme.purple)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(template.name)
+                    .font(.caption.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(template.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(reduceTransparency ? Color(ClarissaTheme.secondarySystemBackground) : ClarissaTheme.assistantBubble)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     @available(iOS 26.0, macOS 26.0, *)

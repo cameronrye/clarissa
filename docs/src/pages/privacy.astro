@@ -8,7 +8,7 @@ import Footer from '../components/Footer.astro';
   <Header />
   <main class="container legal-page">
     <h1 class="gradient-text">Privacy Policy</h1>
-    <p class="last-updated">Last updated: December 12, 2025</p>
+    <p class="last-updated">Last updated: February 6, 2026</p>
 
     <section>
       <h2>Overview</h2>
@@ -38,8 +38,14 @@ import Footer from '../components/Footer.astro';
         for AI processing. All conversations are processed locally on your device and never leave it.
       </p>
       <p>
-        Your calendar events and contacts are accessed only when you explicitly use those features, 
+        Your calendar events and contacts are accessed only when you explicitly use those features,
         and this data is processed entirely on-device.
+      </p>
+      <p>
+        <strong>Proactive Context (optional):</strong> When enabled in Settings, Clarissa detects
+        calendar and weather keywords in your messages and prefetches relevant data on-device before
+        responding. This feature is disabled by default and only operates when using on-device
+        Foundation Models processing.
       </p>
     </section>
 
@@ -65,18 +71,39 @@ import Footer from '../components/Footer.astro';
     </section>
 
     <section>
+      <h2>Share Extension</h2>
+      <p>
+        Clarissa includes a Share Extension that allows you to share text, URLs, and images from other
+        apps. Shared content is stored locally via App Group storage and processed entirely on-device.
+        No shared content is transmitted externally.
+      </p>
+    </section>
+
+    <section>
+      <h2>iCloud Sync</h2>
+      <p>
+        Long-term memories can optionally sync across your devices via Apple's iCloud Key-Value Store.
+        This data is encrypted in transit and at rest by Apple's iCloud infrastructure. We do not have
+        access to your iCloud data. Memory sync includes device identifiers solely for conflict
+        resolution between your own devices.
+      </p>
+    </section>
+
+    <section>
       <h2>Local Storage</h2>
       <p>
         Clarissa stores the following data locally on your device:
       </p>
       <ul>
         <li><strong>Session history</strong> — Your conversation history for session continuity</li>
-        <li><strong>Long-term memories</strong> — Facts you explicitly ask Clarissa to remember</li>
+        <li><strong>Long-term memories</strong> — Facts you explicitly ask Clarissa to remember, with categories, confidence scores, and relationship links</li>
+        <li><strong>Custom templates</strong> — Conversation templates you create</li>
         <li><strong>Settings</strong> — Your app preferences and configuration</li>
         <li><strong>API keys</strong> — Stored securely in the system keychain (iOS) or config file (CLI)</li>
       </ul>
       <p>
-        This data remains on your device and is not transmitted to us or any third party.
+        This data remains on your device (and optionally iCloud for memories) and is not transmitted
+        to us or any third party.
       </p>
     </section>
 

@@ -119,6 +119,43 @@ struct ContextStats: Sendable {
     )
 }
 
+// MARK: - System Prompt Budget
+
+/// Tracks running token usage as sections are added to the system prompt.
+/// Enforces per-section caps and drops lower-priority content when the
+/// total budget (ClarissaConstants.tokenSystemReserve) is exceeded.
+struct SystemPromptBudget {
+    private let totalBudget: Int
+    private(set) var usedTokens: Int = 0
+
+    init(totalBudget: Int = ClarissaConstants.tokenSystemReserve) {
+        self.totalBudget = totalBudget
+    }
+
+    /// Remaining tokens available in the system prompt budget
+    var remaining: Int { max(0, totalBudget - usedTokens) }
+
+    /// Try to add a section to the system prompt within the given cap.
+    /// Returns the (possibly truncated) text, or nil if no budget remains.
+    mutating func add(_ text: String, cap: Int) -> String? {
+        guard remaining > 0 else { return nil }
+        let effectiveCap = min(cap, remaining)
+        let estimated = TokenBudget.estimate(text)
+
+        if estimated <= effectiveCap {
+            usedTokens += estimated
+            return text
+        }
+
+        // Truncate to fit — approximate 4 chars per token for truncation point
+        let maxChars = effectiveCap * 4
+        guard maxChars > 20 else { return nil }
+        let truncated = String(text.prefix(maxChars - 3)) + "..."
+        usedTokens += effectiveCap
+        return truncated
+    }
+}
+
 /// Errors that can occur during agent execution
 enum AgentError: LocalizedError {
     case maxIterationsReached
@@ -152,6 +189,8 @@ public final class Agent: ObservableObject {
     private var conversationSummary: String?
     /// Guard to prevent concurrent summarization requests
     private var isSummarizing: Bool = false
+    /// Active conversation template (nil = default behavior)
+    private(set) var currentTemplate: ConversationTemplate?
 
     public weak var callbacks: AgentCallbacks?
 
@@ -167,22 +206,42 @@ public final class Agent: ObservableObject {
     public func setProvider(_ provider: any LLMProvider) {
         self.provider = provider
     }
+
+    /// Apply a conversation template
+    func applyTemplate(_ template: ConversationTemplate?) {
+        self.currentTemplate = template
+
+        // Set max response tokens override on the provider
+        if let provider = provider as? FoundationModelsProvider {
+            provider.maxResponseTokensOverride = template?.maxResponseTokens
+        } else if let provider = provider as? OpenRouterProvider {
+            provider.maxResponseTokensOverride = template?.maxResponseTokens
+        }
+
+        // Enable template-specific tools
+        if let toolNames = template?.toolNames {
+            let settings = ToolSettings.shared
+            // Enable only the template's tools
+            for tool in settings.allTools {
+                _ = settings.setToolEnabled(tool.id, enabled: toolNames.contains(tool.id))
+            }
+        }
+    }
     
-    /// Build the system prompt with memories
-    /// Optimized for Apple Foundation Models with:
-    /// - Concise, imperative instructions (saves tokens)
-    /// - Clear tool triggers with few-shot examples
-    /// - Explicit negative rules to avoid unnecessary tool use
-    /// Community insights: "Instructions in English work best", "Use CAPS for critical rules"
-    private func buildSystemPrompt() async -> String {
+    /// Build the system prompt with budget-tracked sections.
+    /// Each section is added in priority order and capped to prevent
+    /// exceeding the 500-token system reserve.
+    /// - Parameter proactiveContext: Optional prefetched context from ProactiveContext
+    private func buildSystemPrompt(proactiveContext: String? = nil) async -> String {
+        var budget = SystemPromptBudget()
+
         // Format current date/time for relative date understanding
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
         let currentTime = dateFormatter.string(from: Date())
 
-        // Keep prompt concise to maximize context for conversation
-        // Optimized based on Foundation Models community insights
-        var prompt = """
+        // Priority 1: Core instructions (non-negotiable)
+        let corePrompt = """
         You are Clarissa, a personal assistant. Be warm but concise.
         Current time: \(currentTime)
 
@@ -203,28 +262,28 @@ public final class Agent: ObservableObject {
         - If tool fails, explain and suggest alternative
         - Use saved facts when user asks about their name/preferences
         """
+        // Core prompt always included — budget tracks its size for remaining sections
+        var prompt = budget.add(corePrompt, cap: ClarissaConstants.systemBudgetCore) ?? corePrompt
 
-        // Add disabled tools section so AI can inform user about features that can be enabled
-        let disabledTools = toolRegistry.getDisabledToolDescriptions()
-        if !disabledTools.isEmpty {
-            let disabledList = disabledTools.map { "- \($0.name): \($0.capability)" }.joined(separator: "\n")
-            prompt += """
-
-
-            DISABLED FEATURES (tell user to enable in Settings if they ask for these):
-            \(disabledList)
-            """
+        // Priority 2: Template focus (if active)
+        if let focus = currentTemplate?.systemPromptFocus {
+            let templateText = "\n\nTEMPLATE MODE (\(currentTemplate?.name ?? "Custom")):\n\(focus)"
+            if let section = budget.add(templateText, cap: ClarissaConstants.systemBudgetTemplate) {
+                prompt += section
+            }
         }
 
-        // Add conversation summary if previous messages were trimmed
+        // Priority 3: Conversation summary (only if messages were trimmed)
         if let summary = conversationSummary {
-            prompt += "\n\nCONVERSATION SUMMARY (earlier context):\n\(summary)"
+            let summaryText = "\n\nCONVERSATION SUMMARY (earlier context):\n\(summary)"
+            if let section = budget.add(summaryText, cap: ClarissaConstants.systemBudgetSummary) {
+                prompt += section
+            }
         }
 
-        // Add memories, using relevance ranking when possible
+        // Priority 4: Memories
         var memoriesPrompt: String? = nil
 
-        // Extract topics from recent user messages for relevance ranking
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, *) {
             let recentUserContent = messages
@@ -245,18 +304,41 @@ public final class Agent: ObservableObject {
         }
         #endif
 
-        // Fall back to recency-based memories
         if memoriesPrompt == nil {
             memoriesPrompt = await MemoryManager.shared.getForPrompt()
         }
 
         if let memoriesPrompt = memoriesPrompt {
-            prompt += "\n\nCONTEXT:\n\(memoriesPrompt)"
-            ClarissaLogger.agent.info("System prompt includes memories: \(memoriesPrompt.prefix(200), privacy: .public)...")
-        } else {
-            ClarissaLogger.agent.debug("No memories to include in system prompt")
+            let memoriesText = "\n\nCONTEXT:\n\(memoriesPrompt)"
+            if let section = budget.add(memoriesText, cap: ClarissaConstants.systemBudgetMemories) {
+                prompt += section
+                ClarissaLogger.agent.info("System prompt includes memories (\(budget.usedTokens)/\(ClarissaConstants.tokenSystemReserve) tokens used)")
+            } else {
+                ClarissaLogger.agent.info("Memories dropped — system prompt budget exceeded (\(budget.usedTokens)/\(ClarissaConstants.tokenSystemReserve))")
+            }
         }
 
+        // Priority 5: Proactive context
+        if let proactive = proactiveContext {
+            let proactiveText = "\n\n\(proactive)"
+            if let section = budget.add(proactiveText, cap: ClarissaConstants.systemBudgetProactive) {
+                prompt += section
+            } else {
+                ClarissaLogger.agent.info("Proactive context dropped — system prompt budget exceeded")
+            }
+        }
+
+        // Priority 6: Disabled tools list (lowest priority)
+        let disabledTools = toolRegistry.getDisabledToolDescriptions()
+        if !disabledTools.isEmpty {
+            let disabledList = disabledTools.map { "- \($0.name): \($0.capability)" }.joined(separator: "\n")
+            let disabledText = "\n\nDISABLED FEATURES (tell user to enable in Settings if they ask for these):\n\(disabledList)"
+            if let section = budget.add(disabledText, cap: ClarissaConstants.systemBudgetDisabledTools) {
+                prompt += section
+            }
+        }
+
+        ClarissaLogger.agent.debug("System prompt budget: \(budget.usedTokens)/\(ClarissaConstants.tokenSystemReserve) tokens")
         return prompt
     }
     
@@ -383,8 +465,22 @@ public final class Agent: ObservableObject {
             throw AgentError.noProvider
         }
 
-        // Update system prompt
-        let systemPrompt = await buildSystemPrompt()
+        // Proactive context: detect intents and prefetch data in parallel with prompt building
+        // Only when FM is active (free, on-device) and user opted in
+        var proactiveData: String?
+        if ProactiveContext.isEnabled && provider.handlesToolsNatively {
+            let intents = ProactiveContext.detectIntents(in: userMessage)
+            if !intents.isEmpty {
+                proactiveData = await ProactiveContext.prefetch(intents: intents, toolRegistry: toolRegistry)
+                // Notify UI that proactive context was used
+                let labels = intents.map(\.label)
+                callbacks?.onProactiveContext(labels: labels)
+            }
+        }
+
+        // Build system prompt with budget-tracked sections (proactive context included)
+        let systemPrompt = await buildSystemPrompt(proactiveContext: proactiveData)
+
         if messages.isEmpty || messages.first?.role != .system {
             messages.insert(.system(systemPrompt), at: 0)
         } else {
@@ -600,6 +696,39 @@ public final class Agent: ObservableObject {
         return content
     }
     
+    /// Aggressively trim conversation to recover from contextWindowExceeded
+    /// Keeps only the system message and last 2 non-system messages, forcing summarization
+    /// - Returns: true if trimming was performed
+    @discardableResult
+    func aggressiveTrim() async -> Bool {
+        let nonSystemMessages = messages.filter { $0.role != .system }
+        guard nonSystemMessages.count > 2 else { return false }
+
+        // Force summarize everything except the last 2 messages
+        let messagesToSummarize = nonSystemMessages.dropLast(2)
+            .map { "\($0.role == .user ? "User" : "Assistant"): \($0.content)" }
+            .joined(separator: "\n")
+
+        if !messagesToSummarize.isEmpty && !isSummarizing {
+            isSummarizing = true
+            await summarizeOldMessages(messagesToSummarize)
+            isSummarizing = false
+        }
+
+        // Keep system + last 2 non-system messages
+        let systemMessage = messages.first { $0.role == .system }
+        let lastTwo = Array(nonSystemMessages.suffix(2))
+        let removedCount = messages.count - (systemMessage != nil ? 1 : 0) - lastTwo.count
+        messages = (systemMessage.map { [$0] } ?? []) + lastTwo
+        trimmedCount += removedCount
+
+        // Reset provider session to clear cached transcript
+        await provider?.resetSession()
+
+        ClarissaLogger.agent.info("Aggressive trim: removed \(removedCount) messages, summary created: \(self.conversationSummary != nil)")
+        return true
+    }
+
     /// Reset conversation (keep system prompt)
     /// Note: This only clears local message history. Call resetForNewConversation()
     /// to also reset the LLM provider session.

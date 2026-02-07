@@ -53,8 +53,8 @@ struct ResponseHistoryItem: Identifiable, Codable {
 enum QuickAction: String, CaseIterable, Identifiable {
     case weather = "Weather"
     case nextMeeting = "Next meeting"
-    case setTimer = "Set a 5 minute timer"
-    case reminders = "What are my reminders?"
+    case morningBriefing = "Morning Briefing"
+    case meetingPrep = "Meeting Prep"
 
     var id: String { rawValue }
 
@@ -62,8 +62,8 @@ enum QuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .weather: return "cloud.sun.fill"
         case .nextMeeting: return "calendar"
-        case .setTimer: return "timer"
-        case .reminders: return "checklist"
+        case .morningBriefing: return "sunrise"
+        case .meetingPrep: return "person.2"
         }
     }
 
@@ -71,8 +71,8 @@ enum QuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .weather: return "What's the weather like?"
         case .nextMeeting: return "When is my next meeting?"
-        case .setTimer: return "Set a timer for 5 minutes"
-        case .reminders: return "What are my reminders for today?"
+        case .morningBriefing: return "Give me my morning briefing"
+        case .meetingPrep: return "Help me prepare for my next meeting"
         }
     }
 
@@ -80,8 +80,17 @@ enum QuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .weather: return "Weather"
         case .nextMeeting: return "Next Meeting"
-        case .setTimer: return "5min Timer"
-        case .reminders: return "Reminders"
+        case .morningBriefing: return "Briefing"
+        case .meetingPrep: return "Prep"
+        }
+    }
+
+    /// Template ID to apply on the iPhone side (nil for plain queries)
+    var templateId: String? {
+        switch self {
+        case .morningBriefing: return "morning_briefing"
+        case .meetingPrep: return "meeting_prep"
+        case .weather, .nextMeeting: return nil
         }
     }
 }
@@ -215,14 +224,14 @@ final class WatchAppState: ObservableObject {
     }
 
     /// Send a query to the iPhone
-    func sendQuery(_ text: String) {
+    func sendQuery(_ text: String, templateId: String? = nil) {
         guard !text.isEmpty else { return }
 
         pendingQuery = text
         status = .sending
         HapticManager.querySent()
 
-        if let requestId = connectivity.sendQuery(text) {
+        if let requestId = connectivity.sendQuery(text, templateId: templateId) {
             pendingRequestId = requestId
             status = .waiting
         } else {
@@ -232,9 +241,9 @@ final class WatchAppState: ObservableObject {
         }
     }
 
-    /// Send a quick action query
+    /// Send a quick action query (with optional template)
     func sendQuickAction(_ action: QuickAction) {
-        sendQuery(action.query)
+        sendQuery(action.query, templateId: action.templateId)
     }
 
     /// Clear any error state

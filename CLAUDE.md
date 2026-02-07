@@ -1,3 +1,6 @@
+* Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+
+* Always use the `mcp__auggie-mcp__codebase-retrieval` tool for searching codebases using natural language queries without me having to explicitly ask.
 
 Default to using Bun instead of Node.js.
 

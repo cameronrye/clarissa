@@ -69,10 +69,22 @@ actor SessionManager {
             return
         }
 
-        // Trim messages if needed
+        // Trim messages using token-budget-based limit instead of hard message count.
+        // Keep removing oldest non-system messages until within budget, with a hard cap as safety net.
         var trimmedMessages = messages
+        let maxTokens = TokenBudget.maxHistoryTokens
+        var tokenCount = TokenBudget.estimate(trimmedMessages.filter { $0.role != .system })
+
+        // Remove oldest non-system messages while over budget (keep last 3 as minimum)
+        while tokenCount > maxTokens {
+            let nonSystemIndices = trimmedMessages.indices.filter { trimmedMessages[$0].role != .system }
+            guard nonSystemIndices.count > 3, let oldest = nonSystemIndices.first else { break }
+            let removed = trimmedMessages.remove(at: oldest)
+            tokenCount -= TokenBudget.estimate(removed.content)
+        }
+
+        // Safety net: hard cap at maxMessagesPerSession to prevent unbounded storage
         if trimmedMessages.count > Self.maxMessagesPerSession {
-            // Keep system message and most recent messages
             let systemMessages = trimmedMessages.filter { $0.role == .system }
             let otherMessages = trimmedMessages.filter { $0.role != .system }
             let recentMessages = Array(otherMessages.suffix(Self.maxMessagesPerSession - systemMessages.count))

@@ -10,6 +10,9 @@ public final class OpenRouterProvider: LLMProvider, @unchecked Sendable {
     private let baseURL = URL(string: ClarissaConstants.openRouterBaseURL + ClarissaConstants.openRouterCompletionsPath)!
     private let timeout: TimeInterval = ClarissaConstants.llmApiTimeoutSeconds
 
+    /// Per-request override for max response tokens (nil = no limit sent)
+    var maxResponseTokensOverride: Int?
+
     public var isAvailable: Bool {
         get async { !apiKey.isEmpty }
     }
@@ -185,7 +188,11 @@ public final class OpenRouterProvider: LLMProvider, @unchecked Sendable {
         if !tools.isEmpty {
             body["tools"] = tools.map { toolToDict($0) }
         }
-        
+
+        if let maxTokens = maxResponseTokensOverride {
+            body["max_tokens"] = maxTokens
+        }
+
         return body
     }
     

@@ -14,11 +14,20 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 ### AI & Conversations
 
 - **On-device AI** using Apple Foundation Models with native tool calling
+- **Private Cloud Compute** - Seamless fallback to Apple's privacy-preserving server inference with consent toggle
 - **Cloud fallback** via OpenRouter API with 100+ model options
+- **Provider fallback banner** - Suggests OpenRouter when Foundation Models fails, with auto-dismiss
 - **ReAct agent loop** for multi-step reasoning and tool execution
 - **Streaming responses** with real-time token display
 - **Session persistence** with automatic title generation
-- **Long-term memory** across conversations
+- **Long-term memory** with category, temporal type, confidence scoring, and relationship linking
+- **Memory intelligence** - Multi-factor relevance ranking (topic 40%, confidence 30%, recency 20%, category 10%)
+- **Conversation templates** - 4 bundled templates (Morning Briefing, Meeting Prep, Research Mode, Quick Math) plus custom user-created templates
+- **Proactive intelligence** - Automatic detection of weather, calendar, and schedule intents with parallel tool prefetch
+- **Edit & Resend** - Long-press any user message to edit and resend from that point
+- **Regenerate** - Long-press any assistant message to regenerate the response
+- **Error recovery** - Automatic conversation summarization and retry when context window is exceeded
+- **Conversation search** - Search and filter conversation history by date and topic
 
 ### Voice Capabilities
 
@@ -32,13 +41,13 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 
 ### Tools
 
-- **Calendar** - Create, list, search events (EventKit)
-- **Contacts** - Search and view contacts
+- **Calendar** - Create, list, search events (EventKit) with deep links to Calendar.app and Maps
+- **Contacts** - Search and view contacts with tap-to-call, message, or email actions
 - **Reminders** - Create, list, complete reminders (EventKit)
-- **Weather** - Current conditions and 5-day forecast (WeatherKit)
+- **Weather** - Current conditions and 5-day forecast with expandable hourly/daily charts (WeatherKit + Swift Charts)
 - **Location** - Get current position with reverse geocoding
-- **Web Fetch** - Fetch and parse web content
-- **Calculator** - Mathematical expression evaluation
+- **Web Fetch** - Fetch and parse web content with preview cards and "Open in Browser"
+- **Calculator** - Mathematical expression evaluation with copy-to-clipboard
 - **Remember** - Store long-term memories with auto-tagging (iOS 26+)
 - **Image Analysis** - OCR, handwriting, object detection, face detection, multi-image comparison
 - **Document OCR** - Full-document recognition, PDF extraction, handwriting, table detection (iOS 26+)
@@ -52,21 +61,40 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 - **Streaming Partial UI** - Progressive display of structured results with animations
 - **Enhanced Image Understanding** - Foundation Models vision encoder with multi-image reasoning
 
+### Agent Visibility
+
+- **Agent plan preview** - Real-time tool execution plan inferred from tool calls as they happen
+- **Live Activity progress** - Dynamic Island shows step-by-step plan progress during multi-tool execution
+- **Tool plan view** - Step-by-step progress displayed inline in the chat UI
+
+### Export & Sharing
+
+- **PDF export** - Export conversations as styled PDF
+- **Share as image** - Share individual assistant responses as images
+- **Code block copy** - Copy code blocks with syntax highlighting
+- **Markdown export** - Export conversation history as Markdown
+
 ### User Interface
 
 - **Liquid Glass design** with iOS 26 glass effects
 - **Adaptive navigation** - Tab bar on iPhone, split view on iPad/Mac
 - **Tab bar minimization** on scroll for distraction-free reading
 - **Glass morphing transitions** between UI states
+- **Template picker** - Empty-state grid for quick template selection
 - **Onboarding flow** with glass-styled buttons
-- **Context visualization** with token usage display
+- **Context visualization** with token usage display and manual summarize button
 - **Tool settings** with enable/disable per tool
 - **Haptic feedback** for interactive glass elements
 - **Accessibility support** for VoiceOver, Reduce Motion, Reduce Transparency
 
 ### Platform Integration
 
-- **Siri Shortcuts** - "Ask Clarissa" and "New Conversation" intents
+- **Siri Shortcuts** - "Ask Clarissa", "New Conversation", and template shortcuts (Morning Briefing, Meeting Prep, etc.)
+- **Siri follow-up questions** - 5-minute conversation sessions for back-and-forth with Siri
+- **Share Extension** - Process shared text, URLs, and images from any app
+- **Watch companion** - Voice queries, Morning Briefing and Meeting Prep quick actions, WatchConnectivity relay
+- **Live Activities** - Dynamic Island and Lock Screen progress during multi-tool execution
+- **iCloud sync** - Memory sync with timestamp-based conflict resolution across devices
 - **macOS menu bar** - Native keyboard shortcuts (⌘N, ⇧⌘⌫)
 - **macOS Settings window** - Standard preferences experience
 - **Keychain storage** - Secure API key management
@@ -77,17 +105,22 @@ Native Apple version of Clarissa for iOS and macOS, built with Swift and SwiftUI
 ```text
 apple/Clarissa/
 ├── Sources/
-│   ├── App/           # App entry point and state
-│   ├── Agent/         # ReAct agent implementation
-│   ├── Camera/        # Camera capture for image analysis (iOS 26+)
-│   ├── Intents/       # Siri Shortcuts integration
-│   ├── LLM/           # LLM providers, guided generation, content tagging
-│   ├── Persistence/   # Session, memory (with auto-tagging), and keychain
-│   ├── Tools/         # Tool implementations including DocumentOCR
-│   ├── UI/            # SwiftUI views, streaming partial views
-│   └── Voice/         # SpeechAnalyzer, SpeechRecognizer, synthesis
-├── Resources/         # Info.plist, assets
-└── Tests/             # Unit tests
+│   ├── App/              # App entry point and state
+│   ├── Agent/            # ReAct agent, proactive context, system prompt budget
+│   ├── Camera/           # Camera capture for image analysis (iOS 26+)
+│   ├── Extensions/       # Share Extension
+│   ├── Intents/          # Siri Shortcuts (Ask, New, Templates)
+│   ├── LiveActivity/     # Live Activity attributes + manager
+│   ├── LLM/              # LLM providers, guided generation, content tagging
+│   ├── Persistence/      # Session, memory (with conflict resolution), keychain
+│   ├── Tools/            # Tool implementations including DocumentOCR
+│   ├── UI/               # SwiftUI views, coordinators, template editor
+│   ├── Voice/            # SpeechAnalyzer, SpeechRecognizer, synthesis
+│   └── Watch/            # WatchConnectivity manager, query handler
+├── ClarissaWatch/        # watchOS companion app
+├── ClarissaWidgets/      # Widget extension
+├── Resources/            # Info.plist, assets
+└── Tests/                # Unit tests (55+ tests)
 ```
 
 ## Setup
@@ -177,6 +210,16 @@ The agent implements a ReAct (Reasoning + Acting) loop:
   - 100+ model options (Claude, GPT-4, Gemini, Llama, etc.)
   - Secure API key storage in Keychain
 
+### ChatViewModel Architecture (v2.0)
+
+The ChatViewModel uses a facade pattern composing three focused coordinators:
+
+| Component | Responsibility |
+|-----------|---------------|
+| `ProviderCoordinator` | Provider init, switching, availability, PCC consent |
+| `SessionCoordinator` | Session CRUD, switching, title generation, export, share extension handling |
+| `VoiceController` | Speech recognition + TTS lifecycle |
+
 ### Tool System
 
 Tools are registered with the `ToolRegistry` and implement the `ClarissaTool` protocol:
@@ -192,6 +235,21 @@ Tools are registered with the `ToolRegistry` and implement the `ClarissaTool` pr
 | `calculator` | Math expression evaluation | No |
 | `remember` | Long-term memory storage with auto-tagging | No |
 | `image_analysis` | Vision + Foundation Models (OCR, classification, faces, AI descriptions) | No |
+
+### Context Management
+
+The agent uses a token-budget-based system (4096 total tokens) with a 6-priority system prompt budget:
+
+| Priority | Content | Max Tokens |
+|----------|---------|-----------|
+| 1 | Core instructions | ~250 |
+| 2 | Conversation summary | ~100 |
+| 3 | Memories | ~80 |
+| 4 | Proactive context | ~80 |
+| 5 | Template prompt | ~50 |
+| 6 | Disabled tools list | ~40 |
+
+When the context window is exceeded, the agent automatically summarizes the conversation and retries.
 
 ### Voice System
 

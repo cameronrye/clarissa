@@ -24,6 +24,9 @@ public protocol AgentCallbacks: AnyObject {
 
     /// Called when an error occurs
     func onError(error: Error)
+
+    /// Called when proactive context was prefetched and injected into the prompt
+    func onProactiveContext(labels: [String])
 }
 
 /// Default implementation that does nothing
@@ -34,5 +37,6 @@ public extension AgentCallbacks {
     func onStreamChunk(chunk: String) {}
     func onResponse(content: String) {}
     func onError(error: Error) {}
+    func onProactiveContext(labels: [String]) {}
 }
 

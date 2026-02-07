@@ -413,6 +413,19 @@ enum ClarissaTab: Hashable {
 struct ShareItem: Identifiable {
     let id = UUID()
     let text: String
+    var data: Data?
+    var filename: String?
+
+    /// Items suitable for the share sheet
+    var shareItems: [Any] {
+        if let data = data, let filename = filename {
+            // Create a temporary file for PDF sharing
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            try? data.write(to: tempURL)
+            return [tempURL]
+        }
+        return [text]
+    }
 }
 
 struct ChatTabContent: View {
@@ -466,9 +479,11 @@ struct ChatTabContent: View {
                     #endif
                 }
                 .sheet(isPresented: $showContextDetails) {
-                    ContextDetailSheet(stats: viewModel.contextStats)
-                        .presentationDetents([.medium, .large])
-                        .scrollContentBackground(.hidden)
+                    ContextDetailSheet(stats: viewModel.contextStats) {
+                        viewModel.manualSummarize()
+                    }
+                    .presentationDetents([.medium, .large])
+                    .scrollContentBackground(.hidden)
                 }
                 .sheet(isPresented: $showToolsSheet) {
                     ToolSettingsView {
@@ -520,7 +535,7 @@ struct ChatTabContent: View {
         }
         #if os(iOS)
         .sheet(item: $shareItem) { item in
-            ShareSheet(items: [item.text])
+            ShareSheet(items: item.shareItems)
         }
         .sheet(isPresented: $showHistorySheet) {
             SearchableHistoryView(viewModel: viewModel)
@@ -562,6 +577,14 @@ struct ChatTabContent: View {
                 viewModel.sendMessage()
             }
         }
+        .onChange(of: appState.pendingTemplateId) { _, newValue in
+            if let templateId = newValue {
+                appState.pendingTemplateId = nil
+                if let template = ConversationTemplate.bundled.first(where: { $0.id == templateId }) {
+                    viewModel.startWithTemplate(template)
+                }
+            }
+        }
         // Auto-present sheets for screenshot mode scenarios
         .onAppear {
             if DemoData.isScreenshotMode {
@@ -593,6 +616,20 @@ struct ChatTabContent: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         showCopiedAlert = true
+        #endif
+    }
+
+    private func exportAsPDF() async {
+        guard let data = await viewModel.exportConversationAsPDF() else { return }
+        #if os(iOS)
+        shareItem = ShareItem(text: "", data: data, filename: "Clarissa Conversation.pdf")
+        #else
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Clarissa Conversation.pdf"
+        panel.allowedContentTypes = [.pdf]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
         #endif
     }
 
@@ -683,9 +720,20 @@ struct ChatTabContent: View {
             if !viewModel.messages.isEmpty {
                 Divider()
 
-                Button {
-                    HapticManager.shared.lightTap()
-                    exportConversation()
+                Menu {
+                    Button {
+                        HapticManager.shared.lightTap()
+                        exportConversation()
+                    } label: {
+                        Label("Share as Text", systemImage: "doc.plaintext")
+                    }
+
+                    Button {
+                        HapticManager.shared.lightTap()
+                        Task { await exportAsPDF() }
+                    } label: {
+                        Label("Share as PDF", systemImage: "doc.richtext")
+                    }
                 } label: {
                     Label("Share Conversation", systemImage: "square.and.arrow.up.circle")
                 }

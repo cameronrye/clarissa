@@ -48,7 +48,7 @@ final class LiveActivityManager {
     }
 
     /// Update the Live Activity with current tool progress
-    func updateTool(name: String, status: String = "Running") {
+    func updateTool(name: String, status: String = "Running", planStepNames: [String]? = nil) {
         #if canImport(ActivityKit) && os(iOS)
         guard let activity = currentActivity else { return }
 
@@ -58,7 +58,8 @@ final class LiveActivityManager {
             toolStatus: status,
             completedSteps: completedSteps,
             totalSteps: totalSteps,
-            isProcessing: true
+            isProcessing: true,
+            planStepNames: planStepNames
         )
 
         Task {

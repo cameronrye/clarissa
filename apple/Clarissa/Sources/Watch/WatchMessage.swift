@@ -30,11 +30,14 @@ struct QueryRequest: Codable, Sendable {
     let id: UUID
     let text: String
     let timestamp: Date
-    
-    init(text: String) {
+    /// Optional template ID to apply before processing (nil = no template)
+    let templateId: String?
+
+    init(text: String, templateId: String? = nil) {
         self.id = UUID()
         self.text = text
         self.timestamp = Date()
+        self.templateId = templateId
     }
 }
 

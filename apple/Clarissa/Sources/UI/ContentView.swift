@@ -75,9 +75,11 @@ public struct ContentView: View {
                         .scrollContentBackground(.hidden)  // Glass compatibility
                 }
                 .sheet(isPresented: $showContextDetails) {
-                    ContextDetailSheet(stats: chatViewModel.contextStats)
-                        .presentationDetents([.medium, .large])
-                        .scrollContentBackground(.hidden)  // Glass compatibility
+                    ContextDetailSheet(stats: chatViewModel.contextStats) {
+                        chatViewModel.manualSummarize()
+                    }
+                    .presentationDetents([.medium, .large])
+                    .scrollContentBackground(.hidden)  // Glass compatibility
                 }
         }
         .tint(ClarissaTheme.purple)

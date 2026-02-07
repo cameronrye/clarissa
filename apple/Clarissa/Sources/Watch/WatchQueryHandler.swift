@@ -33,35 +33,43 @@ final class WatchQueryHandler: ObservableObject {
     
     /// Handle an incoming query from the Watch
     private func handleQuery(_ request: QueryRequest) async -> QueryResponse {
-        ClarissaLogger.agent.info("Processing Watch query: \(request.text.prefix(50), privacy: .public)...")
-        
+        ClarissaLogger.agent.info("Processing Watch query: \(request.text.prefix(50), privacy: .public)... template: \(request.templateId ?? "none", privacy: .public)")
+
         // Send status update
         connectivity.sendStatus(ProcessingStatus(requestId: request.id, status: .thinking))
-        
+
         do {
             // Create a fresh agent for this query
             let agent = Agent()
             self.agent = agent
-            
+
             // Set up the provider based on current settings
             let provider = await createProvider()
             agent.setProvider(provider)
-            
+
+            // Apply template if specified by the Watch
+            if let templateId = request.templateId {
+                let allTemplates = await ConversationTemplate.allTemplates()
+                if let template = allTemplates.first(where: { $0.id == templateId }) {
+                    agent.applyTemplate(template)
+                    ClarissaLogger.agent.info("Applied template '\(templateId, privacy: .public)' for Watch query")
+                }
+            }
+
             // Set up callbacks to relay status to Watch
-            // Store in property to keep alive during query execution
             let callbacks = WatchAgentCallbacks(
                 requestId: request.id,
                 connectivity: connectivity
             )
             self.currentCallbacks = callbacks
             agent.callbacks = callbacks
-            
+
             // Run the query
             let response = try await agent.run(request.text)
-            
+
             ClarissaLogger.agent.info("Watch query completed successfully")
             return QueryResponse(requestId: request.id, text: response)
-            
+
         } catch {
             ClarissaLogger.agent.error("Watch query failed: \(error.localizedDescription, privacy: .public)")
             connectivity.sendError(ErrorInfo(

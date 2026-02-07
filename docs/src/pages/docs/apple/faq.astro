@@ -49,9 +49,16 @@ const base = import.meta.env.BASE_URL;
 
   <h3>What's the tool limit for on-device AI?</h3>
   <p>
-    Apple Foundation Models support a maximum of 3-5 tools per session for optimal performance. 
-    Clarissa automatically prioritizes the most useful tools. For workflows requiring more 
-    tools, use OpenRouter.
+    Apple Foundation Models support a maximum of 10 tools per session, with best results at 4-5 tools.
+    Clarissa automatically prioritizes the most useful tools. For workflows requiring more
+    tools, use OpenRouter. If Foundation Models fails, a banner will suggest switching to OpenRouter.
+  </p>
+
+  <h3>What is Private Cloud Compute?</h3>
+  <p>
+    Private Cloud Compute (PCC) is Apple's privacy-preserving server inference. When the on-device
+    model can't handle a request, PCC processes it on Apple's servers with the same privacy guarantees.
+    You can enable or disable PCC in Settings under the AI provider section.
   </p>
 
   <h2>Cloud Providers</h2>
@@ -90,10 +97,16 @@ const base = import.meta.env.BASE_URL;
     Siri Shortcuts need time to learn. Try these tips:
   </p>
   <ul>
-    <li>Use the exact phrases: "Ask Clarissa" or "Talk to Clarissa"</li>
+    <li>Use the exact phrases: "Ask Clarissa", "Talk to Clarissa", or template names like "Morning Briefing with Clarissa"</li>
     <li>Open the Shortcuts app and run the intent manually first</li>
     <li>Make sure Siri is enabled and listening</li>
   </ul>
+
+  <h3>Can I have a back-and-forth conversation with Siri?</h3>
+  <p>
+    Yes! Siri supports 5-minute follow-up sessions. After the first response, you can ask
+    follow-up questions without repeating the trigger phrase.
+  </p>
 
   <h2>Troubleshooting</h2>
 
@@ -120,8 +133,37 @@ const base = import.meta.env.BASE_URL;
 
   <h3>Responses are getting cut off</h3>
   <p>
-    Long conversations may hit token limits. The app automatically trims older messages 
-    to stay within limits. Start a new conversation for complex topics.
+    Long conversations may hit token limits. Clarissa automatically manages context in several ways:
+  </p>
+  <ul>
+    <li><strong>Auto-trimming</strong> — Older messages are trimmed when the token budget is exceeded</li>
+    <li><strong>Auto-summarization</strong> — If the context window is exceeded, Clarissa automatically summarizes the conversation and retries</li>
+    <li><strong>Manual summarize</strong> — Tap "Summarize conversation" in the context indicator to proactively compress history</li>
+    <li><strong>Edit &amp; Resend</strong> — Long-press a message to edit and resend from that point</li>
+  </ul>
+
+  <h3>How do I export a conversation?</h3>
+  <p>
+    Clarissa supports multiple export formats:
+  </p>
+  <ul>
+    <li><strong>PDF</strong> — Export the full conversation as a styled PDF</li>
+    <li><strong>Image</strong> — Long-press any assistant message and choose "Share as Image"</li>
+    <li><strong>Markdown</strong> — Export as Markdown text</li>
+    <li><strong>Code blocks</strong> — Tap the copy button on any code block to copy with syntax highlighting</li>
+  </ul>
+
+  <h3>What are conversation templates?</h3>
+  <p>
+    Templates are pre-configured conversation starters with specialized system prompts and tools.
+    Clarissa includes 4 built-in templates (Morning Briefing, Meeting Prep, Research Mode, Quick Math)
+    and you can create your own in Settings. Templates are also available via Siri and Apple Watch.
+  </p>
+
+  <h3>How does the Share Extension work?</h3>
+  <p>
+    You can share text, URLs, or images from any app to Clarissa using the system Share sheet.
+    The shared content will be queued and appear as a new conversation when you open Clarissa.
   </p>
 
   <h3>How do I report a bug?</h3>

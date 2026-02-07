@@ -9,32 +9,32 @@ const features = [
   {
     icon: 'sparkles',
     title: 'On-Device AI',
-    description: 'Powered by Apple Foundation Models. Your conversations stay private, processed entirely on your device.'
-  },
-  {
-    icon: 'mic',
-    title: 'Voice Input',
-    description: 'Speak naturally with built-in speech recognition. Dictate prompts hands-free.'
-  },
-  {
-    icon: 'siri',
-    title: 'Siri Shortcuts',
-    description: '"Hey Siri, ask Clarissa" — integrate with Shortcuts for automation.'
-  },
-  {
-    icon: 'cloud',
-    title: 'Cloud Fallback',
-    description: 'Access 100+ models via OpenRouter when you need more power.'
+    description: 'Powered by Apple Foundation Models with Private Cloud Compute fallback. Your conversations stay private.'
   },
   {
     icon: 'tools',
-    title: 'Native Tools',
-    description: 'Execute tools with Apple\'s native tool calling API for seamless integration.'
+    title: 'Smart Agent',
+    description: 'ReAct agent with 9 native tools, proactive intent detection, and real-time plan visibility via Live Activities.'
+  },
+  {
+    icon: 'mic',
+    title: 'Voice & Siri',
+    description: 'SpeechAnalyzer transcription, Siri follow-up conversations, and template shortcuts like "Morning Briefing with Clarissa".'
+  },
+  {
+    icon: 'cloud',
+    title: 'Templates & Export',
+    description: 'Bundled and custom conversation templates. Export as PDF, share responses as images, copy code blocks.'
   },
   {
     icon: 'sync',
-    title: 'Session Sync',
-    description: 'Conversations persist across sessions with automatic title generation.'
+    title: 'Memory Intelligence',
+    description: 'Memories with categories, confidence scoring, relationship linking, and iCloud sync with conflict resolution.'
+  },
+  {
+    icon: 'siri',
+    title: 'Multi-Platform',
+    description: 'iPhone, iPad, Mac, and Apple Watch companion. Share Extension for text, URLs, and images from any app.'
   }
 ];
 ---
@@ -48,12 +48,14 @@ const features = [
           <div class="platform-badges">
             <span class="badge">iOS 26+</span>
             <span class="badge">macOS 26+</span>
+            <span class="badge">watchOS 26+</span>
           </div>
           <h1><span class="gradient-text">Clarissa</span> for Apple</h1>
-          <p class="tagline">Native AI assistant with Apple Intelligence</p>
+          <p class="tagline">Your private AI assistant, powered by Apple Intelligence</p>
           <p class="description">
-            Experience Clarissa as a native iOS and macOS app. Built with SwiftUI and Apple's 
-            Liquid Glass design, featuring on-device AI with Apple Foundation Models.
+            A native iOS, macOS, and watchOS AI assistant. Built with SwiftUI and Apple's
+            Liquid Glass design, featuring on-device AI with Apple Foundation Models,
+            conversation templates, proactive intelligence, and rich tool integration.
           </p>
           <div class="cta-buttons">
             <a href="#testflight" class="btn btn-primary">
