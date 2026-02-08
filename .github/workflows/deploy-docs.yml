@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
   pages: write
   id-token: write
 
@@ -63,6 +64,28 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Deduplicate artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const pages = artifacts.data.artifacts
+              .filter(a => a.name === 'github-pages')
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            for (const dup of pages.slice(1)) {
+              console.log(`Deleting duplicate artifact ${dup.id} (created ${dup.created_at})`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: dup.id,
+              });
+            }
+            console.log(`Kept artifact ${pages[0].id} (created ${pages[0].created_at})`);
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
