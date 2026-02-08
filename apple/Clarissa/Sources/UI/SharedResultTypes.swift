@@ -12,6 +12,8 @@ struct SharedResult: Codable, Identifiable, Sendable {
     let originalContent: String
     let analysis: String
     let createdAt: Date
+    /// Optional tool chain ID to trigger when this result is processed
+    let chainId: String?
 }
 
 /// The type of content that was shared
@@ -44,6 +46,7 @@ enum SharedResultStore {
 struct SharedResultBanner: View {
     let result: SharedResult
     let onInsert: () -> Void
+    let onRunChain: ((String) -> Void)?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -53,7 +56,7 @@ struct SharedResultBanner: View {
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Shared Content")
+                Text(result.chainId != nil ? "Shared → Chain" : "Shared Content")
                     .font(.subheadline.weight(.medium))
                 Text(result.analysis.prefix(60) + (result.analysis.count > 60 ? "..." : ""))
                     .font(.caption)
@@ -63,9 +66,16 @@ struct SharedResultBanner: View {
 
             Spacer()
 
+            if let chainId = result.chainId, let onRunChain {
+                Button("Run") { onRunChain(chainId) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(ClarissaTheme.purple)
+                    .controlSize(.small)
+            }
+
             Button("Add") { onInsert() }
                 .buttonStyle(.borderedProminent)
-                .tint(ClarissaTheme.purple)
+                .tint(result.chainId != nil ? .secondary : ClarissaTheme.purple)
                 .controlSize(.small)
 
             Button { onDismiss() } label: {

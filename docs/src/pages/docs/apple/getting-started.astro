@@ -22,10 +22,18 @@ const base = import.meta.env.BASE_URL;
 
   <h2>Installation Options</h2>
 
-  <h3>TestFlight (Recommended)</h3>
+  <h3>App Store (Recommended)</h3>
   <p>
-    Join the TestFlight beta to get early access to Clarissa. This is the easiest way to 
-    install and receive automatic updates.
+    Clarissa is available on the App Store for iPhone, iPad, and Mac.
+  </p>
+  <ol>
+    <li>Open the <a href="https://apps.apple.com/us/app/clarissa-ai/id6756459191" target="_blank" rel="noopener">Clarissa AI App Store page</a></li>
+    <li>Tap "Get" to download and install</li>
+  </ol>
+
+  <h3>TestFlight Beta</h3>
+  <p>
+    Want early access to upcoming features? Join the TestFlight beta for preview builds.
   </p>
   <ol>
     <li>Install <a href="https://apps.apple.com/app/testflight/id899247664" target="_blank" rel="noopener">TestFlight</a> from the App Store</li>
@@ -44,6 +52,10 @@ open Package.swift</code></pre>
   </p>
 
   <h2>Initial Setup</h2>
+  <figure class="screenshot-inline">
+    <img src={`${base}images/iphone/01-welcome.png`} alt="Clarissa welcome screen on iPhone" loading="lazy" />
+    <figcaption>Welcome screen with template picker</figcaption>
+  </figure>
   <p>
     When you first launch Clarissa, you'll be guided through a quick onboarding process:
   </p>
@@ -54,6 +66,10 @@ open Package.swift</code></pre>
   </ol>
 
   <h2>Choosing Your AI Provider</h2>
+  <figure class="screenshot-inline">
+    <img src={`${base}images/iphone/09-settings-provider.png`} alt="Provider settings on iPhone" loading="lazy" />
+    <figcaption>AI provider settings</figcaption>
+  </figure>
 
   <h3>Apple Intelligence (On-Device)</h3>
   <p>
@@ -86,6 +102,20 @@ open Package.swift</code></pre>
   </ol>
 
   <h2>Your First Conversation</h2>
+  <div class="screenshot-row">
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/02-conversation-calendar.png`} alt="Calendar conversation" loading="lazy" />
+      <figcaption>Calendar</figcaption>
+    </figure>
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/03-conversation-weather.png`} alt="Weather conversation" loading="lazy" />
+      <figcaption>Weather</figcaption>
+    </figure>
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/04-conversation-reminder.png`} alt="Reminder conversation" loading="lazy" />
+      <figcaption>Reminders</figcaption>
+    </figure>
+  </div>
   <p>
     Once setup is complete, you can start a conversation in several ways:
   </p>
@@ -93,6 +123,7 @@ open Package.swift</code></pre>
     <li><strong>Type a message</strong> — Tap the text field and type your question</li>
     <li><strong>Use voice input</strong> — Tap the microphone button and speak</li>
     <li><strong>Pick a template</strong> — Choose from Morning Briefing, Meeting Prep, Research Mode, or Quick Math in the empty-state picker</li>
+    <li><strong>Run a tool chain</strong> — Execute a multi-step workflow like Daily Digest or Travel Prep from the chain picker</li>
     <li><strong>Share from another app</strong> — Use the Share Extension to send text, URLs, or images to Clarissa</li>
   </ol>
   <p>
@@ -100,10 +131,88 @@ open Package.swift</code></pre>
     or checking your calendar), you'll see step-by-step progress in the chat and Dynamic Island.
   </p>
 
+  <h2>Setting Up Automation</h2>
+  <p>
+    After you're comfortable with conversations, explore automation in Settings:
+  </p>
+  <ul>
+    <li><strong>Tool chains</strong> — Create or customize multi-step workflows that pipe data between tools</li>
+    <li><strong>Scheduled check-ins</strong> — Get a notification with your Daily Digest every morning</li>
+    <li><strong>Automation triggers</strong> — Run chains based on time, location, or Focus mode</li>
+    <li><strong>Shortcuts actions</strong> — Use Clarissa's 8 tools directly in the Shortcuts app</li>
+    <li><strong>Widgets</strong> — Add the Morning Briefing or Memory Spotlight widget to your Home Screen</li>
+  </ul>
+
   <h2>Next Steps</h2>
   <ul>
     <li>Explore <a href={`${base}docs/apple/features/`}>Features</a> to learn about templates, Siri Shortcuts, export, and more</li>
     <li>Check the <a href={`${base}docs/apple/faq/`}>FAQ</a> for troubleshooting and tips</li>
   </ul>
 </Docs>
+
+<style>
+  .screenshot-row {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-end;
+    justify-content: center;
+    margin: 1.5rem 0 2rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+
+  .screenshot {
+    flex: 0 0 auto;
+    text-align: center;
+  }
+
+  .screenshot img {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    display: block;
+  }
+
+  .screenshot figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .screenshot.phone img {
+    height: 320px;
+    width: auto;
+  }
+
+  .screenshot-inline {
+    margin: 1.5rem 0 2rem;
+    text-align: center;
+  }
+
+  .screenshot-inline img {
+    height: 400px;
+    width: auto;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .screenshot-inline figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .screenshot.phone img {
+      height: 240px;
+    }
+
+    .screenshot-inline img {
+      height: 300px;
+    }
+
+    .screenshot-row {
+      gap: 0.75rem;
+    }
+  }
+</style>
 

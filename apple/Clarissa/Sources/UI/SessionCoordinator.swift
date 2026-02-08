@@ -48,9 +48,21 @@ final class SessionCoordinator {
         let messagesToSave = agent.getMessagesForSave()
         await SessionManager.shared.updateCurrentSession(messages: messagesToSave)
 
-        // Tag session with topics for search/filtering
         if let sessionId = await SessionManager.shared.getCurrentSessionId() {
+            // Tag session with topics for search/filtering
             await SessionManager.shared.tagSession(id: sessionId)
+
+            // Auto-generate summary if the session doesn't have one yet
+            #if canImport(FoundationModels)
+            if #available(iOS 26.0, macOS 26.0, *) {
+                let session = await SessionManager.shared.getCurrentSession()
+                if session.summary == nil {
+                    if let summary = await SessionSummarizer.shared.summarize(messages: messagesToSave) {
+                        await SessionManager.shared.setSummary(summary, for: sessionId)
+                    }
+                }
+            }
+            #endif
         }
     }
 
@@ -101,7 +113,11 @@ final class SessionCoordinator {
 
         if isDeletingActive {
             await agent.resetForNewConversation()
-            _ = await SessionManager.shared.startNewSession()
+            // SessionManager.deleteSession already falls back to sessions.first.
+            // Only create a brand new session if no sessions remain.
+            if await SessionManager.shared.getCurrentSessionId() == nil {
+                _ = await SessionManager.shared.startNewSession()
+            }
         }
 
         return isDeletingActive
@@ -147,15 +163,41 @@ final class SessionCoordinator {
     #if canImport(WebKit)
     func exportConversationAsPDF(from messages: [ChatMessage]) async -> Data? {
         let html = exportConversationAsHTML(from: messages)
+
+        // Use DispatchWorkItem timeout to prevent indefinite hangs
+        // (e.g., if loadHTMLString fails without triggering a delegate callback)
         return await withCheckedContinuation { continuation in
+            var hasResumed = false
+
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 612, height: 792))
             webView.loadHTMLString(html, baseURL: nil)
 
-            // Wait for load to complete, then create PDF
-            let delegate = PDFWebViewDelegate {
+            // 10-second timeout
+            let timeoutWork = DispatchWorkItem { [weak webView] in
+                guard !hasResumed else { return }
+                hasResumed = true
+                if let webView {
+                    objc_setAssociatedObject(webView, "delegate", nil, .OBJC_ASSOCIATION_RETAIN)
+                }
+                ClarissaLogger.ui.warning("PDF export timed out after 10 seconds")
+                continuation.resume(returning: nil)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeoutWork)
+
+            let delegate = PDFWebViewDelegate { [weak webView] in
+                timeoutWork.cancel()
+                guard !hasResumed else { return }
+                guard let webView else {
+                    hasResumed = true
+                    continuation.resume(returning: nil)
+                    return
+                }
                 let config = WKPDFConfiguration()
                 config.rect = CGRect(x: 0, y: 0, width: 612, height: 792)
                 webView.createPDF(configuration: config) { result in
+                    guard !hasResumed else { return }
+                    hasResumed = true
+                    objc_setAssociatedObject(webView, "delegate", nil, .OBJC_ASSOCIATION_RETAIN)
                     switch result {
                     case .success(let data):
                         continuation.resume(returning: data)
@@ -165,7 +207,6 @@ final class SessionCoordinator {
                 }
             }
             webView.navigationDelegate = delegate
-            // Prevent delegate from being deallocated
             objc_setAssociatedObject(webView, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
         }
     }
@@ -263,6 +304,35 @@ final class SessionCoordinator {
 
     // MARK: - Private Helpers
 
+    // MARK: - Pin / Favorite / Tag Bridges
+
+    /// Toggle pin on a message in persistence, returns updated pin state
+    func toggleMessagePin(messageId: UUID) async {
+        await SessionManager.shared.toggleMessagePin(messageId: messageId)
+    }
+
+    /// Toggle favorite on a session
+    func toggleFavorite(sessionId: UUID) async {
+        await SessionManager.shared.toggleFavorite(id: sessionId)
+    }
+
+    /// Add a manual tag to a session
+    func addTag(_ tag: String, to sessionId: UUID) async {
+        await SessionManager.shared.addTag(tag, to: sessionId)
+    }
+
+    /// Remove a manual tag from a session
+    func removeTag(_ tag: String, from sessionId: UUID) async {
+        await SessionManager.shared.removeTag(tag, from: sessionId)
+    }
+
+    /// Set summary for a session
+    func setSummary(_ summary: String, for sessionId: UUID) async {
+        await SessionManager.shared.setSummary(summary, for: sessionId)
+    }
+
+    // MARK: - Private Helpers
+
     /// Convert persisted Message objects to ChatMessage objects for UI display
     private func convertSessionMessages(_ messages: [Message]) -> [ChatMessage] {
         var chatMessages: [ChatMessage] = []
@@ -271,6 +341,7 @@ final class SessionCoordinator {
             case .user, .assistant:
                 var chatMessage = ChatMessage(role: message.role, content: message.content)
                 chatMessage.imageData = message.imageData
+                chatMessage.isPinned = message.isPinned ?? false
                 chatMessages.append(chatMessage)
             case .tool:
                 var chatMessage = ChatMessage(
@@ -308,8 +379,10 @@ private class PDFWebViewDelegate: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        // Don't call onFinish — the continuation will never resume, but that's fine
-        // because the caller will time out or the view will be deallocated
+        // Resume continuation on failure to avoid indefinite hang
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [onFinish] in
+            onFinish()
+        }
     }
 }
 #endif

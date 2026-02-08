@@ -10,7 +10,7 @@ import ActivityKit
 final class LiveActivityManager {
     static let shared = LiveActivityManager()
 
-    #if canImport(ActivityKit)
+    #if canImport(ActivityKit) && os(iOS)
     private var currentActivity: Activity<ClarissaActivityAttributes>?
     #endif
     private var completedSteps = 0
@@ -70,13 +70,15 @@ final class LiveActivityManager {
 
     /// Mark a tool step as completed
     func completeStep() {
-        completedSteps += 1
+        completedSteps = min(completedSteps + 1, max(totalSteps, 1))
     }
 
     /// End the Live Activity (agent finished responding)
     func endActivity() {
         #if canImport(ActivityKit) && os(iOS)
+        // Capture and nil-out currentActivity atomically to prevent updateTool race
         guard let activity = currentActivity else { return }
+        currentActivity = nil
 
         let finalState = ClarissaActivityAttributes.ContentState(
             currentTool: "Done",
@@ -90,7 +92,6 @@ final class LiveActivityManager {
             await activity.end(.init(state: finalState, staleDate: nil), dismissalPolicy: .after(.now + 5))
         }
 
-        currentActivity = nil
         completedSteps = 0
         totalSteps = 0
         #endif

@@ -2,40 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Sandbox -->
-    <key>com.apple.security.app-sandbox</key>
-    <true/>
-
-    <!-- Network (for web fetch and API calls) -->
-    <key>com.apple.security.network.client</key>
-    <true/>
-
-    <!-- Calendar access -->
-    <key>com.apple.security.personal-information.calendars</key>
-    <true/>
-
-    <!-- Contacts access -->
-    <key>com.apple.security.personal-information.addressbook</key>
-    <true/>
-
-    <!-- Note: Reminders entitlement not supported on macOS App Store -->
-    <!-- Reminders functionality uses EventKit which is available without entitlement on macOS -->
-
-    <!-- Location access -->
-    <key>com.apple.security.personal-information.location</key>
-    <true/>
-
-    <!-- WeatherKit -->
-    <key>com.apple.developer.weatherkit</key>
-    <true/>
-
-    <!-- Microphone access for voice mode (macOS sandbox requirement) -->
-    <key>com.apple.security.device.audio-input</key>
-    <true/>
-
-    <!-- iCloud Key-Value Storage for memory sync across devices -->
-    <key>com.apple.developer.ubiquity-kvstore-identifier</key>
-    <string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
+	<key>com.apple.developer.weatherkit</key>
+	<true/>
 </dict>
 </plist>
-

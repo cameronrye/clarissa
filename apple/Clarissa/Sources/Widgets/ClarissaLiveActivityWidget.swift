@@ -1,13 +1,14 @@
 import SwiftUI
 import WidgetKit
-#if canImport(ActivityKit)
+#if canImport(ActivityKit) && os(iOS)
 import ActivityKit
 
 /// Live Activity widget for showing multi-tool ReAct execution progress
 /// Displays on Lock Screen and Dynamic Island during complex agent operations
 @available(iOS 16.1, *)
-struct ClarissaLiveActivityWidget: Widget {
-    var body: some WidgetConfiguration {
+public struct ClarissaLiveActivityWidget: Widget {
+    public init() {}
+    public var body: some WidgetConfiguration {
         ActivityConfiguration(for: ClarissaActivityAttributes.self) { context in
             // Lock Screen banner
             lockScreenView(context: context)

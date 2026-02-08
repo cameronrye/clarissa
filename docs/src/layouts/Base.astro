@@ -4,7 +4,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'An AI-powered terminal assistant with tool execution capabilities' } = Astro.props;
+const { title, description = 'AI assistant for terminal and Apple devices with tool execution, automation, and MCP support' } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const siteUrl = import.meta.env.SITE;
 const pageTitle = title === 'Home' ? 'Clarissa' : `${title} | Clarissa`;
@@ -25,7 +25,7 @@ const ogImage = new URL(`${base}logo.svg`, siteUrl);
     <!-- PWA -->
     <link rel="manifest" href={`${base}manifest.json`} />
     <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Clarissa" />
@@ -62,10 +62,10 @@ const ogImage = new URL(`${base}logo.svg`, siteUrl);
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Clarissa",
-      "description": "An AI-powered terminal assistant with tool execution capabilities. Built with Bun and powered by OpenRouter.",
+      "description": "AI assistant for terminal and Apple devices. Terminal CLI built with Bun, native iOS/macOS/watchOS apps powered by Apple Intelligence.",
       "url": siteUrl + base,
       "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "macOS, Linux, Windows",
+      "operatingSystem": "macOS, Linux, Windows, iOS, watchOS",
       "license": "https://opensource.org/licenses/MIT",
       "author": {
         "@type": "Person",
@@ -86,14 +86,37 @@ const ogImage = new URL(`${base}logo.svg`, siteUrl);
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    </noscript>
   </head>
   <body>
+    <a href="#main-content" class="skip-nav">Skip to content</a>
     <slot />
+    <!-- Back to top button -->
+    <button class="back-to-top" id="back-to-top" aria-label="Back to top">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </button>
     <script is:inline>
+      // Back to top visibility
+      (function() {
+        var btn = document.getElementById('back-to-top');
+        if (!btn) return;
+        window.addEventListener('scroll', function() {
+          btn.classList.toggle('visible', window.scrollY > 400);
+        }, { passive: true });
+        btn.addEventListener('click', function() {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      })();
+
+      // Service worker
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').catch(function() {});
         });
       }
     </script>
@@ -103,8 +126,8 @@ const ogImage = new URL(`${base}logo.svg`, siteUrl);
 <style is:global>
   @import '../styles/global.css';
 
-  body {
+  /* Mono font for code elements only */
+  code, pre, .install-command code, .font-mono {
     font-family: 'JetBrains Mono', var(--font-mono);
   }
 </style>
-

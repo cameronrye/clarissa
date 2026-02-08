@@ -4,6 +4,12 @@
 <dict>
     <key>com.apple.security.app-sandbox</key>
     <true/>
+
+    <!-- App Group for sharing data with main app -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.dev.rye.clarissa</string>
+    </array>
 </dict>
 </plist>
 

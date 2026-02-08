@@ -9,7 +9,7 @@ const base = import.meta.env.BASE_URL;
         <img src={`${base}logo.svg`} alt="Clarissa" width="24" height="24" />
         <span class="gradient-text">Clarissa</span>
       </a>
-      <p class="tagline">An AI-powered terminal assistant</p>
+      <p class="tagline">AI assistant for terminal and Apple devices</p>
     </div>
     <div class="footer-links">
       <div class="footer-section">
@@ -40,7 +40,7 @@ const base = import.meta.env.BASE_URL;
       </div>
     </div>
     <div class="footer-bottom">
-      <p>Made with <span class="heart"><svg viewBox="0 0 24 24" fill="url(#heart-gradient)" width="16" height="16"><defs><linearGradient id="heart-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--color-pink)" /><stop offset="50%" stop-color="var(--color-purple)" /><stop offset="100%" stop-color="var(--color-cyan)" /></linearGradient></defs><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg></span> by <a href="https://rye.dev" target="_blank" rel="noopener">Cameron Rye</a></p>
+      <p>Made with <span class="heart"><svg viewBox="0 0 24 24" fill="url(#heart-gradient)" width="16" height="16" aria-hidden="true"><defs><linearGradient id="heart-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--color-pink)" /><stop offset="50%" stop-color="var(--color-purple)" /><stop offset="100%" stop-color="var(--color-cyan)" /></linearGradient></defs><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg></span> by <a href="https://rye.dev" target="_blank" rel="noopener">Cameron Rye</a></p>
       <p class="license">MIT License</p>
     </div>
   </div>
@@ -131,6 +131,14 @@ const base = import.meta.env.BASE_URL;
     color: var(--color-text-muted);
   }
 
+  /* Single column on very narrow screens */
+  @media (max-width: 480px) {
+    .footer-links {
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+  }
+
   @media (min-width: 768px) {
     .footer {
       padding: 3rem 0 2rem;
@@ -165,4 +173,3 @@ const base = import.meta.env.BASE_URL;
     }
   }
 </style>
-

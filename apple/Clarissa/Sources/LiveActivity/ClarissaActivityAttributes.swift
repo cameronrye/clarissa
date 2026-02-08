@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(ActivityKit)
+#if canImport(ActivityKit) && os(iOS)
 import ActivityKit
 
 /// Activity attributes for Live Activities during multi-tool ReAct execution

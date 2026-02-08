@@ -3149,7 +3149,8 @@ struct SessionCoordinatorTests {
             type: .text,
             originalContent: "Some shared text",
             analysis: "This is an analysis of the text.",
-            createdAt: Date()
+            createdAt: Date(),
+            chainId: nil
         )
         let message = coordinator.buildSharedResultMessage(result)
 
@@ -3169,7 +3170,8 @@ struct SessionCoordinatorTests {
             type: .url,
             originalContent: "https://example.com",
             analysis: "A website about examples.",
-            createdAt: Date()
+            createdAt: Date(),
+            chainId: nil
         )
         let message = coordinator.buildSharedResultMessage(result)
 
@@ -3190,7 +3192,8 @@ struct SessionCoordinatorTests {
             type: .image,
             originalContent: "image.png",
             analysis: "An image of a cat.",
-            createdAt: Date()
+            createdAt: Date(),
+            chainId: nil
         )
         let message = coordinator.buildSharedResultMessage(result)
 
@@ -4309,7 +4312,8 @@ struct SharedResultRoundTripTests {
             type: .text,
             originalContent: "Some shared text content",
             analysis: "User shared a text snippet about testing",
-            createdAt: Date()
+            createdAt: Date(),
+            chainId: nil
         )
         let data = try JSONEncoder().encode([original])
         let decoded = try JSONDecoder().decode([SharedResult].self, from: data)
@@ -4327,7 +4331,8 @@ struct SharedResultRoundTripTests {
             type: .url,
             originalContent: "https://example.com/article",
             analysis: "Article about Swift programming",
-            createdAt: Date()
+            createdAt: Date(),
+            chainId: nil
         )
         let data = try JSONEncoder().encode([original])
         let decoded = try JSONDecoder().decode([SharedResult].self, from: data)
@@ -4342,7 +4347,8 @@ struct SharedResultRoundTripTests {
             type: .image,
             originalContent: "photo_001.jpg",
             analysis: "A landscape photo showing mountains",
-            createdAt: Date()
+            createdAt: Date(),
+            chainId: nil
         )
         let data = try JSONEncoder().encode([original])
         let decoded = try JSONDecoder().decode([SharedResult].self, from: data)
@@ -4353,9 +4359,9 @@ struct SharedResultRoundTripTests {
     @Test("Multiple SharedResults round-trip preserves order")
     func testMultipleResultsOrder() throws {
         let results = [
-            SharedResult(id: UUID(), type: .text, originalContent: "First", analysis: "1st", createdAt: Date()),
-            SharedResult(id: UUID(), type: .url, originalContent: "Second", analysis: "2nd", createdAt: Date()),
-            SharedResult(id: UUID(), type: .image, originalContent: "Third", analysis: "3rd", createdAt: Date()),
+            SharedResult(id: UUID(), type: .text, originalContent: "First", analysis: "1st", createdAt: Date(), chainId: nil),
+            SharedResult(id: UUID(), type: .url, originalContent: "Second", analysis: "2nd", createdAt: Date(), chainId: nil),
+            SharedResult(id: UUID(), type: .image, originalContent: "Third", analysis: "3rd", createdAt: Date(), chainId: nil),
         ]
         let data = try JSONEncoder().encode(results)
         let decoded = try JSONDecoder().decode([SharedResult].self, from: data)

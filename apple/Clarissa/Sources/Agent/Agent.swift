@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 /// Configuration for the agent
 public struct AgentConfig {
@@ -156,6 +159,277 @@ struct SystemPromptBudget {
     }
 }
 
+// MARK: - Tool Call Validation
+
+/// Validates tool calls against user intent and checks response coherence.
+/// Catches cases where the on-device model selects the wrong tool (e.g., calculator → calendar)
+/// or fabricates results that don't match the user's question.
+enum ToolCallValidator {
+
+    // MARK: - Tool Mismatch Detection
+
+    /// Patterns that strongly indicate a specific tool should be used
+    private static let mathPatterns: [String] = [
+        #"\d+\s*[+\-*/×÷%^]\s*\d+"#,      // "9*8", "3 + 4"
+        #"what(?:'s| is)\s+\d+\s*[+\-*/×÷%^]"#, // "what's 9*8"
+        #"\b(calculate|compute|solve)\b"#,   // "calculate 15+3"
+        #"\b(square root|sqrt|factorial)\b"#,
+        #"\d+%\s+of\s+\d+"#,               // "20% of 85"
+    ]
+
+    private static let calendarPatterns: [String] = [
+        #"\b(schedule|meeting|appointment|event|calendar|busy|free)\b"#,
+        #"\b(today|tomorrow|tonight|this morning|this afternoon|this evening)\b"#,
+        #"\b(next (monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b"#,
+    ]
+
+    private static let weatherPatterns: [String] = [
+        #"\b(weather|forecast|temperature|rain|snow|sunny|cloudy|humid|wind)\b"#,
+        #"\b(umbrella|jacket|coat|cold outside|hot outside)\b"#,
+    ]
+
+    private static let reminderPatterns: [String] = [
+        #"\b(remind|reminder|to-?do|task)\b"#,
+    ]
+
+    /// Check if a tool call is a clear mismatch for the user's message.
+    /// Returns a description of the mismatch, or nil if the call seems reasonable.
+    static func detectMismatch(userMessage: String, toolName: String) -> String? {
+        let lower = userMessage.lowercased()
+
+        // Math question → should use calculator, not anything else
+        if matchesAny(lower, patterns: mathPatterns) && toolName != "calculator" {
+            return "Message looks like math (\(userMessage.prefix(30))...) but tool '\(toolName)' was selected instead of 'calculator'"
+        }
+
+        // Calendar question → should not use calculator
+        if toolName == "calendar" && !matchesAny(lower, patterns: calendarPatterns) && matchesAny(lower, patterns: mathPatterns) {
+            return "No calendar intent detected but 'calendar' was called for what appears to be a math question"
+        }
+
+        return nil
+    }
+
+    // MARK: - Response Coherence Check
+
+    /// Check if the response is coherent with the user's query.
+    /// Returns a corrected response if incoherent, or nil if the response seems fine.
+    static func checkCoherence(userMessage: String, response: String, toolExecutions: [(name: String, result: String)]) -> String? {
+        let lowerQuery = userMessage.lowercased()
+        let lowerResponse = response.lowercased()
+
+        // Case 1: Math question but response is about something else entirely
+        if matchesAny(lowerQuery, patterns: mathPatterns) {
+            // Check if any non-calculator tool was called — strong signal of wrong tool selection
+            let calledWrongTool = !toolExecutions.isEmpty && !toolExecutions.contains(where: { $0.name == "calculator" })
+
+            let irrelevantPhrases = [
+                // Scheduling/calendar
+                "scheduled", "meeting", "appointment", "calendar", "event", "booked",
+                // Weather
+                "weather", "forecast", "temperature", "°f", "°c", "sunny", "cloudy",
+                "windy", "humidity", "rain", "snow",
+                // Location
+                "latitude", "longitude", "your location",
+                // Contacts
+                "phone number", "email address", "contact",
+            ]
+            let hasIrrelevantContent = irrelevantPhrases.contains { lowerResponse.contains($0) }
+
+            if (hasIrrelevantContent || calledWrongTool) && !matchesAny(lowerQuery, patterns: calendarPatterns) && !matchesAny(lowerQuery, patterns: weatherPatterns) {
+                // The model answered a math question with an unrelated response
+                ClarissaLogger.agent.warning("Coherence failure: math question got irrelevant response (wrongTool=\(calledWrongTool), irrelevant=\(hasIrrelevantContent))")
+
+                // Try to compute the answer ourselves using a simple regex extraction
+                if let corrected = attemptMathFallback(from: lowerQuery) {
+                    return corrected
+                }
+                return "I wasn't able to calculate that correctly. Could you try asking again? For example: \"What is 9 times 8?\""
+            }
+
+            // Math question but no number in response at all
+            let hasNumber = response.range(of: #"\b\d+\b"#, options: .regularExpression) != nil
+            if !hasNumber && !lowerResponse.contains("calculator") && !lowerResponse.contains("error") {
+                if let corrected = attemptMathFallback(from: lowerQuery) {
+                    return corrected
+                }
+            }
+        }
+
+        // Case 2: Response claims an action was taken but no tool confirmed it
+        let actionClaims = [
+            "i've successfully scheduled",
+            "i've scheduled",
+            "i've created",
+            "i've added",
+            "i've deleted",
+            "i've removed",
+            "i've sent",
+            "successfully created",
+            "successfully scheduled",
+            "successfully added",
+        ]
+        let claimsAction = actionClaims.contains { lowerResponse.contains($0) }
+        if claimsAction && toolExecutions.isEmpty {
+            ClarissaLogger.agent.warning("Coherence failure: response claims action but no tools were executed")
+            return "I wasn't able to complete that action. Could you try again?"
+        }
+
+        return nil
+    }
+
+    // MARK: - Helpers
+
+    private static func matchesAny(_ text: String, patterns: [String]) -> Bool {
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - Conversational Query Detection
+
+    /// Patterns for messages that should be answered directly without tools.
+    /// The on-device Foundation Model aggressively calls tools even for conversational
+    /// queries like "What can you do?" — this filter catches those and strips tools
+    /// before sending to the session.
+    private static let conversationalPatterns: [String] = [
+        // Greetings
+        #"^(hi|hey|hello|good (morning|afternoon|evening)|howdy|yo|sup)\b"#,
+        // Capability questions — allow words between "what" and "can/do you"
+        #"\bwhat\b.{0,20}\b(can|do) you\b"#,
+        #"\b(what are your|your capabilities|what('re| are) you able|how can you help)\b"#,
+        // Thanks / farewell
+        #"^(thanks?|thank you|thx|bye|goodbye|see you|good night|talk later)\b"#,
+        // Meta / conversational
+        #"^(who are you|what('s| is) your name|how do you work|tell me about yourself)\b"#,
+        // Opinion / general knowledge (no tool needed)
+        #"^(what do you think|in your opinion|can you explain|what does .+ mean)\b"#,
+        // Affirmations / short replies unlikely to need tools
+        #"^(ok|okay|sure|got it|cool|nice|great|awesome|perfect|sounds good|understood|yep|yes|no|nope)[\.\!\?]?$"#,
+        // Creative writing — the on-device FM may trigger safety guardrails (process kill)
+        // on open-ended generative prompts. Intercept these and handle locally.
+        #"^(tell me a (story|joke|riddle|fun fact)|write (me )?a (story|poem|song|essay|letter))\b"#,
+        #"^(make up|create|compose|imagine|invent) (a |an )?(story|poem|tale|song|scenario)\b"#,
+        #"\b(write|generate) (fiction|creative|a paragraph|a chapter)\b"#,
+    ]
+
+    /// Returns true if the message is purely conversational and shouldn't trigger tool calls.
+    static func isConversational(_ message: String) -> Bool {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+
+        // Short messages (≤3 words) that don't match any tool pattern are likely conversational
+        let wordCount = lower.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+        if wordCount <= 3 && !matchesAnyToolPattern(lower) {
+            return matchesAny(lower, patterns: conversationalPatterns)
+        }
+
+        return matchesAny(lower, patterns: conversationalPatterns) && !matchesAnyToolPattern(lower)
+    }
+
+    /// Check if message matches any known tool-triggering pattern
+    private static func matchesAnyToolPattern(_ text: String) -> Bool {
+        matchesAny(text, patterns: mathPatterns) ||
+        matchesAny(text, patterns: calendarPatterns) ||
+        matchesAny(text, patterns: weatherPatterns) ||
+        matchesAny(text, patterns: reminderPatterns)
+    }
+
+    // MARK: - Creative Writing / Guardrail-Unsafe Detection
+
+    /// Patterns for open-ended generative prompts that can trigger Foundation Models
+    /// safety guardrails, causing a process kill (SIGKILL). These must be handled locally
+    /// without ever sending to the FM session.
+    private static let creativeWritingPatterns: [String] = [
+        #"^tell me a (story|joke|riddle|fun fact)"#,
+        #"^(write|create|compose|generate|make up) (me )?(a |an )?(story|poem|song|essay|letter|tale|limerick|haiku|narrative|script)"#,
+        #"^(imagine|invent|make up) (a |an )?(story|scenario|world|character|adventure)"#,
+        #"\b(write|generate) (fiction|creative writing|a paragraph about|a chapter)\b"#,
+        #"^once upon a time\b"#,
+    ]
+
+    /// Returns true if the message is a creative/generative prompt that should be handled
+    /// locally to avoid Foundation Models safety guardrails killing the process.
+    static func isCreativeWriting(_ message: String) -> Bool {
+        let lower = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        return matchesAny(lower, patterns: creativeWritingPatterns)
+    }
+
+    /// Friendly response for creative writing prompts
+    static let creativeWritingResponse = "I'm not set up for creative writing like stories or poems, but I'm great at helping with your calendar, reminders, weather, calculations, and contacts. What can I help you with?"
+
+    // MARK: - Intent-Based Tool Restriction
+
+    /// When a message clearly matches a single tool intent, restrict tools to just that tool.
+    /// This prevents the on-device FM model from calling unrelated tools (e.g., weather/calendar
+    /// for a math question), which causes unnecessary network requests and UI freezes.
+    /// Returns the tool name to restrict to, or nil if all tools should be available.
+    static func restrictedToolName(for message: String) -> String? {
+        let lower = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let isMath = matchesAny(lower, patterns: mathPatterns)
+        let isCalendar = matchesAny(lower, patterns: calendarPatterns)
+        let isWeather = matchesAny(lower, patterns: weatherPatterns)
+        let isReminder = matchesAny(lower, patterns: reminderPatterns)
+
+        // Only restrict if exactly one intent matches — ambiguous queries get all tools
+        let matches = [isMath, isCalendar, isWeather, isReminder].filter { $0 }.count
+        guard matches == 1 else { return nil }
+
+        if isMath { return "calculator" }
+        if isCalendar { return "calendar" }
+        if isWeather { return "weather" }
+        if isReminder { return "reminders" }
+        return nil
+    }
+
+    /// Attempt to extract and evaluate a simple math expression from the user message
+    private static func attemptMathFallback(from message: String) -> String? {
+        // Extract simple two-operand expressions like "9*8", "5+3", "100/4"
+        let pattern = #"(\d+(?:\.\d+)?)\s*([+\-*/×÷])\s*(\d+(?:\.\d+)?)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: message, range: NSRange(message.startIndex..., in: message)),
+              match.numberOfRanges == 4,
+              let r1 = Range(match.range(at: 1), in: message),
+              let r2 = Range(match.range(at: 2), in: message),
+              let r3 = Range(match.range(at: 3), in: message),
+              let a = Double(message[r1]),
+              let b = Double(message[r3]) else {
+            return nil
+        }
+
+        let op = String(message[r2])
+        let result: Double
+        switch op {
+        case "+": result = a + b
+        case "-": result = a - b
+        case "*", "×": result = a * b
+        case "/", "÷":
+            guard b != 0 else { return "That's a division by zero — undefined!" }
+            result = a / b
+        default: return nil
+        }
+
+        // Format nicely (drop .0 for whole numbers)
+        let formatted = result.truncatingRemainder(dividingBy: 1) == 0
+            ? String(format: "%.0f", result)
+            : String(result)
+        let aStr = a.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(a)) : String(a)
+        let bStr = b.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(b)) : String(b)
+        return "\(aStr) \(op) \(bStr) = \(formatted)"
+    }
+
+    /// Public accessor for math fallback — used by Agent when the calculator tool
+    /// is unavailable but the intent restriction detected a math query.
+    static func attemptMathFallbackPublic(from message: String) -> String? {
+        attemptMathFallback(from: message)
+    }
+}
+
 /// Errors that can occur during agent execution
 enum AgentError: LocalizedError {
     case maxIterationsReached
@@ -191,6 +465,8 @@ public final class Agent: ObservableObject {
     private var isSummarizing: Bool = false
     /// Active conversation template (nil = default behavior)
     private(set) var currentTemplate: ConversationTemplate?
+    /// Whether the current template's tools have already been prefetched
+    private var templatePrefetchDone: Bool = false
 
     public weak var callbacks: AgentCallbacks?
 
@@ -208,8 +484,9 @@ public final class Agent: ObservableObject {
     }
 
     /// Apply a conversation template
-    func applyTemplate(_ template: ConversationTemplate?) {
+    public func applyTemplate(_ template: ConversationTemplate?) {
         self.currentTemplate = template
+        self.templatePrefetchDone = false
 
         // Set max response tokens override on the provider
         if let provider = provider as? FoundationModelsProvider {
@@ -218,14 +495,10 @@ public final class Agent: ObservableObject {
             provider.maxResponseTokensOverride = template?.maxResponseTokens
         }
 
-        // Enable template-specific tools
-        if let toolNames = template?.toolNames {
-            let settings = ToolSettings.shared
-            // Enable only the template's tools
-            for tool in settings.allTools {
-                _ = settings.setToolEnabled(tool.id, enabled: toolNames.contains(tool.id))
-            }
-        }
+        // Template tool filtering is handled in run() via prefetch + exclusion.
+        // We intentionally do NOT modify ToolSettings here — the template's toolNames
+        // control which tools get prefetched, but all user-enabled tools remain available
+        // for subsequent messages in the conversation.
     }
     
     /// Build the system prompt with budget-tracked sections.
@@ -248,12 +521,30 @@ public final class Agent: ObservableObject {
         TOOLS: weather(location?), calculator(expression), calendar(action,title?,date?), reminders(action,title?), contacts(query), location(), remember(content), web_fetch(url), image_analysis(file_url)
 
         USE TOOLS for: weather, math, calendar, reminders, contacts, location, saving facts, fetching URLs, analyzing images/PDFs
-        ANSWER DIRECTLY for: "[Image Analysis]" in message (use provided OCR/classifications), date/time questions, general knowledge, opinions, greetings
+        ANSWER DIRECTLY for: "[Image Analysis]" in message (use provided OCR/classifications), date/time questions, general knowledge, opinions, greetings, capability questions
+
+        TOOL ROUTING (match the right tool to the request):
+        - Math/numbers/calculations -> calculator ONLY (never calendar)
+        - Weather/forecast/temperature -> weather
+        - Events/meetings/schedule -> calendar
+        - Tasks/to-do/remind -> reminders
+        - People/phone/email -> contacts
 
         EXAMPLES:
         "Weather in Paris" -> weather(location="Paris")
         "What's 20% of 85?" -> calculator(expression="85*0.20")
+        "What is 9*8?" -> calculator(expression="9*8")
         "Meeting tomorrow 2pm" -> calendar(action=create,title,startDate)
+
+        WHEN ASKED about your capabilities or what you can do, list these:
+        - Weather forecasts and conditions
+        - Calendar management (view and create events)
+        - Reminders (view and create tasks)
+        - Math calculations
+        - Contact lookup
+        - Web page fetching and summarization
+        - Image and PDF analysis
+        - Saving personal notes to memory
 
         RULES:
         - Brief responses (1-2 sentences)
@@ -261,6 +552,8 @@ public final class Agent: ObservableObject {
         - If request is ambiguous, ask one clarifying question before using tools
         - If tool fails, explain and suggest alternative
         - Use saved facts when user asks about their name/preferences
+        - NEVER claim you performed an action (created, scheduled, deleted, sent) unless a tool confirmed success
+        - ONLY report data that a tool actually returned — do not fabricate results
         """
         // Core prompt always included — budget tracks its size for remaining sections
         var prompt = budget.add(corePrompt, cap: ClarissaConstants.systemBudgetCore) ?? corePrompt
@@ -293,9 +586,7 @@ public final class Agent: ObservableObject {
                 .joined(separator: " ")
 
             if !recentUserContent.isEmpty {
-                let topics = (try? await MainActor.run {
-                    Task { try await ContentTagger.shared.extractTopics(from: recentUserContent) }
-                }.value) ?? []
+                let topics = (try? await ContentTagger.shared.extractTopics(from: recentUserContent)) ?? []
 
                 if !topics.isEmpty {
                     memoriesPrompt = await MemoryManager.shared.getRelevantForConversation(topics: topics)
@@ -342,6 +633,76 @@ public final class Agent: ObservableObject {
         return prompt
     }
     
+    /// Prefetch tool data for a template's required tools.
+    /// Runs all tools in parallel with a 3-second timeout per tool.
+    /// Returns formatted context string and the names of tools that succeeded, or nil if all failed.
+    private func prefetchTemplateTools(_ toolNames: [String]) async -> (context: String, fetchedTools: Set<String>)? {
+        let enabledNames = ToolSettings.shared.enabledToolNames
+        let validTools = toolNames.filter { enabledNames.contains($0) }
+        guard !validTools.isEmpty else { return nil }
+
+        // Default arguments for each tool when prefetching
+        let defaultArgs: [String: String] = [
+            "weather": "{}",
+            "calendar": "{\"action\":\"list\"}",
+            "reminders": "{\"action\":\"list\"}",
+            "contacts": "{\"query\":\"recent\"}",
+            "location": "{}",
+        ]
+
+        // Run all prefetches in parallel with per-tool timeout
+        let results = await withTaskGroup(of: (String, String?).self, returning: [(String, String)].self) { group in
+            for toolName in validTools {
+                group.addTask { [toolRegistry] in
+                    let args = defaultArgs[toolName] ?? "{}"
+                    do {
+                        let result = try await withThrowingTaskGroup(of: String.self) { inner in
+                            inner.addTask {
+                                try await toolRegistry.execute(name: toolName, arguments: args)
+                            }
+                            inner.addTask {
+                                try await Task.sleep(for: .seconds(3))
+                                throw CancellationError()
+                            }
+                            guard let first = try await inner.next() else { return "" }
+                            inner.cancelAll()
+                            return first
+                        }
+                        return (toolName, result as String?)
+                    } catch {
+                        ClarissaLogger.agent.info("Template prefetch for \(toolName) failed: \(error.localizedDescription)")
+                        return (toolName, nil)
+                    }
+                }
+            }
+
+            var collected: [(String, String)] = []
+            for await (name, result) in group {
+                if let result { collected.append((name, result)) }
+            }
+            return collected
+        }
+
+        guard !results.isEmpty else { return nil }
+
+        // Format results for injection into the system prompt
+        var context = "PREFETCHED DATA (from template tools — use this data in your response, do NOT call these tools again):"
+        for (name, result) in results {
+            // Truncate each result to keep within budget
+            let truncated = result.count > 500 ? String(result.prefix(497)) + "..." : result
+            context += "\n[\(name)] \(truncated)"
+        }
+
+        // Fire tool callbacks so UI shows tool cards for the prefetched data
+        for (name, result) in results {
+            callbacks?.onToolCall(name: name, arguments: defaultArgs[name] ?? "{}")
+            callbacks?.onToolResult(name: name, result: result, success: true)
+        }
+
+        let fetchedTools = Set(results.map(\.0))
+        return (context: context, fetchedTools: fetchedTools)
+    }
+
     /// Trim conversation history to fit within token budget
     /// Uses priority-based trimming: user messages first, then assistant, tool results last
     /// Triggers summarization when approaching the context limit
@@ -366,8 +727,9 @@ public final class Agent: ObservableObject {
             if !messagesToSummarize.isEmpty {
                 isSummarizing = true
                 Task { @MainActor [weak self] in
-                    await self?.summarizeOldMessages(messagesToSummarize)
-                    self?.isSummarizing = false
+                    guard let self else { return }
+                    defer { self.isSummarizing = false }
+                    await self.summarizeOldMessages(messagesToSummarize)
                 }
             }
         }
@@ -465,14 +827,44 @@ public final class Agent: ObservableObject {
             throw AgentError.noProvider
         }
 
+        await AnalyticsCollector.shared.beginSession()
+
+        // Clear template after its initial message has been processed.
+        // The template's system prompt focus and tool prefetch only apply to the first
+        // message — subsequent messages should behave normally with all tools available.
+        if templatePrefetchDone, currentTemplate != nil {
+            ClarissaLogger.agent.info("Clearing template after initial message")
+            applyTemplate(nil)
+        }
+
+        // Template prefetch: when a template specifies required tools, prefetch their data
+        // so the model doesn't need to decide which tools to call — data is already available.
+        // This runs regardless of ProactiveContext setting since templates explicitly declare tools.
+        var proactiveData: String?
+        var prefetchedToolNames: Set<String> = []
+        var isTemplatePrefetch = false
+        if let template = currentTemplate, let requiredTools = template.toolNames, !requiredTools.isEmpty, !templatePrefetchDone {
+            if let result = await prefetchTemplateTools(requiredTools) {
+                proactiveData = result.context
+                prefetchedToolNames = result.fetchedTools
+                isTemplatePrefetch = true
+                callbacks?.onProactiveContext(labels: requiredTools)
+                ClarissaLogger.agent.info("Template prefetch completed for: \(requiredTools)")
+            }
+            templatePrefetchDone = true
+        }
+
         // Proactive context: detect intents and prefetch data in parallel with prompt building
         // Only when FM is active (free, on-device) and user opted in
-        var proactiveData: String?
-        if ProactiveContext.isEnabled && provider.handlesToolsNatively {
+        // Skip if template prefetch already provided data
+        if proactiveData == nil && ProactiveContext.isEnabled && provider.handlesToolsNatively {
             let intents = ProactiveContext.detectIntents(in: userMessage)
             if !intents.isEmpty {
                 proactiveData = await ProactiveContext.prefetch(intents: intents, toolRegistry: toolRegistry)
-                // Notify UI that proactive context was used
+                // Track which tools were proactively prefetched so they're excluded
+                // from the session — otherwise the on-device model redundantly calls
+                // them again despite the data already being in the system prompt.
+                prefetchedToolNames = Set(intents.map(\.toolName))
                 let labels = intents.map(\.label)
                 callbacks?.onProactiveContext(labels: labels)
             }
@@ -495,8 +887,76 @@ public final class Agent: ObservableObject {
 
         // Get available tools (limited by provider capability)
         // For providers that handle tools natively (e.g., Foundation Models),
-        // we still pass tool definitions but they're used by the session internally
-        let tools = toolRegistry.getDefinitionsLimited(provider.maxTools)
+        // we still pass tool definitions but they're used by the session internally.
+        var tools: [ToolDefinition]
+        if isTemplatePrefetch {
+            // Template prefetch: ALL needed data is in the system prompt and the template
+            // instructs "Do NOT call tools again" — register NO tools. Otherwise the
+            // on-device model aggressively calls unrelated tools (e.g. calculator during
+            // a morning briefing) producing hallucinated results.
+            tools = []
+        } else {
+            tools = toolRegistry.getDefinitionsLimited(provider.maxTools)
+            // Proactive prefetch: exclude only the prefetched tools so the model doesn't
+            // redundantly re-call them, but keep other tools available since the user
+            // message may need them (e.g. "What's the weather and set a reminder").
+            if !prefetchedToolNames.isEmpty {
+                tools = tools.filter { !prefetchedToolNames.contains($0.name) }
+            }
+        }
+
+        // Skip tools entirely for conversational queries (greetings, capability questions, etc.)
+        // The on-device Foundation Model aggressively calls tools even when they're not needed.
+        // Since native tool handling auto-executes tools with no interception point, the only
+        // reliable fix is to not register tools for queries that clearly don't need them.
+        if ToolCallValidator.isConversational(userMessage) {
+            ClarissaLogger.agent.info("Conversational query detected — skipping tools")
+            tools = []
+        }
+
+        // Intent-based tool restriction: when a message clearly targets one tool,
+        // restrict the session to just that tool. This prevents the model from
+        // calling unrelated tools (e.g., weather for "9*8") which causes wrong
+        // responses and unnecessary network requests.
+        if !tools.isEmpty,
+           let restrictedName = ToolCallValidator.restrictedToolName(for: userMessage) {
+            let filtered = tools.filter { $0.name == restrictedName }
+            if !filtered.isEmpty {
+                ClarissaLogger.agent.info("Intent-based restriction: using only '\(restrictedName)' tool")
+                tools = filtered
+            } else {
+                // The intended tool isn't available (disabled or at max-tools limit).
+                // For math queries, fall back to the local evaluator immediately
+                // rather than passing all tools and risking a wrong-tool call.
+                if restrictedName == "calculator",
+                   let fallback = ToolCallValidator.attemptMathFallbackPublic(from: userMessage) {
+                    ClarissaLogger.agent.info("Calculator not available — using local math fallback")
+                    let assistantMessage = Message.assistant(fallback)
+                    messages.append(assistantMessage)
+                    callbacks?.onStreamChunk(chunk: fallback)
+                    callbacks?.onResponse(content: fallback)
+                    return fallback
+                }
+                // The intended tool is unavailable — strip all tools rather than letting
+                // the on-device model call unrelated tools (e.g., calendar for a reminder
+                // query). The model will answer from its own knowledge instead.
+                ClarissaLogger.agent.warning("Intent restriction for '\(restrictedName)' found no matching tool — stripping all tools")
+                tools = []
+            }
+        }
+
+        // Creative writing bypass: open-ended generative prompts (stories, poems, etc.)
+        // can trigger Foundation Models safety guardrails which SIGKILL the process.
+        // Handle these locally without ever sending to the FM session.
+        if provider.handlesToolsNatively && ToolCallValidator.isCreativeWriting(userMessage) {
+            ClarissaLogger.agent.info("Creative writing detected — handling locally to avoid guardrail kill")
+            let response = ToolCallValidator.creativeWritingResponse
+            let assistantMessage = Message.assistant(response)
+            messages.append(assistantMessage)
+            callbacks?.onStreamChunk(chunk: response)
+            callbacks?.onResponse(content: response)
+            return response
+        }
 
         // Check if provider handles tools natively (e.g., Apple Foundation Models)
         // Native providers execute tools within the LLM session - no manual execution needed
@@ -508,7 +968,9 @@ public final class Agent: ObservableObject {
         // ReAct loop
         // For native tool providers, this typically completes in one iteration
         // since tools are executed internally by the LLM session
+        var recentToolCalls: [String] = []  // Track recent tool calls for loop detection
         for _ in 0..<config.maxIterations {
+            await AnalyticsCollector.shared.recordReactIteration()
             callbacks?.onThinking()
 
             // Get LLM response with streaming (with retry for rate limits)
@@ -555,12 +1017,14 @@ public final class Agent: ObservableObject {
                         try await Task.sleep(for: .seconds(delay))
                         continue
                     }
+                    await AnalyticsCollector.shared.completeSession(crashed: true)
                     throw error
                 }
             }
 
             // If we exhausted retries, throw the last error
             if let error = lastError {
+                await AnalyticsCollector.shared.completeSession(crashed: true)
                 throw error
             }
 
@@ -578,6 +1042,7 @@ public final class Agent: ObservableObject {
                 for execution in toolExecutions {
                     callbacks?.onToolCall(name: execution.name, arguments: execution.arguments)
                     callbacks?.onToolResult(name: execution.name, result: execution.result, success: execution.success)
+                    await AnalyticsCollector.shared.recordToolCall(name: execution.name, success: execution.success)
 
                     // Add tool message to history so it gets saved
                     let toolMessage = Message.tool(
@@ -592,8 +1057,27 @@ public final class Agent: ObservableObject {
                 messages.append(assistantMessage)
 
                 ClarissaLogger.agent.info("Agent run completed (native tool handling, \(toolExecutions.count) tools executed)")
-                let finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
+                var finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
+
+                // Validate response coherence — catch hallucinated actions and wrong-tool responses
+                let execTuples = toolExecutions.map { (name: $0.name, result: $0.result) }
+                if let corrected = ToolCallValidator.checkCoherence(
+                    userMessage: userMessage,
+                    response: finalContent,
+                    toolExecutions: execTuples
+                ) {
+                    ClarissaLogger.agent.warning("Response coherence check failed, using corrected response")
+                    finalContent = corrected
+                    // Replace the last assistant message with the corrected one
+                    if let lastIdx = messages.lastIndex(where: { $0.role == .assistant }) {
+                        messages[lastIdx] = .assistant(corrected)
+                    }
+                }
+
                 callbacks?.onResponse(content: finalContent)
+                let stats = getContextStats()
+                await AnalyticsCollector.shared.recordContextUsage(percent: stats.usagePercent)
+                await AnalyticsCollector.shared.completeSession(crashed: false)
                 return finalContent
             }
 
@@ -603,6 +1087,21 @@ public final class Agent: ObservableObject {
             // Check for tool calls (only for non-native providers like OpenRouter)
             if !toolCalls.isEmpty {
                 for toolCall in toolCalls {
+                    // Validate tool selection before execution
+                    if let mismatch = ToolCallValidator.detectMismatch(userMessage: userMessage, toolName: toolCall.name) {
+                        ClarissaLogger.agent.warning("Tool mismatch detected: \(mismatch, privacy: .public)")
+                        // Tell the model to pick the correct tool instead of executing the wrong one
+                        let errorResult = Self.encodeErrorJSON(
+                            "Wrong tool selected. \(mismatch). Re-read the user's message and pick the correct tool.",
+                            suggestion: "Use the calculator tool for math questions"
+                        )
+                        let toolMessage = Message.tool(callId: toolCall.id, name: toolCall.name, content: errorResult)
+                        messages.append(toolMessage)
+                        callbacks?.onToolCall(name: toolCall.name, arguments: toolCall.arguments)
+                        callbacks?.onToolResult(name: toolCall.name, result: errorResult, success: false)
+                        continue
+                    }
+
                     callbacks?.onToolCall(name: toolCall.name, arguments: toolCall.arguments)
 
                     // Execute tool
@@ -612,6 +1111,7 @@ public final class Agent: ObservableObject {
                         let toolMessage = Message.tool(callId: toolCall.id, name: toolCall.name, content: result)
                         messages.append(toolMessage)
                         callbacks?.onToolResult(name: toolCall.name, result: result, success: true)
+                        await AnalyticsCollector.shared.recordToolCall(name: toolCall.name, success: true)
                         ClarissaLogger.tools.info("Tool \(toolCall.name, privacy: .public) completed successfully")
                     } catch {
                         ClarissaLogger.tools.error("Tool \(toolCall.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
@@ -621,19 +1121,55 @@ public final class Agent: ObservableObject {
                         let toolMessage = Message.tool(callId: toolCall.id, name: toolCall.name, content: errorResult)
                         messages.append(toolMessage)
                         callbacks?.onToolResult(name: toolCall.name, result: errorResult, success: false)
+                        await AnalyticsCollector.shared.recordToolCall(name: toolCall.name, success: false)
                     }
                 }
+
+                // Detect infinite tool-call loops: if the same tool+args pattern repeats 3 times, break
+                let callSignature = toolCalls.map { "\($0.name):\($0.arguments)" }.joined(separator: "|")
+                recentToolCalls.append(callSignature)
+                if recentToolCalls.count >= 3 {
+                    let last3 = recentToolCalls.suffix(3)
+                    if Set(last3).count == 1 {
+                        ClarissaLogger.agent.warning("Detected repeated tool call loop, breaking out")
+                        let loopMsg = "I seem to be stuck in a loop. Let me try a different approach or answer directly."
+                        callbacks?.onResponse(content: loopMsg)
+                        messages.append(.assistant(loopMsg))
+                        await AnalyticsCollector.shared.completeSession(crashed: false)
+                        return loopMsg
+                    }
+                }
+
                 continue // Continue loop for next response
             }
 
             // No tool calls - final response
             ClarissaLogger.agent.info("Agent run completed with response")
-            let finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
+            var finalContent = Self.applyRefusalFallback(fullContent, userMessage: userMessage)
+
+            // Validate response coherence (no tools were called, so pass empty executions)
+            if let corrected = ToolCallValidator.checkCoherence(
+                userMessage: userMessage,
+                response: finalContent,
+                toolExecutions: []
+            ) {
+                ClarissaLogger.agent.warning("Response coherence check failed (no-tool path), using corrected response")
+                finalContent = corrected
+                // Update the message in history
+                if let lastIdx = messages.lastIndex(where: { $0.role == .assistant }) {
+                    messages[lastIdx] = .assistant(corrected)
+                }
+            }
+
             callbacks?.onResponse(content: finalContent)
+            let stats = getContextStats()
+            await AnalyticsCollector.shared.recordContextUsage(percent: stats.usagePercent)
+            await AnalyticsCollector.shared.completeSession(crashed: false)
             return finalContent
         }
 
         ClarissaLogger.agent.warning("Agent reached max iterations")
+        await AnalyticsCollector.shared.completeSession(crashed: true)
         throw AgentError.maxIterationsReached
     }
 
@@ -738,6 +1274,7 @@ public final class Agent: ObservableObject {
         trimmedCount = 0
         conversationSummary = nil
         isSummarizing = false
+        templatePrefetchDone = false
         // Reset native tool usage tracking
         NativeToolUsageTracker.shared.reset()
     }

@@ -115,6 +115,7 @@ public final class AppState: ObservableObject {
             // Unknown command, try treating the whole path as a question
             let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             if !path.isEmpty {
+                requestNewConversation = true
                 pendingShortcutQuestion = path
                 pendingQuestionSource = .urlScheme
             }
@@ -166,5 +167,7 @@ public enum QuestionSource: Sendable {
     case siriShortcut
     /// From URL scheme (CLI integration)
     case urlScheme
+    /// From a notification action
+    case notification
 }
 

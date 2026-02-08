@@ -49,14 +49,14 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
 <Base title={title} description={description}>
   <Header />
   <div class="docs-layout container">
-    <button class="mobile-sidebar-toggle" id="sidebar-toggle" aria-expanded="false">
+    <button class="mobile-sidebar-toggle" id="sidebar-toggle" aria-expanded="false" aria-controls="sidebar">
       <span class="toggle-label">{currentLabel}</span>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
     </button>
     <aside class="sidebar" id="sidebar">
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" aria-label="Documentation">
         {sidebar.map(section => (
           <div class="sidebar-section">
             <h3>{section.title}</h3>
@@ -69,16 +69,21 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
         ))}
       </nav>
     </aside>
-    <main class="docs-content">
+    <main class="docs-content" id="main-content">
       <article class="prose">
         <slot />
       </article>
+      <nav class="toc" id="toc" aria-label="On this page">
+        <h4>On this page</h4>
+        <ul id="toc-list"></ul>
+      </nav>
     </main>
   </div>
   <Footer />
 </Base>
 
 <script>
+  // Sidebar toggle
   const toggle = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('sidebar');
 
@@ -86,6 +91,81 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
     const isOpen = sidebar?.classList.toggle('open');
     toggle.classList.toggle('open');
     toggle.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  // Auto-close sidebar on mobile when clicking a link
+  sidebar?.querySelectorAll('.sidebar-link').forEach(link => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth < 768) {
+        sidebar.classList.remove('open');
+        toggle?.classList.remove('open');
+        toggle?.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+
+  // Auto-generate heading IDs and anchor links
+  const prose = document.querySelector('.prose');
+  if (prose) {
+    const headings = prose.querySelectorAll('h2, h3');
+    headings.forEach(heading => {
+      const el = heading as HTMLElement;
+      if (!el.id) {
+        el.id = el.textContent!.trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+      }
+      // Add anchor link
+      const anchor = document.createElement('a');
+      anchor.href = `#${el.id}`;
+      anchor.className = 'heading-anchor';
+      anchor.setAttribute('aria-label', `Link to ${el.textContent!.trim()}`);
+      anchor.textContent = '#';
+      el.style.position = 'relative';
+      el.appendChild(anchor);
+    });
+
+    // Build TOC
+    const tocList = document.getElementById('toc-list');
+    const toc = document.getElementById('toc');
+    if (tocList && headings.length > 1) {
+      headings.forEach(heading => {
+        const el = heading as HTMLElement;
+        const li = document.createElement('li');
+        li.className = el.tagName === 'H3' ? 'toc-h3' : '';
+        const a = document.createElement('a');
+        a.href = `#${el.id}`;
+        a.textContent = el.textContent!.replace('#', '').trim();
+        li.appendChild(a);
+        tocList.appendChild(li);
+      });
+    } else if (toc) {
+      toc.style.display = 'none';
+    }
+  }
+
+  // Table scroll indicators
+  document.querySelectorAll('.prose table').forEach(table => {
+    const el = table as HTMLElement;
+    if (el.parentElement && !el.parentElement.classList.contains('table-wrapper')) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrapper';
+      el.parentElement.insertBefore(wrapper, el);
+      wrapper.appendChild(el);
+
+      const updateFade = () => {
+        const canScrollLeft = wrapper.scrollLeft > 0;
+        const canScrollRight = wrapper.scrollLeft < wrapper.scrollWidth - wrapper.clientWidth - 1;
+        wrapper.classList.toggle('scroll-left', canScrollLeft);
+        wrapper.classList.toggle('scroll-right', canScrollRight);
+      };
+
+      wrapper.addEventListener('scroll', updateFade);
+      // Check on load + resize
+      updateFade();
+      window.addEventListener('resize', updateFade);
+    }
   });
 </script>
 
@@ -179,9 +259,34 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
     border-color: var(--color-cyan);
   }
 
+  /* TOC — hidden on mobile, shown beside content on wide screens */
+  .toc {
+    display: none;
+  }
+
   .docs-content {
     max-width: 800px;
     min-width: 0;
+  }
+
+  /* Heading anchors */
+  .prose :global(.heading-anchor) {
+    position: absolute;
+    left: -1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.875em;
+    opacity: 0;
+    transition: opacity 0.2s;
+    padding-right: 0.5rem;
+  }
+
+  .prose :global(h2:hover .heading-anchor),
+  .prose :global(h3:hover .heading-anchor),
+  .prose :global(.heading-anchor:focus) {
+    opacity: 0.6;
   }
 
   .prose h1 {
@@ -224,13 +329,49 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
     padding-left: 0;
   }
 
+  /* Table wrapper with scroll hints */
+  .prose :global(.table-wrapper) {
+    position: relative;
+    overflow-x: auto;
+    margin: 1rem 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .prose :global(.table-wrapper)::before,
+  .prose :global(.table-wrapper)::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1;
+  }
+
+  .prose :global(.table-wrapper)::before {
+    left: 0;
+    background: linear-gradient(to right, var(--color-bg), transparent);
+  }
+
+  .prose :global(.table-wrapper)::after {
+    right: 0;
+    background: linear-gradient(to left, var(--color-bg), transparent);
+  }
+
+  .prose :global(.table-wrapper.scroll-left)::before {
+    opacity: 1;
+  }
+
+  .prose :global(.table-wrapper.scroll-right)::after {
+    opacity: 1;
+  }
+
   .prose table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1rem 0;
     font-size: 0.8125rem;
-    display: block;
-    overflow-x: auto;
   }
 
   .prose th, .prose td {
@@ -245,7 +386,7 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
     font-weight: 600;
   }
 
-  @media (min-width: 1024px) {
+  @media (min-width: 768px) {
     .docs-layout {
       grid-template-columns: 220px 1fr;
       padding-top: 2rem;
@@ -288,5 +429,56 @@ const currentLabel = sidebar.flatMap(s => s.items).find(item => Astro.url.pathna
       white-space: normal;
     }
   }
-</style>
 
+  @media (min-width: 1200px) {
+    .docs-layout {
+      grid-template-columns: 220px 1fr 180px;
+    }
+
+    .docs-content {
+      max-width: none;
+    }
+
+    .toc {
+      display: block;
+      position: sticky;
+      top: 80px;
+      align-self: start;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+
+    .toc h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--color-text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .toc ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .toc li {
+      margin-bottom: 0.375rem;
+    }
+
+    .toc :global(.toc-h3) {
+      padding-left: 0.75rem;
+    }
+
+    .toc a {
+      color: var(--color-text-muted);
+      font-size: 0.8125rem;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .toc a:hover {
+      color: var(--color-cyan);
+    }
+  }
+</style>

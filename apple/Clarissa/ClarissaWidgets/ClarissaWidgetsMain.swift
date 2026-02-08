@@ -10,6 +10,8 @@ struct ClarissaWidgetsMain: WidgetBundle {
     var body: some Widget {
         QuickAskWidget()
         ConversationWidget()
+        MorningWidget()
+        MemorySpotlightWidget()
 
         #if os(iOS)
         // Control Center widgets (iOS 18+)
@@ -17,8 +19,13 @@ struct ClarissaWidgetsMain: WidgetBundle {
         VoiceModeControlWidget()
         NewChatControlWidget()
 
+        #if canImport(ActivityKit)
         // Live Activity for multi-tool execution
         ClarissaLiveActivityWidget()
+        #endif
+
+        // StandBy mode widget (iOS only)
+        StandByWidget()
         #endif
     }
 }

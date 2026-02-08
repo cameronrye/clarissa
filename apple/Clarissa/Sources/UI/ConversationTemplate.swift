@@ -1,23 +1,23 @@
 import Foundation
 
 /// A pre-built conversation starter with specialized system prompt, tools, and response tuning
-struct ConversationTemplate: Codable, Identifiable, Hashable, Sendable {
-    let id: String
-    let name: String
-    let description: String
-    let icon: String  // SF Symbol name
+public struct ConversationTemplate: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let description: String
+    public let icon: String  // SF Symbol name
 
     /// Additional system prompt instruction appended to the base prompt
-    let systemPromptFocus: String?
+    public let systemPromptFocus: String?
 
     /// Specific tool names to enable for this template (nil = use current settings)
-    let toolNames: [String]?
+    public let toolNames: [String]?
 
     /// Override for maxResponseTokens (nil = use default)
-    let maxResponseTokens: Int?
+    public let maxResponseTokens: Int?
 
     /// Initial message to send when template is selected (nil = just configure, don't auto-send)
-    let initialPrompt: String?
+    public let initialPrompt: String?
 
     /// Whether this is a user-created custom template
     var isCustom: Bool { !ConversationTemplate.bundled.contains(where: { $0.id == id }) }
@@ -27,7 +27,7 @@ struct ConversationTemplate: Codable, Identifiable, Hashable, Sendable {
 
 extension ConversationTemplate {
     /// Returns bundled + custom templates
-    static func allTemplates() async -> [ConversationTemplate] {
+    public static func allTemplates() async -> [ConversationTemplate] {
         let custom = await TemplateStore.shared.load()
         return bundled + custom
     }
@@ -42,7 +42,8 @@ actor TemplateStore {
     private let fileName = "custom_templates.json"
 
     private var fileURL: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         return docs.appendingPathComponent(fileName)
     }
 
@@ -57,7 +58,12 @@ actor TemplateStore {
 
     func save(_ templates: [ConversationTemplate]) throws {
         let data = try JSONEncoder().encode(templates)
-        try data.write(to: fileURL, options: .atomic)
+        let url = fileURL
+        let dir = url.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        try data.write(to: url, options: .atomic)
     }
 
     func add(_ template: ConversationTemplate) throws {
@@ -85,13 +91,13 @@ actor TemplateStore {
 
 extension ConversationTemplate {
     /// Built-in templates shipped with the app
-    static let bundled: [ConversationTemplate] = [
+    public static let bundled: [ConversationTemplate] = [
         ConversationTemplate(
             id: "morning_briefing",
             name: "Morning Briefing",
             description: "Weather, calendar, and reminders summary",
             icon: "sunrise",
-            systemPromptFocus: "Give a concise morning briefing. Lead with weather, then today's events, then pending reminders. Use a friendly, energizing tone.",
+            systemPromptFocus: "Give a concise morning briefing using the PREFETCHED DATA provided. The weather, calendar, and reminders data has already been fetched for you — summarize it directly. Do NOT call tools again. Do NOT fabricate data beyond what was prefetched. If a section has no data, say \"nothing scheduled\" or \"no reminders\". Lead with weather, then events, then reminders. Friendly, energizing tone.",
             toolNames: ["weather", "calendar", "reminders"],
             maxResponseTokens: 600,
             initialPrompt: "Give me my morning briefing"
@@ -101,7 +107,7 @@ extension ConversationTemplate {
             name: "Meeting Prep",
             description: "Event details and attendee info",
             icon: "person.2",
-            systemPromptFocus: "Help prepare for meetings. Show event details, attendee contact info, and suggest talking points. Be organized and thorough.",
+            systemPromptFocus: "Help prepare for meetings using the PREFETCHED DATA provided. Calendar and contacts data has already been fetched for you — summarize it directly. Do NOT call tools again. Do NOT fabricate event or attendee data beyond what was prefetched. Show event details, attendee contact info, and suggest talking points. Be organized and thorough.",
             toolNames: ["calendar", "contacts"],
             maxResponseTokens: 500,
             initialPrompt: "Help me prepare for my next meeting"

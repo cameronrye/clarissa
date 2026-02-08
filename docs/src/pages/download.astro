@@ -3,12 +3,11 @@ import Base from '../layouts/Base.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 
-const base = import.meta.env.BASE_URL;
 ---
 
 <Base title="Download" description="Download Clarissa for your platform - macOS, Linux, or Windows">
   <Header />
-  <main class="download-page">
+  <main class="download-page" id="main-content">
     <div class="container">
       <h1 class="gradient-text">Download Clarissa</h1>
       <p class="subtitle">Get the standalone binary for your platform</p>
@@ -24,21 +23,29 @@ const base = import.meta.env.BASE_URL;
             <h3>npm / Bun</h3>
             <p>Install globally with your preferred package manager:</p>
             <div class="install-command">
-              <code>bun install -g clarissa</code>
-              <button class="copy-btn" data-copy="bun install -g clarissa" aria-label="Copy">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <code class="font-mono">bun install -g clarissa</code>
+              <button class="copy-btn" data-copy="bun install -g clarissa" aria-label="Copy install command">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
+                <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span class="copy-label">Copied!</span>
               </button>
             </div>
             <div class="install-command">
-              <code>npm install -g clarissa</code>
-              <button class="copy-btn" data-copy="npm install -g clarissa" aria-label="Copy">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <code class="font-mono">npm install -g clarissa</code>
+              <button class="copy-btn" data-copy="npm install -g clarissa" aria-label="Copy install command">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
+                <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span class="copy-label">Copied!</span>
               </button>
             </div>
           </div>
@@ -46,12 +53,16 @@ const base = import.meta.env.BASE_URL;
             <h3>Homebrew (macOS)</h3>
             <p>Install via Homebrew tap:</p>
             <div class="install-command">
-              <code>brew install cameronrye/tap/clarissa</code>
-              <button class="copy-btn" data-copy="brew install cameronrye/tap/clarissa" aria-label="Copy">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <code class="font-mono">brew install cameronrye/tap/clarissa</code>
+              <button class="copy-btn" data-copy="brew install cameronrye/tap/clarissa" aria-label="Copy install command">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
+                <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span class="copy-label">Copied!</span>
               </button>
             </div>
           </div>
@@ -59,12 +70,16 @@ const base = import.meta.env.BASE_URL;
             <h3>winget (Windows)</h3>
             <p>Install via Windows Package Manager:</p>
             <div class="install-command">
-              <code>winget install cameronrye.clarissa</code>
-              <button class="copy-btn" data-copy="winget install cameronrye.clarissa" aria-label="Copy">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <code class="font-mono">winget install cameronrye.clarissa</code>
+              <button class="copy-btn" data-copy="winget install cameronrye.clarissa" aria-label="Copy install command">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
+                <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span class="copy-label">Copied!</span>
               </button>
             </div>
           </div>
@@ -72,21 +87,29 @@ const base = import.meta.env.BASE_URL;
             <h3>From Source</h3>
             <p>Clone and build from the repository:</p>
             <div class="install-command">
-              <code>git clone https://github.com/cameronrye/clarissa.git</code>
-              <button class="copy-btn" data-copy="git clone https://github.com/cameronrye/clarissa.git" aria-label="Copy">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <code class="font-mono">git clone https://github.com/cameronrye/clarissa.git</code>
+              <button class="copy-btn" data-copy="git clone https://github.com/cameronrye/clarissa.git" aria-label="Copy install command">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
+                <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span class="copy-label">Copied!</span>
               </button>
             </div>
             <div class="install-command">
-              <code>cd clarissa && bun install && bun link</code>
-              <button class="copy-btn" data-copy="cd clarissa && bun install && bun link" aria-label="Copy">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <code class="font-mono">cd clarissa && bun install && bun link</code>
+              <button class="copy-btn" data-copy="cd clarissa && bun install && bun link" aria-label="Copy install command">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
+                <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span class="copy-label">Copied!</span>
               </button>
             </div>
           </div>
@@ -209,13 +232,37 @@ const base = import.meta.env.BASE_URL;
     border: none;
     color: var(--color-text-muted);
     cursor: pointer;
-    padding: 4px;
+    padding: 4px 8px;
     display: flex;
+    align-items: center;
+    gap: 0.375rem;
     flex-shrink: 0;
     transition: color 0.2s;
+    font-size: 0.75rem;
+    border-radius: 4px;
   }
 
   .copy-btn:hover { color: var(--color-text); }
-  .copy-btn.copied { color: var(--color-cyan); }
-</style>
 
+  .copy-btn .check-icon,
+  .copy-btn .copy-label {
+    display: none;
+  }
+
+  .copy-btn .copy-icon {
+    display: block;
+  }
+
+  .copy-btn.copied {
+    color: var(--color-cyan);
+  }
+
+  .copy-btn.copied .copy-icon {
+    display: none;
+  }
+
+  .copy-btn.copied .check-icon,
+  .copy-btn.copied .copy-label {
+    display: block;
+  }
+</style>

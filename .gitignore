@@ -47,6 +47,8 @@ xcuserdata/
 DerivedData/
 *.xcscmblueprint
 build/
+*.xcarchive
+Packaging.log
 
 # Fastlane
 apple/Clarissa/fastlane/test_output/

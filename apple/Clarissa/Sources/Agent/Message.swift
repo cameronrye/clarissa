@@ -31,6 +31,8 @@ public struct Message: Identifiable, Codable, Sendable {
     public let toolName: String?
     public let imageData: Data?  // Optional attached image (thumbnail for display)
     public let createdAt: Date
+    /// Whether the user has pinned this message for quick reference
+    public var isPinned: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -40,7 +42,8 @@ public struct Message: Identifiable, Codable, Sendable {
         toolCallId: String? = nil,
         toolName: String? = nil,
         imageData: Data? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        isPinned: Bool? = nil
     ) {
         self.id = id
         self.role = role
@@ -50,6 +53,7 @@ public struct Message: Identifiable, Codable, Sendable {
         self.toolName = toolName
         self.imageData = imageData
         self.createdAt = createdAt
+        self.isPinned = isPinned
     }
 
     public static func system(_ content: String) -> Message {

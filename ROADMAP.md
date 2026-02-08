@@ -8,10 +8,10 @@
 
 | Product | Status | Description |
 |---------|--------|-------------|
-| **Clarissa for Apple** | v2.0 shipped | Native iOS, iPadOS, macOS app with Apple Intelligence |
+| **Clarissa for Apple** | v2.2 shipped | Native iOS, iPadOS, macOS app with Apple Intelligence |
 | **Clarissa CLI** | v1.2 shipped | Terminal assistant for developers (TypeScript/Bun) |
 | **Clarissa Watch** | v1.0 shipped | watchOS companion target (requires paired iPhone) |
-| **Clarissa Widgets** | v1.0 shipped | Home Screen, Lock Screen, Control Center |
+| **Clarissa Widgets** | v2.0 shipped | Home Screen, Lock Screen, Control Center, StandBy |
 | **clarissa.run** | Live | Documentation and marketing site (Astro) |
 
 ---
@@ -34,74 +34,62 @@ For context on the baseline these roadmap items build on:
 
 ---
 
-## Near Term
+## Shipped in v2.1
 
-### v2.1 — Foundations & Core Improvements
+Quality, testing, conversation intelligence, and dynamic widgets.
 
-Ship quality, testing, and the conversation features that don't depend on new infrastructure.
+### 1. Quality & Foundations
 
-#### 1. Quality & Foundations
+- [x] **Test coverage expansion** — Unit and integration tests for Agent loop (6 tests), SessionManager (38 tests across 6 suites), MemoryManager, and tool execution paths
+- [x] **Data model versioning** — SchemaVersion enum with SchemaMigrator pipeline; versioned PersistedSessionData with sequential migration support
+- [x] **Error analytics** — On-device AnalyticsCollector actor: tool failure rates, avg ReAct iterations, context utilization, crash-free session rate; displayed in Settings → Diagnostics
+- [x] **Accessibility pass** — VoiceOver labels/hints on all interactive elements, `.accessibilityElement(children: .combine)` on message bubbles and session rows, Dynamic Type via `@ScaledMetric`
+- [x] **Offline resilience** — OfflineManager with NWPathMonitor, cached tool results with staleness threshold, offline UI banner, stale widget data indicators
 
-Invest in reliability, accessibility, and resilience before adding more features. This unblocks confident iteration on everything else.
+### 2. Conversation Intelligence
 
-- [ ] **Test coverage expansion** — Unit and integration tests for Agent loop, SessionManager, MemoryManager, and tool execution paths
-- [ ] **Data model versioning** — Schema migration strategy for persistence layer as features add new fields (knowledge base, structured memories, full session sync)
-- [ ] **Error analytics** — Privacy-respecting on-device metrics: tool failure rates, average ReAct loop iterations, context budget utilization, crash-free session rate
-- [ ] **Accessibility pass** — VoiceOver audit, Dynamic Type support in all views, reduced motion alternatives for animations
-- [ ] **Offline resilience** — Graceful degradation when offline: cached last-known tool results, queued tool executions, stale-but-useful widget data
+- [x] **Pin messages** — Pin/unpin via context menu, PinnedMessagesStrip above message list, isPinned field on Message
+- [x] **Session tagging** — Manual tags CRUD on sessions, merged with auto-detected topics for unified filter chips
+- [x] **Enhanced session summaries** — SessionSummarizer using content tagging adapter, auto-generates one-line summary shown in history list
+- [x] **Enhanced cross-session search** — SearchableHistoryView extended to match summaries, manual tags, and full message content
+- [x] **Favorites** — Star sessions via swipe action, favorites filter toggle, favorited sessions exempt from trimming
 
-#### 2. Conversation Intelligence
+### 3. Home Screen & Lock Screen Widgets
 
-v2.0 shipped conversation search/filtering and summarization. Build on that foundation with richer organization and discovery.
-
-- [ ] **Pin messages** — Pin important responses within a conversation for quick reference
-- [ ] **Session tagging** — Auto-tag conversations by topic using ContentTagger, plus manual tags
-- [ ] **Enhanced session summaries** — Upgrade existing summarization to auto-generate a one-line summary shown in the history list (currently used only for context trimming)
-- [ ] **Enhanced cross-session search** — Extend SearchableHistoryView with full-text search across message content, not just session metadata
-- [ ] **Favorites** — Star conversations to keep them from being lost in history
-
-#### 3. Home Screen & Lock Screen Widgets
-
-Widgets exist but are static launchers. Make them dynamic and information-rich.
-
-- [ ] **Glanceable morning widget** — Large widget showing today's weather + next event + top reminder, refreshed via timeline provider with intelligent scheduling
-- [ ] **Memory spotlight widget** — Medium widget surfacing a relevant memory based on time/location (e.g., "You mentioned wanting to try that restaurant nearby")
-- [ ] **StandBy mode card** — Full-screen StandBy display with rotating contextual info (weather, next event, reminders count)
-
-### v2.2 — Tool Chains & Automation
-
-Build the multi-tool engine, then expose it through Shortcuts, notifications, and extensions.
-
-#### 4. Multi-Turn Tool Chains
-
-The ReAct loop executes tools one at a time. Let the agent compose richer workflows. This is foundational infrastructure — tool chains power the Shortcuts actions library, scheduled check-ins, and template quick actions.
-
-- [ ] **Dependent tool chaining** — Agent can declare tool dependencies so outputs pipe into inputs (e.g., "get today's calendar → find contacts for attendees → fetch weather for meeting location")
-- [ ] **Tool chain templates** — Saveable multi-tool workflows that users can trigger with one tap (e.g., "Travel prep: weather + calendar + reminders for trip dates")
-- [ ] **Chain preview** — Show the planned tool chain before execution and let users approve, edit, or skip steps
-
-#### 5. Shortcuts & Automation Power-Ups
-
-Clarissa already has Siri Shortcuts, but they're one-shot. Make Clarissa a first-class automation citizen. *Depends on #4 for tool chain execution.*
-
-- [ ] **Shortcuts actions library** — Expose individual tools (weather, calendar, reminders, web fetch) as standalone Shortcuts actions so users can chain them in their own automations without a chat prompt
-- [ ] **Automation triggers** — Register for time-of-day, location, and Focus mode triggers via the Intents framework to proactively surface information (e.g., commute weather at 7:30am)
-- [ ] **Shortcut result types** — Return rich `IntentResult` types (not just strings) so Shortcuts can pass structured data between actions
-- [ ] **Action extensions** — "Ask Clarissa" action extension in Safari, Notes, Mail for contextual queries without switching apps
-
-#### 6. Smart Notifications
-
-Clarissa is purely reactive today. Add a lightweight notification layer. Scheduled check-ins extend the existing Watch template system (Morning Briefing, Meeting Prep) — notifications become the delivery mechanism for templates that already exist. *Depends on #4 for background tool chain execution.*
-
-- [ ] **Scheduled check-ins** — User-configured schedules that trigger existing templates (Morning Briefing, Meeting Prep, or custom) in the background and deliver results as a notification
-- [ ] **Calendar alerting** — "Heads up: your 2pm meeting has 6 attendees you haven't met — want a prep?" 30 min before events with new contacts
-- [ ] **Memory reminders** — Surface time-sensitive memories as notifications (e.g., "You wanted to follow up with Alex this week")
-- [ ] **Notification actions** — Reply, snooze, or expand directly from the notification
-- [ ] **Share Extension → tool chains** — Extend the existing Share Extension to trigger tool chain workflows (e.g., share a URL → auto-summarize → save to Notes)
+- [x] **Glanceable morning widget** — Large widget with weather + next event + top reminder via MorningDataCollector, intelligent timeline scheduling
+- [x] **Memory spotlight widget** — Medium widget surfacing contextual memories scored by confidence, time-of-day relevance, and recency
+- [x] **StandBy mode card** — Full-screen StandBy display with rotating contextual info (weather, next event, reminders count)
 
 ---
 
-## Medium Term
+## Shipped in v2.2
+
+Tool chains, automation, and smart notifications.
+
+### 4. Multi-Turn Tool Chains
+
+- [x] **Dependent tool chaining** — ToolChainExecutor pipes outputs into inputs via `$N.path` argument references (e.g., "get today's calendar → find contacts for attendees → fetch weather for meeting location")
+- [x] **Tool chain templates** — Saveable multi-tool workflows (built-in: Travel Prep, Daily Digest, Meeting Context, Research & Save) plus custom chain editor
+- [x] **Chain preview** — ChainPreviewView shows planned steps before execution; users can approve, skip optional steps, or cancel
+
+### 5. Shortcuts & Automation Power-Ups
+
+- [x] **Shortcuts actions library** — 8 standalone Shortcuts actions (Get Weather, Get Calendar, Create Reminder, Search Contacts, Calculate, Fetch Web, Save to Memory, Get Location) plus Run Tool Chain action
+- [x] **Automation triggers** — AutomationManager with time-of-day, location, and Focus mode trigger conditions; FocusModeObserver for significant time change detection
+- [x] **Shortcut result types** — All Shortcuts actions return `ReturnsValue<String>` for structured data passing between actions
+- [x] **Action extensions** — Share Extension extended to trigger tool chain workflows via optional `chainId` on SharedResult
+
+### 6. Smart Notifications
+
+- [x] **Scheduled check-ins** — ScheduledCheckInStore with per-day scheduling, BGTaskScheduler background execution, delivers results as actionable notifications
+- [x] **Calendar alerting** — CalendarMonitor scans upcoming events via EventKit, alerts before meetings with configurable attendee threshold and lead time
+- [x] **Memory reminders** — MemoryReminderScanner detects time-sensitive patterns ("follow up this week", "by Friday") and surfaces as notifications
+- [x] **Notification actions** — Reply (text input), snooze (1hr), open, and dismiss actions on all notification categories
+- [x] **Share Extension → tool chains** — SharedResult gains optional `chainId` field; SharedResultBanner shows "Run" button to trigger chain with shared content as input
+
+---
+
+## Near Term
 
 ### 7. Focus Mode Integration
 
@@ -212,12 +200,12 @@ The CLI tool has been stable at v1.2. Bring it forward with the learnings from t
 
 | # | Feature | Effort | Impact | Dependencies | Timeline |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Quality & Foundations | Low | High | — | Near (v2.1) |
-| 2 | Conversation Intelligence | Low | Medium | — | Near (v2.1) |
-| 3 | Dynamic Widgets | Low | High | — | Near (v2.1) |
-| 4 | Multi-Turn Tool Chains | Medium | High | #1 (tests) | Near (v2.2) |
-| 5 | Shortcuts & Automation | Medium | High | #4 | Near (v2.2) |
-| 6 | Smart Notifications | Medium | High | #4 | Near (v2.2) |
+| 1 | Quality & Foundations | Low | High | — | **Shipped (v2.1)** |
+| 2 | Conversation Intelligence | Low | Medium | — | **Shipped (v2.1)** |
+| 3 | Dynamic Widgets | Low | High | — | **Shipped (v2.1)** |
+| 4 | Multi-Turn Tool Chains | Medium | High | #1 (tests) | **Shipped (v2.2)** |
+| 5 | Shortcuts & Automation | Medium | High | #4 | **Shipped (v2.2)** |
+| 6 | Smart Notifications | Medium | High | #4 | **Shipped (v2.2)** |
 | 7 | Focus Mode Integration | Low | Medium | — | Medium |
 | 8 | Health & Fitness | Medium | High | #6 (notifications) | Medium |
 | 9 | Apple Intelligence Adapters | High | High | Apple toolkit | Medium |

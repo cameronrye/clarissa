@@ -20,7 +20,7 @@ final class ProviderCoordinator {
         }
 
         // Default: try Foundation Models first
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             let pccAllowed = UserDefaults.standard.bool(forKey: "pccConsentGiven")
             let provider = FoundationModelsProvider(allowPCC: pccAllowed)
             if await provider.isAvailable {
@@ -39,7 +39,7 @@ final class ProviderCoordinator {
     func checkAvailability(_ providerType: LLMProviderType) async -> Bool {
         switch providerType {
         case .foundationModels:
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, macOS 26.0, *) {
                 let provider = FoundationModelsProvider()
                 return await provider.isAvailable
             }
@@ -74,7 +74,7 @@ final class ProviderCoordinator {
     /// Get an available LLM provider for auxiliary tasks (e.g., prompt enhancement)
     func getAvailableProvider() async -> (any LLMProvider)? {
         // Try Foundation Models first, but check availability
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             let provider = FoundationModelsProvider()
             if await provider.isAvailable {
                 return provider

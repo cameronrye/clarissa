@@ -51,15 +51,33 @@ enum ProactiveContext {
 
     // MARK: - Weather Detection
 
-    private static let weatherKeywords: Set<String> = [
-        "weather", "forecast", "temperature", "rain", "raining", "sunny",
-        "cold", "hot", "warm", "snow", "snowing", "windy", "humid",
-        "umbrella", "jacket", "coat"
+    /// Strong keywords that unambiguously indicate weather intent
+    private static let strongWeatherKeywords: Set<String> = [
+        "weather", "forecast", "temperature"
+    ]
+
+    /// Contextual weather patterns — require weather-related phrasing to avoid
+    /// false positives like "hot take", "cold case", "warm welcome", "coat of arms"
+    private static let contextualWeatherPatterns: [String] = [
+        #"\b(is it|will it|going to)\s+(rain|snow|be (cold|hot|warm|sunny|cloudy|windy))"#,
+        #"\b(rain|snow)\s+(today|tomorrow|tonight|this week|later)"#,
+        #"\bdo i need\s+(an?\s+)?(umbrella|jacket|coat)\b"#,
+        #"\b(how('s| is) the weather|what('s| is) the (weather|temperature|forecast))\b"#,
     ]
 
     private static func matchesWeather(_ text: String) -> Bool {
+        // Strong keywords always match
         let words = Set(text.components(separatedBy: .alphanumerics.inverted).filter { !$0.isEmpty })
-        return !words.isDisjoint(with: weatherKeywords)
+        if !words.isDisjoint(with: strongWeatherKeywords) { return true }
+
+        // Contextual patterns require weather-specific phrasing
+        for pattern in contextualWeatherPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
+                return true
+            }
+        }
+        return false
     }
 
     /// Try to extract a location from the message (e.g., "weather in Paris")
@@ -83,10 +101,14 @@ enum ProactiveContext {
     // MARK: - Calendar Detection
 
     private static let calendarPatterns: [String] = [
-        #"\b(today|tomorrow|tonight|this morning|this afternoon|this evening)\b"#,
-        #"\b(schedule|meeting|appointment|event|busy|free)\b"#,
-        #"\b(at \d{1,2}(:\d{2})?\s*(am|pm)?)\b"#,
+        // Require calendar-adjacent context — bare "today" triggers too often
+        // ("What happened today?", "I'm tired today")
+        #"\b(what('s| is|'re| are)\s+(on\s+)?(my\s+)?(calendar|schedule|agenda))\b"#,
+        #"\b(schedule|meeting|appointment)\b"#,
+        #"\b(am i|are we)\s+(busy|free|available)\b"#,
+        #"\b(at \d{1,2}(:\d{2})?\s*(am|pm))\b"#,
         #"\b(next (monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b"#,
+        #"\b(do i have)\s+.{0,20}\b(today|tomorrow|tonight|this week)\b"#,
     ]
 
     private static func matchesCalendar(_ text: String) -> Bool {
@@ -126,7 +148,7 @@ enum ProactiveContext {
                                 try await Task.sleep(for: .seconds(2))
                                 throw CancellationError()
                             }
-                            let first = try await inner.next()!
+                            guard let first = try await inner.next() else { return "" }
                             inner.cancelAll()
                             return first
                         }

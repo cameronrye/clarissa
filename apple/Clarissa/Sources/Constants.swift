@@ -104,22 +104,22 @@ public enum ClarissaConstants {
     // MARK: - System Prompt Budget (per-section caps within tokenSystemReserve)
 
     /// Maximum tokens for core instructions (non-negotiable base prompt)
-    public static let systemBudgetCore = 250
+    public static let systemBudgetCore = 200
 
     /// Maximum tokens for conversation summary (only if messages were trimmed)
-    public static let systemBudgetSummary = 100
+    public static let systemBudgetSummary = 80
 
     /// Maximum tokens for memories injected into system prompt
     public static let systemBudgetMemories = 80
 
     /// Maximum tokens for proactive context (prefetched calendar/weather)
-    public static let systemBudgetProactive = 80
+    public static let systemBudgetProactive = 60
 
     /// Maximum tokens for disabled tools list
     public static let systemBudgetDisabledTools = 40
 
     /// Maximum tokens for template focus text
-    public static let systemBudgetTemplate = 50
+    public static let systemBudgetTemplate = 40
 
     // MARK: - Context Summarization
 
@@ -149,6 +149,28 @@ public enum ClarissaConstants {
 
     /// Minimum contrast ratio for text (WCAG AA standard)
     public static let minimumContrastRatio: Double = 4.5
+
+    // MARK: - Tool Chains (v2.2)
+
+    /// Maximum number of steps in a single tool chain
+    public static let maxToolChainSteps = 10
+
+    /// Timeout per tool chain step (seconds)
+    public static let toolChainStepTimeoutSeconds: TimeInterval = 15
+
+    /// Maximum length of chain synthesis context passed to LLM
+    public static let maxChainSynthesisChars = 1500
+
+    // MARK: - Notifications (v2.2)
+
+    /// Default minutes before a meeting to send calendar alert
+    public static let defaultCalendarAlertMinutes = 30
+
+    /// Minimum attendees to trigger a calendar alert
+    public static let defaultMinAttendeesForAlert = 3
+
+    /// Background task identifier for scheduled check-ins
+    public static let checkInTaskIdentifier = "dev.rye.clarissa.checkin"
 }
 
 // MARK: - Cross-Platform Notifications

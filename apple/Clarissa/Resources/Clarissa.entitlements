@@ -37,6 +37,12 @@
     <!-- iCloud Key-Value Storage for memory sync across devices -->
     <key>com.apple.developer.ubiquity-kvstore-identifier</key>
     <string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
+
+    <!-- App Group for sharing data with widgets and Share Extension -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.dev.rye.clarissa</string>
+    </array>
 </dict>
 </plist>
 

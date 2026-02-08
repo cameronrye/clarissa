@@ -17,6 +17,9 @@ struct ChatView: View {
     @Namespace private var inputNamespace
     @Namespace private var messageNamespace
 
+    // Scroll target for pinned message navigation
+    @State private var scrollTarget: UUID?
+
     // Accessibility environment variables
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -68,6 +71,16 @@ struct ChatView: View {
                 // Input area for empty state
                 inputAreaView
             } else {
+            // Pinned messages strip
+            if !viewModel.pinnedMessages.isEmpty {
+                PinnedMessagesStrip(
+                    messages: viewModel.pinnedMessages,
+                    onTap: { messageId in
+                        scrollTarget = messageId
+                    }
+                )
+            }
+
             // Messages list
             ScrollViewReader { proxy in
                 ScrollView {
@@ -80,6 +93,8 @@ struct ChatView: View {
                                 onStopSpeaking: { viewModel.stopSpeaking() },
                                 onEdit: message.role == .user ? { viewModel.editAndResend(messageId: message.id) } : nil,
                                 onRegenerate: message.role == .assistant ? { viewModel.regenerateResponse(messageId: message.id) } : nil,
+                                onTogglePin: (message.role == .user || message.role == .assistant)
+                                    ? { viewModel.togglePin(messageId: message.id) } : nil,
                                 isSpeaking: viewModel.isSpeaking
                             )
                             .id(message.id)
@@ -118,25 +133,57 @@ struct ChatView: View {
                     .padding()
                 }
                 .onChange(of: viewModel.messages.count) { _, _ in
-                    withAnimation {
-                        if let lastId = viewModel.messages.last?.id {
+                    // On macOS, defer scrollTo to the next run loop to avoid crashes
+                    // from overlapping animations in NavigationSplitView + LazyVStack.
+                    // The ForEach .animation modifier already handles visual transitions.
+                    if let lastId = viewModel.messages.last?.id {
+                        #if os(macOS)
+                        // Defer to next run loop on macOS to avoid crashes from
+                        // overlapping animations in NavigationSplitView + LazyVStack
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(10))
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                proxy.scrollTo(lastId, anchor: .bottom)
+                            }
+                        }
+                        #else
+                        withAnimation {
                             proxy.scrollTo(lastId, anchor: .bottom)
                         }
+                        #endif
                     }
                 }
                 .onChange(of: viewModel.streamingContent) { _, newValue in
                     // Only scroll when there's active streaming content to avoid
                     // attempting to scroll to a view that no longer exists.
                     guard !newValue.isEmpty else { return }
+                    #if os(macOS)
+                    // Skip animated scroll during streaming on macOS — high-frequency
+                    // updates cause overlapping animations that crash the layout engine.
+                    proxy.scrollTo("streaming", anchor: .bottom)
+                    #else
                     withAnimation {
                         proxy.scrollTo("streaming", anchor: .bottom)
                     }
+                    #endif
                 }
                 .onChange(of: viewModel.thinkingStatus) { _, newStatus in
                     if newStatus.isActive {
+                        #if os(macOS)
+                        proxy.scrollTo("thinking", anchor: .bottom)
+                        #else
                         withAnimation {
                             proxy.scrollTo("thinking", anchor: .bottom)
                         }
+                        #endif
+                    }
+                }
+                .onChange(of: scrollTarget) { _, target in
+                    if let target {
+                        withAnimation {
+                            proxy.scrollTo(target, anchor: .center)
+                        }
+                        scrollTarget = nil
                     }
                 }
             }
@@ -195,6 +242,7 @@ struct ChatView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
                     .controlSize(.mini)
+                    .accessibilityHint("Double-tap to switch to OpenRouter provider")
                     Button {
                         viewModel.showProviderSuggestion = false
                     } label: {
@@ -203,11 +251,30 @@ struct ChatView: View {
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss suggestion")
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
                 .background(.ultraThinMaterial)
                 .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            // Offline banner
+            if OfflineManager.shared.isOffline {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .foregroundStyle(.orange)
+                    Text("Offline — some features may be limited")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Offline. Some features may be limited.")
             }
 
             // Undo banner after edit/regenerate
@@ -239,6 +306,14 @@ struct ChatView: View {
             if let result = viewModel.pendingSharedResult {
                 SharedResultBanner(result: result) {
                     viewModel.insertSharedResult(result)
+                } onRunChain: { chainId in
+                    Task {
+                        let chains = await ToolChain.allChains()
+                        if let chain = chains.first(where: { $0.id == chainId }) {
+                            viewModel.executeChainFromShare(chain, input: result.originalContent)
+                        }
+                    }
+                    viewModel.dismissSharedResult()
                 } onDismiss: {
                     viewModel.dismissSharedResult()
                 }
@@ -658,6 +733,7 @@ struct MessageBubble: View {
     var onStopSpeaking: (() -> Void)? = nil
     var onEdit: (() -> Void)? = nil
     var onRegenerate: (() -> Void)? = nil
+    var onTogglePin: (() -> Void)? = nil
     var isSpeaking: Bool = false
 
     @State private var showCopied = false
@@ -704,6 +780,7 @@ struct MessageBubble: View {
                         .contextMenu {
                             copyButton
                             shareButton
+                            pinButton
                             if let onEdit = onEdit {
                                 Button {
                                     onEdit()
@@ -738,6 +815,7 @@ struct MessageBubble: View {
                         .contextMenu {
                             copyButton
                             shareButton
+                            pinButton
                             #if os(iOS)
                             Button {
                                 shareAsImage()
@@ -774,6 +852,18 @@ struct MessageBubble: View {
                         .accessibilityLabel("Clarissa said: \(message.content)")
                 }
 
+                // Pin indicator
+                if message.isPinned {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                        Text("Pinned")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(ClarissaTheme.purple)
+                    .padding(.horizontal, 8)
+                }
+
                 // Show copied confirmation
                 if showCopied {
                     Text("Copied!")
@@ -804,6 +894,7 @@ struct MessageBubble: View {
                 Spacer(minLength: 60)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -846,6 +937,22 @@ struct MessageBubble: View {
             #endif
         } label: {
             Label("Share", systemImage: "square.and.arrow.up.circle")
+        }
+    }
+
+    @ViewBuilder
+    private var pinButton: some View {
+        if let onTogglePin {
+            Button {
+                onTogglePin()
+            } label: {
+                Label(
+                    message.isPinned ? "Unpin" : "Pin",
+                    systemImage: message.isPinned ? "pin.slash" : "pin"
+                )
+            }
+            .accessibilityLabel(message.isPinned ? "Unpin message" : "Pin message")
+            .accessibilityHint(message.isPinned ? "Double-tap to unpin this message" : "Double-tap to pin this message")
         }
     }
 
@@ -2221,6 +2328,46 @@ struct CameraCaptureModifier: ViewModifier {
     }
 }
 #endif
+
+// MARK: - Pinned Messages Strip
+
+/// Horizontal strip showing pinned messages for quick navigation
+struct PinnedMessagesStrip: View {
+    let messages: [ChatMessage]
+    let onTap: (UUID) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(ClarissaTheme.purple)
+                    .accessibilityHidden(true)
+
+                ForEach(messages) { message in
+                    Button {
+                        onTap(message.id)
+                    } label: {
+                        Text(message.content)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(ClarissaTheme.purple.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Pinned: \(message.content)")
+                    .accessibilityHint("Double-tap to scroll to this pinned message")
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+        .accessibilityLabel("Pinned messages, \(messages.count) \(messages.count == 1 ? "item" : "items")")
+    }
+}
 
 #Preview {
     ChatView(viewModel: ChatViewModel())

@@ -12,6 +12,21 @@ const base = import.meta.env.BASE_URL;
     you expect.
   </p>
 
+  <div class="screenshot-row">
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/02-conversation-calendar.png`} alt="Calendar conversation on iPhone" loading="lazy" />
+      <figcaption>iPhone</figcaption>
+    </figure>
+    <figure class="screenshot desktop">
+      <img src={`${base}images/mac/02-conversation-calendar.png`} alt="Calendar conversation on Mac" loading="lazy" />
+      <figcaption>Mac</figcaption>
+    </figure>
+    <figure class="screenshot watch-fig">
+      <img src={`${base}images/watch/02-watch-response.png`} alt="Response on Apple Watch" loading="lazy" />
+      <figcaption>Watch</figcaption>
+    </figure>
+  </div>
+
   <h2>On-Device AI with Apple Foundation Models</h2>
   <p>
     Clarissa uses Apple's Foundation Models framework for completely private, on-device AI:
@@ -77,6 +92,10 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Live Activity</strong> — Dynamic Island and Lock Screen show real-time plan progress</li>
     <li><strong>Human-readable steps</strong> — Tool calls are translated to descriptions like "Checking your calendar..."</li>
   </ul>
+  <figure class="screenshot-inline">
+    <img src={`${base}images/iphone/06-tool-execution.png`} alt="Tool execution progress on iPhone" loading="lazy" />
+    <figcaption>Real-time tool execution with step-by-step progress</figcaption>
+  </figure>
 
   <h2>Voice Input</h2>
   <p>
@@ -89,6 +108,10 @@ const base = import.meta.env.BASE_URL;
     <li>Tap again to stop and send</li>
     <li><strong>Legacy fallback</strong> to SFSpeechRecognizer on older devices</li>
   </ul>
+  <figure class="screenshot-inline">
+    <img src={`${base}images/iphone/05-voice-mode.png`} alt="Voice input mode on iPhone" loading="lazy" />
+    <figcaption>Voice input with live transcription</figcaption>
+  </figure>
 
   <h2>Siri Shortcuts Integration</h2>
   <p>
@@ -124,6 +147,20 @@ const base = import.meta.env.BASE_URL;
   </p>
 
   <h2>Native Tools</h2>
+  <div class="screenshot-row">
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/03-conversation-weather.png`} alt="Weather tool on iPhone" loading="lazy" />
+      <figcaption>Weather</figcaption>
+    </figure>
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/04-conversation-reminder.png`} alt="Reminder tool on iPhone" loading="lazy" />
+      <figcaption>Reminders</figcaption>
+    </figure>
+    <figure class="screenshot phone">
+      <img src={`${base}images/iphone/07-context-visualizer.png`} alt="Context visualizer on iPhone" loading="lazy" />
+      <figcaption>Context</figcaption>
+    </figure>
+  </div>
   <p>
     The Apple version includes tools deeply integrated with iOS and macOS frameworks:
   </p>
@@ -138,6 +175,104 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Remember</strong> — Store information with auto-tagging, categories, and confidence scoring</li>
     <li><strong>Image Analysis</strong> — OCR, object detection, face detection, AI descriptions (Vision + Foundation Models)</li>
     <li><strong>Document OCR</strong> — Full-document recognition, PDF extraction, handwriting (Vision)</li>
+  </ul>
+
+  <h2>Tool Chains</h2>
+  <p>
+    Chain multiple tools together into reusable, multi-step workflows with output piping:
+  </p>
+  <ul>
+    <li><strong>Argument piping</strong> — Reference previous step outputs with <code>$N.path</code> syntax (e.g., <code>$1.temperature</code>)</li>
+    <li><strong>Built-in chains</strong> — Travel Prep, Daily Digest, Meeting Context, and Research &amp; Save</li>
+    <li><strong>Custom chains</strong> — Create your own with the chain editor: reorder steps, pick icons, mark steps optional</li>
+    <li><strong>Preview &amp; approve</strong> — See planned steps before execution; skip optional steps or cancel</li>
+    <li><strong>Progress tracking</strong> — Real-time step-by-step progress displayed inline in chat</li>
+    <li><strong>Shortcuts integration</strong> — Run any saved chain from the Shortcuts app with the "Run Tool Chain" action</li>
+  </ul>
+
+  <h2>Shortcuts Actions</h2>
+  <p>
+    8 standalone Shortcuts actions let you use Clarissa's tools directly in any automation:
+  </p>
+  <ul>
+    <li><strong>Get Weather</strong> — Current conditions and forecast for any location</li>
+    <li><strong>Get Calendar Events</strong> — Upcoming events for a date range</li>
+    <li><strong>Create Reminder</strong> — Add reminders with title, date, and notes</li>
+    <li><strong>Search Contacts</strong> — Find contacts by name</li>
+    <li><strong>Calculate</strong> — Evaluate math expressions</li>
+    <li><strong>Fetch Web Content</strong> — Retrieve and parse any URL</li>
+    <li><strong>Save to Memory</strong> — Store information in Clarissa's long-term memory</li>
+    <li><strong>Get Current Location</strong> — Your current position with address</li>
+    <li><strong>Run Tool Chain</strong> — Execute any saved tool chain</li>
+  </ul>
+  <p>
+    All actions return values that can be piped into other Shortcuts actions for powerful automations.
+  </p>
+
+  <h2>Automation Triggers</h2>
+  <p>
+    Run tool chains automatically based on context:
+  </p>
+  <ul>
+    <li><strong>Time-of-day</strong> — Schedule chains to run at specific times (e.g., Daily Digest every morning)</li>
+    <li><strong>Location</strong> — Trigger chains when arriving at or leaving a location</li>
+    <li><strong>Focus mode</strong> — Run chains when a Focus mode activates (e.g., Work Focus triggers Meeting Context)</li>
+  </ul>
+  <p>
+    Configure triggers in Settings under Automation. All triggers are managed by the AutomationManager
+    and persist across app launches.
+  </p>
+
+  <h2>Smart Notifications</h2>
+  <p>
+    Clarissa proactively notifies you with contextual, actionable alerts:
+  </p>
+  <ul>
+    <li><strong>Scheduled check-ins</strong> — Set per-day check-in times; Clarissa runs your chosen chain and delivers results as a notification</li>
+    <li><strong>Calendar alerts</strong> — Get notified before meetings with attendee count and context, powered by EventKit scanning</li>
+    <li><strong>Memory reminders</strong> — Detects time-sensitive patterns in your memories (e.g., "follow up by Friday", "check this week") and reminds you</li>
+  </ul>
+  <p>
+    Notification actions include <strong>Reply</strong> (text input), <strong>Snooze</strong> (1 hour),
+    <strong>Open</strong>, and <strong>Dismiss</strong>.
+  </p>
+
+  <h2>Widgets</h2>
+  <p>
+    Glanceable information on your Home Screen and Lock Screen:
+  </p>
+  <ul>
+    <li><strong>Morning briefing</strong> — Weather + next event + top reminder, updated on a timeline schedule</li>
+    <li><strong>Memory spotlight</strong> — Surfaces contextual memories scored by confidence, time-of-day relevance, and recency</li>
+    <li><strong>StandBy card</strong> — Rotating contextual info optimized for StandBy mode on iPhone</li>
+    <li><strong>Live Activity</strong> — Dynamic Island and Lock Screen show real-time progress during multi-tool execution</li>
+  </ul>
+
+  <h2>Session Intelligence</h2>
+  <p>
+    Organize and navigate your conversations with powerful session features:
+  </p>
+  <ul>
+    <li><strong>Pin messages</strong> — Long-press to pin important messages; pinned messages appear in a strip above the conversation</li>
+    <li><strong>Tags</strong> — Manually tag sessions or let Clarissa auto-detect topics from your conversation</li>
+    <li><strong>Favorites</strong> — Star sessions with a swipe action; filter your history to show favorites only</li>
+    <li><strong>Enhanced search</strong> — Search across session titles, summaries, tags, and message content</li>
+    <li><strong>Session summaries</strong> — AI-generated summaries for quick browsing of past conversations</li>
+  </ul>
+  <figure class="screenshot-inline">
+    <img src={`${base}images/iphone/08-history.png`} alt="Session history on iPhone" loading="lazy" />
+    <figcaption>Search and filter conversation history</figcaption>
+  </figure>
+
+  <h2>Offline Mode</h2>
+  <p>
+    Clarissa works even without a network connection:
+  </p>
+  <ul>
+    <li><strong>Network monitoring</strong> — Detects connectivity changes and displays an offline banner</li>
+    <li><strong>Cached tool results</strong> — Recently fetched weather, calendar, and other data remain available offline</li>
+    <li><strong>Stale data indicators</strong> — Clearly marks when displayed data may be outdated</li>
+    <li><strong>On-device AI</strong> — Foundation Models work entirely offline after initial setup</li>
   </ul>
 
   <h2>Export & Sharing</h2>
@@ -158,6 +293,7 @@ const base = import.meta.env.BASE_URL;
   <ul>
     <li>Share text, URLs, or images from Safari, Notes, Mail, and more</li>
     <li>Shared content appears in a new conversation for immediate processing</li>
+    <li><strong>Chain triggers</strong> — Attach a tool chain to shared content and run it with one tap from the banner</li>
     <li>Uses App Group storage for seamless handoff to the main app</li>
   </ul>
 
@@ -214,6 +350,24 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Response history</strong> — View recent responses</li>
     <li><strong>Complications</strong> — Quick launch from watch faces</li>
   </ul>
+  <div class="screenshot-row">
+    <figure class="screenshot watch-fig">
+      <img src={`${base}images/watch/01-watch-welcome.png`} alt="Watch welcome screen" loading="lazy" />
+      <figcaption>Welcome</figcaption>
+    </figure>
+    <figure class="screenshot watch-fig">
+      <img src={`${base}images/watch/03-watch-quick-actions.png`} alt="Watch quick actions" loading="lazy" />
+      <figcaption>Quick Actions</figcaption>
+    </figure>
+    <figure class="screenshot watch-fig">
+      <img src={`${base}images/watch/04-watch-voice-input.png`} alt="Watch voice input" loading="lazy" />
+      <figcaption>Voice Input</figcaption>
+    </figure>
+    <figure class="screenshot watch-fig">
+      <img src={`${base}images/watch/06-watch-history.png`} alt="Watch history" loading="lazy" />
+      <figcaption>History</figcaption>
+    </figure>
+  </div>
 
   <h2>macOS Features</h2>
   <p>
@@ -225,6 +379,16 @@ const base = import.meta.env.BASE_URL;
     <li><strong>Keyboard shortcuts</strong> — ⌘N for new conversation, ⇧⌘⌫ to clear</li>
     <li><strong>Resizable window</strong> — Works at any size</li>
   </ul>
+  <div class="screenshot-row">
+    <figure class="screenshot desktop">
+      <img src={`${base}images/mac/01-welcome.png`} alt="Mac welcome screen" loading="lazy" />
+      <figcaption>Welcome</figcaption>
+    </figure>
+    <figure class="screenshot desktop">
+      <img src={`${base}images/mac/09-settings-provider.png`} alt="Mac settings" loading="lazy" />
+      <figcaption>Settings</figcaption>
+    </figure>
+  </div>
 
   <h2>Next Steps</h2>
   <ul>
@@ -232,4 +396,88 @@ const base = import.meta.env.BASE_URL;
     <li>Return to <a href={`${base}docs/apple/getting-started/`}>Getting Started</a></li>
   </ul>
 </Docs>
+
+<style>
+  .screenshot-row {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-end;
+    justify-content: center;
+    margin: 1.5rem 0 2rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+
+  .screenshot {
+    flex: 0 0 auto;
+    text-align: center;
+  }
+
+  .screenshot img {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    display: block;
+  }
+
+  .screenshot figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .screenshot.phone img {
+    height: 320px;
+    width: auto;
+  }
+
+  .screenshot.desktop img {
+    height: 260px;
+    width: auto;
+  }
+
+  .screenshot.watch-fig img {
+    height: 180px;
+    width: auto;
+  }
+
+  .screenshot-inline {
+    margin: 1.5rem 0 2rem;
+    text-align: center;
+  }
+
+  .screenshot-inline img {
+    height: 400px;
+    width: auto;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .screenshot-inline figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .screenshot.phone img {
+      height: 240px;
+    }
+
+    .screenshot.desktop img {
+      height: 180px;
+    }
+
+    .screenshot.watch-fig img {
+      height: 140px;
+    }
+
+    .screenshot-inline img {
+      height: 300px;
+    }
+
+    .screenshot-row {
+      gap: 0.75rem;
+    }
+  }
+</style>
 

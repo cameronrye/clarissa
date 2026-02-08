@@ -159,14 +159,24 @@ extension WatchConnectivityManager: WCSessionDelegate {
         // Decode message in nonisolated context first
         do {
             let watchMessage = try WatchMessage.from(dictionary: message)
-            // Use nonisolated(unsafe) to bridge the non-Sendable closure
-            // This is safe because WCSession guarantees the reply handler is valid
-            nonisolated(unsafe) let unsafeReplyHandler = replyHandler
+
+            // Build reply dictionary in nonisolated context before crossing actor boundary
+            // This avoids bridging the non-Sendable replyHandler closure across isolation domains
+            if let replyHandler = replyHandler {
+                if case .ping = watchMessage {
+                    let replyDict = (try? WatchMessage.pong.toDictionary()) ?? [:]
+                    replyHandler(replyDict)
+                } else {
+                    replyHandler([:])
+                }
+            }
+
             Task { @MainActor in
-                await processMessage(watchMessage, replyHandler: unsafeReplyHandler)
+                await processMessage(watchMessage, replyHandler: nil)
             }
         } catch {
             ClarissaLogger.agent.error("Failed to decode Watch message: \(error.localizedDescription)")
+            replyHandler?([:])
         }
     }
 

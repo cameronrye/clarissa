@@ -103,16 +103,32 @@ public final class ToolRegistry {
     }
 
     /// Execute a tool by name
-    /// Tool execution happens off the main thread to prevent UI freezes
+    /// Tools run on MainActor to satisfy framework requirements (CLLocationManager, etc.)
+    /// Since tools are async, they yield at await points and won't block the UI.
+    /// On failure when offline, returns cached last-known result if available.
     func execute(name: String, arguments: String) async throws -> String {
         guard let tool = tools[name] else {
             throw ToolError.notAvailable("Tool '\(name)' not found")
         }
 
-        // Execute tool off the main actor to prevent UI blocking
-        return try await Task.detached(priority: .userInitiated) {
-            try await tool.execute(arguments: arguments)
-        }.value
+        do {
+            let result = try await tool.execute(arguments: arguments)
+
+            // Cache successful result for offline fallback
+            OfflineManager.shared.cacheToolResult(name: name, arguments: arguments, result: result)
+
+            return result
+        } catch {
+            // If offline, try to return a cached result
+            if OfflineManager.shared.isOffline,
+               let cached = OfflineManager.shared.getCachedResult(name: name, arguments: arguments) {
+                let staleNote = cached.isStale
+                    ? " (cached from \(cached.ageDescription), may be outdated)"
+                    : " (cached)"
+                return cached.result + staleNote
+            }
+            throw error
+        }
     }
 
     #if canImport(FoundationModels)

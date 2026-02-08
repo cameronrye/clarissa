@@ -5,6 +5,47 @@ All notable changes to the Clarissa Apple application will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-07
+
+### Added
+
+#### Multi-Turn Tool Chains
+- **ToolChain model** — Multi-step workflow data model with `$N.path` argument references for piping outputs between steps
+- **ToolChainExecutor** — Sequential execution engine with argument resolution, cancellation support, and progress callbacks
+- **Built-in chains** — Travel Prep, Daily Digest, Meeting Context, and Research & Save workflows
+- **Chain preview** — ChainPreviewView shows planned steps; users can approve, skip optional steps, or cancel before execution
+- **Chain editor** — ToolChainEditorView for creating and editing custom tool chains with step reordering and icon picker
+- **Chain persistence** — ToolChainStore actor saves custom chains as JSON in documents directory
+
+#### Shortcuts & Automation
+- **Shortcuts actions library** — 8 standalone AppIntents: Get Weather, Get Calendar Events, Create Reminder, Search Contacts, Calculate, Fetch Web Content, Save to Memory, Get Current Location
+- **Run Tool Chain action** — Execute any saved tool chain from Shortcuts with optional user input
+- **Automation triggers** — AutomationManager with time-of-day, location, and Focus mode trigger conditions
+- **FocusModeObserver** — Detects significant time changes to fire time-based automation triggers (iOS)
+- **AutomationTriggerStore** — Actor-based persistence for user-configured triggers
+
+#### Smart Notifications
+- **NotificationManager** — Full UNUserNotificationCenter integration with 3 categories: check-in, calendar alert, memory reminder
+- **Notification actions** — Reply (text input from notification), snooze (1hr), open, and dismiss actions
+- **Scheduled check-ins** — ScheduledCheckInStore with per-day scheduling; CheckInScheduler with BGTaskScheduler background execution (iOS)
+- **Calendar alerting** — CalendarMonitor scans upcoming events via EventKit, sends "heads up" alerts before meetings with configurable attendee threshold
+- **Memory reminders** — MemoryReminderScanner detects time-sensitive patterns (follow-up, this week, by Friday) and surfaces as notifications
+- **Share Extension → chains** — SharedResult extended with optional `chainId`; SharedResultBanner shows "Run" button for chain-triggered workflows
+
+#### Settings & UI
+- **Automation settings** — New AutomationSettingsView with chain management, check-in scheduling, calendar alert configuration, and memory reminder toggle
+- **Settings integration** — Automation tab (macOS) and navigation link (iOS) in SettingsView
+- **Chain progress view** — Real-time step-by-step progress display during chain execution
+
+### Changed
+
+- **AgentCallbacks** — Extended with chain lifecycle callbacks: `onChainStart`, `onChainStepStart`, `onChainStepComplete`, `onChainComplete`
+- **ChatViewModel** — Integrated tool chain state management, preview flow, and ToolChainCallbacks conformance
+- **Schema version** — Bumped to v3 with v2→v3 migration (SharedResult gains optional chainId)
+- **ClarissaConstants** — Added tool chain and notification constants
+
+---
+
 ## [2.0.0] - 2026-02-06
 
 ### Added

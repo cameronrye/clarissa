@@ -27,6 +27,18 @@ public protocol AgentCallbacks: AnyObject {
 
     /// Called when proactive context was prefetched and injected into the prompt
     func onProactiveContext(labels: [String])
+
+    /// Called when a tool chain is about to start executing
+    func onChainStart(chain: ToolChain)
+
+    /// Called when a tool chain step begins
+    func onChainStepStart(stepIndex: Int, step: ToolChainStep)
+
+    /// Called when a tool chain step completes
+    func onChainStepComplete(stepIndex: Int, step: ToolChainStep, result: String, success: Bool)
+
+    /// Called when all chain steps are done and results are being synthesized
+    func onChainComplete(result: ToolChainResult)
 }
 
 /// Default implementation that does nothing
@@ -38,5 +50,9 @@ public extension AgentCallbacks {
     func onResponse(content: String) {}
     func onError(error: Error) {}
     func onProactiveContext(labels: [String]) {}
+    func onChainStart(chain: ToolChain) {}
+    func onChainStepStart(stepIndex: Int, step: ToolChainStep) {}
+    func onChainStepComplete(stepIndex: Int, step: ToolChainStep, result: String, success: Bool) {}
+    func onChainComplete(result: ToolChainResult) {}
 }
 

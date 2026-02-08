@@ -28,6 +28,12 @@ public enum ClarissaAppGroup {
     
     /// Key for suggested quick questions
     public static let suggestedQuestionsKey = "suggestedQuestions"
+
+    /// Key for morning widget data (weather + calendar + reminders)
+    public static let morningDataKey = "morningWidgetData"
+
+    /// Key for memory spotlight widget data
+    public static let memorySpotlightKey = "memorySpotlightData"
 }
 
 // MARK: - Widget Data Models
@@ -64,6 +70,58 @@ public struct WidgetConversationData: Codable, Sendable {
         "What's on my calendar?",
         "Set a reminder"
     ]
+}
+
+/// Data for the glanceable morning widget (weather + calendar + reminder)
+public struct WidgetMorningData: Codable, Sendable {
+    /// Short weather summary (e.g., "72°F, Sunny")
+    public let weatherSummary: String?
+    /// Next calendar event title
+    public let nextEvent: String?
+    /// Next calendar event start time
+    public let nextEventTime: Date?
+    /// Top reminder text
+    public let topReminder: String?
+    /// When this data was last refreshed
+    public let lastUpdated: Date
+
+    public init(
+        weatherSummary: String? = nil,
+        nextEvent: String? = nil,
+        nextEventTime: Date? = nil,
+        topReminder: String? = nil,
+        lastUpdated: Date = Date()
+    ) {
+        self.weatherSummary = weatherSummary
+        self.nextEvent = nextEvent
+        self.nextEventTime = nextEventTime
+        self.topReminder = topReminder
+        self.lastUpdated = lastUpdated
+    }
+}
+
+/// Data for the memory spotlight widget
+public struct WidgetMemorySpotlight: Codable, Sendable {
+    /// The memory content to display
+    public let memoryContent: String
+    /// Associated topics for display
+    public let memoryTopics: [String]?
+    /// Why this memory was surfaced (e.g., "Related to today's calendar")
+    public let reason: String
+    /// When this was last refreshed
+    public let lastUpdated: Date
+
+    public init(
+        memoryContent: String,
+        memoryTopics: [String]? = nil,
+        reason: String = "",
+        lastUpdated: Date = Date()
+    ) {
+        self.memoryContent = memoryContent
+        self.memoryTopics = memoryTopics
+        self.reason = reason
+        self.lastUpdated = lastUpdated
+    }
 }
 
 // MARK: - Widget Data Manager
@@ -126,6 +184,46 @@ public final class WidgetDataManager {
             suggestedQuestions: WidgetConversationData.defaultQuestions
         )
         saveConversationData(data)
+    }
+
+    // MARK: - Morning Widget Data
+
+    /// Save morning briefing data for the morning widget
+    public func saveMorningData(_ data: WidgetMorningData) {
+        guard let defaults = ClarissaAppGroup.sharedDefaults else { return }
+        if let encoded = try? JSONEncoder().encode(data) {
+            defaults.set(encoded, forKey: ClarissaAppGroup.morningDataKey)
+        }
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+    }
+
+    /// Load morning briefing data
+    public func loadMorningData() -> WidgetMorningData? {
+        guard let defaults = ClarissaAppGroup.sharedDefaults,
+              let data = defaults.data(forKey: ClarissaAppGroup.morningDataKey) else { return nil }
+        return try? JSONDecoder().decode(WidgetMorningData.self, from: data)
+    }
+
+    // MARK: - Memory Spotlight Widget Data
+
+    /// Save memory spotlight data for the memory widget
+    public func saveMemorySpotlight(_ data: WidgetMemorySpotlight) {
+        guard let defaults = ClarissaAppGroup.sharedDefaults else { return }
+        if let encoded = try? JSONEncoder().encode(data) {
+            defaults.set(encoded, forKey: ClarissaAppGroup.memorySpotlightKey)
+        }
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+    }
+
+    /// Load memory spotlight data
+    public func loadMemorySpotlight() -> WidgetMemorySpotlight? {
+        guard let defaults = ClarissaAppGroup.sharedDefaults,
+              let data = defaults.data(forKey: ClarissaAppGroup.memorySpotlightKey) else { return nil }
+        return try? JSONDecoder().decode(WidgetMemorySpotlight.self, from: data)
     }
 }
 

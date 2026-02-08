@@ -108,6 +108,69 @@ const base = import.meta.env.BASE_URL;
     follow-up questions without repeating the trigger phrase.
   </p>
 
+  <h2>Tool Chains & Automation</h2>
+
+  <h3>What are tool chains?</h3>
+  <p>
+    Tool chains are multi-step workflows that run several tools in sequence, piping outputs between
+    steps. For example, the "Daily Digest" chain fetches your weather, calendar events, and reminders,
+    then summarizes everything. Clarissa includes 4 built-in chains, and you can create custom ones
+    in the chain editor.
+  </p>
+
+  <h3>How do I create a custom tool chain?</h3>
+  <p>
+    Go to Settings &gt; Automation &gt; Tool Chains &gt; Create New Chain. Add steps, reorder them,
+    pick an icon, and use <code>$N.path</code> syntax to pipe outputs between steps (e.g.,
+    <code>$1.temperature</code> passes the temperature from step 1 to step 2).
+  </p>
+
+  <h3>How do automation triggers work?</h3>
+  <p>
+    You can set tool chains to run automatically based on time-of-day, location, or Focus mode changes.
+    Configure triggers in Settings &gt; Automation. For example, schedule "Daily Digest" to run every
+    morning at 7am, or trigger "Meeting Context" when Work Focus activates.
+  </p>
+
+  <h3>Can I use Clarissa tools in the Shortcuts app?</h3>
+  <p>
+    Yes! Clarissa provides 8 standalone Shortcuts actions (Get Weather, Get Calendar Events, Create
+    Reminder, Search Contacts, Calculate, Fetch Web Content, Save to Memory, Get Current Location)
+    plus a "Run Tool Chain" action. All actions return values that can be piped into other Shortcuts steps.
+  </p>
+
+  <h2>Notifications & Widgets</h2>
+
+  <h3>What are scheduled check-ins?</h3>
+  <p>
+    Check-ins let you schedule Clarissa to run a tool chain at specific times on specific days. The
+    results are delivered as a notification. For example, schedule a Daily Digest check-in for
+    weekday mornings.
+  </p>
+
+  <h3>How do calendar alerts work?</h3>
+  <p>
+    When enabled, Clarissa monitors your upcoming calendar events and sends a notification before
+    meetings that have a significant number of attendees, giving you context before you join.
+    Configure the attendee threshold in Settings &gt; Automation &gt; Calendar Alerts.
+  </p>
+
+  <h3>What widgets are available?</h3>
+  <p>
+    Clarissa offers three widgets: a <strong>Morning Briefing</strong> widget (weather + next event +
+    top reminder), a <strong>Memory Spotlight</strong> widget (contextual memories based on time of
+    day), and a <strong>StandBy</strong> card with rotating information. Add them from the Home Screen
+    widget picker.
+  </p>
+
+  <h3>Does Clarissa work offline?</h3>
+  <p>
+    Yes, partially. On-device AI via Foundation Models works entirely offline. Recently fetched tool
+    results (weather, calendar, etc.) are cached and available offline with stale data indicators.
+    Cloud providers (OpenRouter) require an internet connection. An offline banner appears when
+    connectivity is lost.
+  </p>
+
   <h2>Troubleshooting</h2>
 
   <h3>The app crashes on launch</h3>
@@ -118,7 +181,7 @@ const base = import.meta.env.BASE_URL;
     <li>Force quit and relaunch the app</li>
     <li>Restart your device</li>
     <li>Ensure you're on iOS/macOS 26 or later</li>
-    <li>Reinstall from TestFlight</li>
+    <li>Reinstall from the App Store (or TestFlight if using the beta)</li>
   </ol>
 
   <h3>"Apple Intelligence not available"</h3>
@@ -158,12 +221,15 @@ const base = import.meta.env.BASE_URL;
     Templates are pre-configured conversation starters with specialized system prompts and tools.
     Clarissa includes 4 built-in templates (Morning Briefing, Meeting Prep, Research Mode, Quick Math)
     and you can create your own in Settings. Templates are also available via Siri and Apple Watch.
+    For multi-step automated workflows, see <strong>tool chains</strong> in Settings &gt; Automation.
   </p>
 
   <h3>How does the Share Extension work?</h3>
   <p>
     You can share text, URLs, or images from any app to Clarissa using the system Share sheet.
     The shared content will be queued and appear as a new conversation when you open Clarissa.
+    You can also attach a tool chain to shared content — a "Run" button on the shared result
+    banner lets you execute the chain immediately.
   </p>
 
   <h3>How do I report a bug?</h3>

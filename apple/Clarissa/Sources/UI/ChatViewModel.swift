@@ -33,6 +33,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Suggests switching to OpenRouter after an FM failure
     @Published var showProviderSuggestion: Bool = false
 
+    // MARK: - Tool Chain State
+    /// Chain currently being previewed (awaiting user approval)
+    @Published var pendingChain: ToolChain?
+    /// Step statuses during chain execution (for progress UI)
+    @Published var chainStepStatuses: [UUID: ChainStepStatus] = [:]
+    /// Whether a chain is currently executing
+    @Published var isExecutingChain: Bool = false
+    /// Available chains (built-in + custom) — loaded on demand
+    @Published var availableChains: [ToolChain] = []
+
     // MARK: - Undo State (ephemeral, does not survive app restart)
     /// Stores replaced messages for one-level undo after edit/regenerate
     private(set) var undoSnapshot: [ChatMessage]?
@@ -86,12 +96,12 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Set up provider (default to Foundation Models if available)
         initTask = Task {
+            defer { isSettingUpProvider = false }
             currentProvider = await providerCoordinator.setupProvider(appState: nil)
 
             guard !Task.isCancelled else { return }
 
             await loadSession()
-            isSettingUpProvider = false
         }
 
         // Initialize voice manager on both platforms
@@ -190,14 +200,19 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Clear the current conversation and reset agent state
     private func clearConversation() {
         cancelGeneration()
+
+        let hadMessages = !messages.isEmpty
         messages.removeAll()
         streamingContent = ""
         errorMessage = nil
         contextStats = .empty
         thinkingStatus = .idle
 
-        // Reset agent AND provider session to prevent context bleeding
+        // Save current session before clearing, then reset
         Task {
+            if hadMessages {
+                await sessionCoordinator.saveCurrentSession()
+            }
             await sessionCoordinator.startNewSession()
             updateContextStats()
             sessionVersion += 1
@@ -214,26 +229,29 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         // Cancel any in-progress init task and wait for it to complete
         let previousTask = initTask
         initTask = nil
+        previousTask?.cancel()
 
-        initTask = Task {
-            // Wait for previous task to complete (it will exit early due to cancellation checks)
-            previousTask?.cancel()
+        initTask = Task { [weak self] in
+            // Wait for previous task to fully complete before proceeding
             _ = await previousTask?.value
 
+            guard let self, !Task.isCancelled else { return }
+
             isSettingUpProvider = true
+            defer { isSettingUpProvider = false }
+
             // Set up provider with fallback if persisted selection is unavailable
             await appState.setProviderWithFallback(appState.selectedProvider) { providerType in
                 await self.providerCoordinator.checkAvailability(providerType)
             }
 
-            // Check for cancellation before continuing
+            // Check for cancellation before continuing (another configure() may have superseded us)
             guard !Task.isCancelled else { return }
 
             currentProvider = await providerCoordinator.setupProvider(
                 for: appState.selectedProvider, appState: appState
             )
             await loadSession()
-            isSettingUpProvider = false
         }
     }
 
@@ -253,6 +271,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
             currentProvider = await providerCoordinator.setupProvider(
                 for: appState?.selectedProvider, appState: appState
             )
+            // Reload the current session into the new provider so the agent retains context
+            await loadSession()
         }
     }
 
@@ -333,6 +353,7 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
                 // Pre-process image BEFORE involving the LLM
                 if let imageData = imageData {
+                    try Task.checkCancellation()
                     let processor = ImagePreProcessor()
                     let result = await processor.process(imageData: imageData)
 
@@ -343,14 +364,16 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
                     """
                 }
 
+                try Task.checkCancellation()
                 // Pass image preview for persistence (not the full image)
                 _ = try await agent.run(promptText, imageData: imagePreview)
-                // Save session after successful response
-                await sessionCoordinator.saveCurrentSession()
-                sessionVersion += 1
             } catch is CancellationError {
-                // User cancelled - don't show error
+                // User cancelled - clean up and skip save
                 streamingContent = ""
+                isLoading = false
+                canCancel = false
+                currentTask = nil
+                return
             } catch {
                 // Auto-recovery: if contextWindowExceeded, aggressively trim and retry once
                 let isContextOverflow: Bool
@@ -372,8 +395,6 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
                         // Retry with compressed context
                         do {
                             _ = try await self.agent.run(promptText, imageData: imagePreview)
-                            await self.sessionCoordinator.saveCurrentSession()
-                            self.sessionVersion += 1
                         } catch {
                             // Recovery failed — show original error
                             self.errorMessage = ErrorMapper.userFriendlyMessage(for: error)
@@ -393,10 +414,15 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
                 }
             }
 
+            // Unblock UI immediately — don't wait for save operations
             isLoading = false
             canCancel = false
             streamingContent = ""
             currentTask = nil
+
+            // Save session in the background so the user can keep chatting
+            await sessionCoordinator.saveCurrentSession()
+            sessionVersion += 1
         }
     }
 
@@ -408,6 +434,10 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         canCancel = false
         streamingContent = ""
         thinkingStatus = .idle
+
+        // Clear chain execution state so stale progress doesn't show on next message
+        chainStepStatuses = [:]
+        isExecutingChain = false
 
         // End any active Live Activity and reset tool call tracking
         #if os(iOS)
@@ -502,6 +532,33 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
     /// Whether an undo is available
     var canUndo: Bool { undoSnapshot != nil }
+
+    // MARK: - Pin Messages
+
+    /// Toggle pin state on a message
+    func togglePin(messageId: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        messages[index].isPinned.toggle()
+        HapticManager.shared.lightTap()
+
+        // Persist pin state — find the matching agent-layer message by content+role and toggle
+        Task {
+            // The agent-layer Message IDs may differ from ChatMessage IDs.
+            // Match by content + role + approximate timestamp.
+            let chat = messages[index]
+            let agentMessages = agent.getMessagesForSave()
+            if let agentMsg = agentMessages.first(where: {
+                $0.role == chat.role && $0.content == chat.content
+            }) {
+                await sessionCoordinator.toggleMessagePin(messageId: agentMsg.id)
+            }
+        }
+    }
+
+    /// Get all pinned messages in the current conversation
+    var pinnedMessages: [ChatMessage] {
+        messages.filter { $0.isPinned }
+    }
 
     /// Sync agent's internal message history with current UI messages
     private func syncAgentMessages() {
@@ -603,7 +660,12 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         isLoading = false
         canCancel = false
 
-        // Clear UI state immediately
+        // Save the current session before creating a new one so no messages are lost
+        if !messages.isEmpty {
+            await sessionCoordinator.saveCurrentSession()
+        }
+
+        // Clear UI state
         messages.removeAll()
         streamingContent = ""
         errorMessage = nil
@@ -634,13 +696,15 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
 
         // Save current session before switching
         await sessionCoordinator.saveCurrentSession()
-        sessionVersion += 1
 
         guard let chatMessages = await sessionCoordinator.switchToSession(id: id) else { return }
 
         // Clear UI messages first, then load new ones
         messages = chatMessages
         updateContextStats()
+
+        // Only increment version after successful switch
+        sessionVersion += 1
     }
 
     /// Delete a session
@@ -711,6 +775,124 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     /// Dismiss the shared result banner
     func dismissSharedResult() {
         pendingSharedResult = nil
+    }
+
+    // MARK: - Tool Chains
+
+    /// Load available tool chains
+    func loadChains() async {
+        availableChains = await ToolChain.allChains()
+    }
+
+    /// Show chain preview for user approval before executing
+    func previewChain(_ chain: ToolChain) {
+        pendingChain = chain
+        HapticManager.shared.lightTap()
+    }
+
+    /// Cancel a pending chain preview
+    func cancelChainPreview() {
+        pendingChain = nil
+    }
+
+    /// Approve and execute a chain (optionally skipping steps)
+    func executeChain(_ chain: ToolChain, skippedStepIds: Set<UUID> = [], userInput: String? = nil) {
+        pendingChain = nil
+        isExecutingChain = true
+        chainStepStatuses = [:]
+
+        // Initialize all steps as pending
+        for step in chain.steps {
+            chainStepStatuses[step.id] = skippedStepIds.contains(step.id) ? .skipped : .pending
+        }
+
+        // Add a system message showing the chain is running
+        var chainMessage = ChatMessage(role: .tool, content: "Running \(chain.name)...")
+        chainMessage.toolName = "chain"
+        chainMessage.toolStatus = .running
+        messages.append(chainMessage)
+
+        currentTask = Task {
+            do {
+                let executor = ToolChainExecutor(toolRegistry: .shared, callbacks: self)
+
+                // Notify chain start
+                agent.callbacks?.onChainStart(chain: chain)
+
+                let result = try await executor.execute(
+                    chain: chain,
+                    skippedStepIds: skippedStepIds,
+                    userInput: userInput
+                )
+
+                // Notify chain complete
+                agent.callbacks?.onChainComplete(result: result)
+
+                // Update the chain message with final status
+                if let index = messages.lastIndex(where: { $0.toolName == "chain" && $0.toolStatus == .running }) {
+                    messages[index].toolStatus = result.isSuccess ? .completed : .failed
+                    messages[index].toolResult = result.synthesisContext
+                    messages[index].content = "\(chain.name) completed"
+                }
+
+                // Feed chain results to the agent for synthesis into a natural response
+                if result.isSuccess && !result.synthesisContext.isEmpty {
+                    let synthesisPrompt = """
+                    I just ran the "\(chain.name)" workflow. Here are the results:
+
+                    \(result.synthesisContext)
+
+                    Summarize these results in a natural, helpful response.
+                    """
+                    _ = try await agent.run(synthesisPrompt)
+                }
+
+            } catch is CancellationError {
+                // User cancelled
+            } catch {
+                errorMessage = ErrorMapper.userFriendlyMessage(for: error)
+            }
+
+            // Unblock UI immediately — don't wait for save operations
+            isExecutingChain = false
+            chainStepStatuses = [:]
+            currentTask = nil
+
+            // Save session in the background
+            await sessionCoordinator.saveCurrentSession()
+            sessionVersion += 1
+        }
+    }
+
+    /// Run a chain triggered from the Share Extension
+    func executeChainFromShare(_ chain: ToolChain, input: String) {
+        executeChain(chain, userInput: input)
+    }
+
+    /// Save a custom tool chain
+    func saveCustomChain(_ chain: ToolChain) {
+        Task {
+            do {
+                if chain.isBuiltIn { return }
+                try await ToolChainStore.shared.add(chain)
+                await loadChains()
+                HapticManager.shared.success()
+            } catch {
+                errorMessage = "Failed to save chain: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Delete a custom tool chain
+    func deleteCustomChain(id: String) {
+        Task {
+            do {
+                try await ToolChainStore.shared.delete(id: id)
+                await loadChains()
+            } catch {
+                errorMessage = "Failed to delete chain: \(error.localizedDescription)"
+            }
+        }
     }
 
     // MARK: - Voice Control Methods
@@ -922,6 +1104,10 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     }
 
     func onResponse(content: String) {
+        // Clear streaming content immediately to prevent duplication:
+        // without this, both StreamingMessageBubble and the final MessageBubble
+        // show the same text until the cleanup code runs after saveCurrentSession()
+        streamingContent = ""
         thinkingStatus = .idle
         planSteps = []
 
@@ -955,7 +1141,11 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         }
 
         // Speak response in voice mode
-        if isVoiceModeActive, let voiceManager = voiceController.voiceManager {
+        if isVoiceModeActive {
+            guard let voiceManager = voiceController.voiceManager else {
+                ClarissaLogger.ui.warning("Voice mode active but voiceManager is nil — cannot speak response")
+                return
+            }
             // Read voice output setting - default to true to match @AppStorage default in SettingsView
             let voiceOutputEnabled: Bool
             if UserDefaults.standard.object(forKey: "voiceOutputEnabled") == nil {
@@ -971,6 +1161,8 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
     }
 
     func onError(error: Error) {
+        // Clear streaming content to prevent partial text staying visible alongside error
+        streamingContent = ""
         thinkingStatus = .idle
         planSteps = []
 
@@ -993,5 +1185,70 @@ final class ChatViewModel: ObservableObject, AgentCallbacks {
         }
 
         errorMessage = error.localizedDescription
+    }
+
+    // MARK: - Chain Callbacks
+
+    func onChainStart(chain: ToolChain) {
+        isExecutingChain = true
+        thinkingStatus = .usingTool(chain.name)
+    }
+
+    func onChainComplete(result: ToolChainResult) {
+        isExecutingChain = false
+        thinkingStatus = .idle
+    }
+}
+
+// MARK: - ToolChainCallbacks Conformance
+
+extension ChatViewModel: ToolChainCallbacks {
+    func onChainStepStart(stepIndex: Int, step: ToolChainStep) {
+        chainStepStatuses[step.id] = .running
+
+        thinkingStatus = .usingTool("\(step.label)")
+
+        // Add a tool message for this chain step
+        let toolMessage = ChatMessage(
+            role: .tool,
+            content: step.label,
+            toolName: step.toolName,
+            toolStatus: .running
+        )
+        messages.append(toolMessage)
+
+        // Live Activity updates for chain steps
+        #if os(iOS)
+        let displayName = ToolDisplayNames.format(step.toolName)
+        toolCallCount += 1
+        if #available(iOS 16.1, *) {
+            if toolCallCount == 2 {
+                let question = messages.last(where: { $0.role == .user })?.content ?? "Running chain..."
+                LiveActivityManager.shared.startActivity(question: question, currentTool: displayName)
+            } else if toolCallCount > 2 {
+                LiveActivityManager.shared.updateTool(name: displayName)
+            }
+        }
+        #endif
+    }
+
+    func onChainStepComplete(stepIndex: Int, step: ToolChainStep, result: String, success: Bool) {
+        chainStepStatuses[step.id] = success
+            ? .completed(result: result)
+            : .failed(error: result)
+
+        // Update the tool message for this step
+        if let index = messages.lastIndex(where: { $0.toolName == step.toolName && $0.toolStatus == .running }) {
+            messages[index].toolStatus = success ? .completed : .failed
+            messages[index].toolResult = result
+        }
+
+        thinkingStatus = .processing
+
+        #if os(iOS)
+        if #available(iOS 16.1, *) {
+            LiveActivityManager.shared.completeStep()
+        }
+        #endif
     }
 }

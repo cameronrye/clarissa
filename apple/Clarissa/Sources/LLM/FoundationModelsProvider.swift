@@ -91,9 +91,12 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
     /// Create or reuse session with native tool support
     /// Tools are registered directly with LanguageModelSession for native tool calling
     /// - Parameter systemPrompt: The system prompt/instructions for the session
-    /// - Parameter withTools: Whether to include tools from the registry (false for simple text generation)
+    /// - Parameter allowedToolNames: Tool names the agent wants available for this call.
+    ///   When empty, the session is created without tools.
+    ///   This ensures the FM session respects tool filtering from Agent.run()
+    ///   (e.g., conversational queries get no tools, prefetched tools are excluded).
     @MainActor
-    private func getOrCreateSession(systemPrompt: String?, withTools: Bool = true) -> LanguageModelSession {
+    private func getOrCreateSession(systemPrompt: String?, allowedToolNames: Set<String>) -> LanguageModelSession {
         let instructionsText = systemPrompt ?? "You are Clarissa, a helpful AI assistant."
 
         // Use permissive guardrails for the memory feature to work correctly.
@@ -103,22 +106,21 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
         // This setting only affects content transformations, not safety guardrails.
         let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
 
-        // For tool-less sessions (e.g., prompt enhancement), always create fresh
-        // This prevents pollution from previous chat sessions and ensures clean context
-        if !withTools {
+        // For tool-less sessions (e.g., conversational queries, prompt enhancement),
+        // always create a fresh throwaway session to prevent unwanted tool calls.
+        // IMPORTANT: Do NOT clear the cached session/instructions/toolSet here.
+        // Clearing them would destroy the main session's conversation transcript,
+        // breaking continuity when the next tool-enabled query creates a new session.
+        if allowedToolNames.isEmpty {
             let instructions = Instructions(instructionsText)
-            // Create a simple session without tools for text generation tasks
             return LanguageModelSession(model: model, instructions: instructions)
         }
 
-        // Get current enabled tools to check if session needs refresh
-        let enabledToolNames = Set(ToolSettings.shared.enabledToolNames)
-
         // Reuse existing session if instructions AND tools haven't changed
-        // Session must be invalidated if user enables/disables tools in settings
+        // Session must be invalidated if the allowed tool set differs
         if let existingSession = session,
            currentInstructions == instructionsText,
-           currentToolSet == enabledToolNames {
+           currentToolSet == allowedToolNames {
             ClarissaLogger.provider.debug("Reusing existing session - instructions unchanged")
             return existingSession
         }
@@ -132,8 +134,17 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
             ClarissaLogger.provider.info("Creating new session - tool set changed")
         }
 
-        // Get Apple-native tools from the registry (limited to maxTools)
+        // Get Apple-native tools filtered to only those the agent requested
         let appleTools = toolRegistry.getAppleToolsLimited(maxTools)
+            .filter { allowedToolNames.contains($0.name) }
+
+        // Safety: if filtering removed all tools (name mismatch), create tool-less session
+        // rather than passing tools: [] which may behave differently
+        guard !appleTools.isEmpty else {
+            ClarissaLogger.provider.warning("All tools filtered out — creating tool-less session")
+            let instructions = Instructions(instructionsText)
+            return LanguageModelSession(model: model, instructions: instructions)
+        }
 
         // Create Instructions struct as per the guide
         let instructions = Instructions(instructionsText)
@@ -147,14 +158,16 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
 
         session = newSession
         currentInstructions = instructionsText
-        currentToolSet = enabledToolNames
+        currentToolSet = allowedToolNames
         return newSession
     }
 
     /// Prewarm the session for faster first response
     @MainActor
     func prewarm(with promptPrefix: String? = nil) {
-        let session = getOrCreateSession(systemPrompt: nil)
+        // Prewarm with all enabled tools since we don't know the query yet
+        let enabledNames = Set(ToolSettings.shared.enabledToolNames)
+        let session = getOrCreateSession(systemPrompt: nil, allowedToolNames: enabledNames)
         if let prefix = promptPrefix {
             session.prewarm(promptPrefix: Prompt(prefix))
         } else {
@@ -205,13 +218,13 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
                     // Extract system prompt
                     let systemPrompt = messages.first { $0.role == .system }?.content
 
-                    // Determine if this is a simple text generation request (no tools)
-                    // For such requests, create a fresh tool-less session to avoid polluting
-                    // the main chat session and to ensure clean context for tasks like prompt enhancement
-                    let useTools = !tools.isEmpty
+                    // Pass the agent's filtered tool names to the session.
+                    // This ensures the FM session only has the tools that Agent.run()
+                    // determined are appropriate (e.g., no tools for conversational queries,
+                    // prefetched tools excluded, intent-based filtering applied).
+                    let allowedToolNames = Set(tools.map(\.name))
 
-                    // Get or create session (tool-less sessions are always fresh)
-                    let session = getOrCreateSession(systemPrompt: systemPrompt, withTools: useTools)
+                    let session = getOrCreateSession(systemPrompt: systemPrompt, allowedToolNames: allowedToolNames)
 
                     // Build the user prompt from messages
                     let promptText = buildPrompt(from: messages)
@@ -229,6 +242,11 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
 
                     // Check for cancellation before starting stream
                     try Task.checkCancellation()
+
+                    // Clear any stale tool executions from the tracker before streaming.
+                    // If a previous stream errored, consumeExecutions() may not have run,
+                    // leaving stale data that would leak into this response.
+                    NativeToolUsageTracker.shared.clearCurrentExecutions()
 
                     // Stream response using correct API: streamResponse(to: Prompt, options:)
                     // The stream yields ResponseStream.Snapshot with .content property
@@ -289,12 +307,16 @@ public final class FoundationModelsProvider: @preconcurrency LLMProvider {
                     continuation.finish()
 
                 } catch is CancellationError {
+                    // Clear stale tracker data so it doesn't leak into the next request
+                    NativeToolUsageTracker.shared.clearCurrentExecutions()
                     continuation.finish()
                 } catch let error as LanguageModelSession.GenerationError {
+                    NativeToolUsageTracker.shared.clearCurrentExecutions()
                     // Handle specific GenerationError cases as per the guide
                     let wrappedError = handleGenerationError(error)
                     continuation.finish(throwing: wrappedError)
                 } catch {
+                    NativeToolUsageTracker.shared.clearCurrentExecutions()
                     continuation.finish(throwing: error)
                 }
                 #else

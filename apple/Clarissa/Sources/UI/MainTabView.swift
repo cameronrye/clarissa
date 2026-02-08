@@ -73,7 +73,8 @@ public struct MainTabView: View {
             #if os(macOS)
             // Auto-present history sheet for screenshot mode on macOS
             if DemoData.isScreenshotMode && DemoData.currentScenario == .history {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
                     showHistorySheet = true
                 }
             }
@@ -561,7 +562,18 @@ struct ChatTabContent: View {
         .onChange(of: appState.requestNewConversation) { _, newValue in
             if newValue {
                 appState.requestNewConversation = false
-                Task { await viewModel.startNewSession() }
+                // Capture any pending question so we can send it AFTER the new session is ready
+                let pendingQuestion = appState.pendingShortcutQuestion
+                if pendingQuestion != nil {
+                    appState.pendingShortcutQuestion = nil
+                }
+                Task {
+                    await viewModel.startNewSession()
+                    if let question = pendingQuestion, !question.isEmpty {
+                        viewModel.inputText = question
+                        viewModel.sendMessage()
+                    }
+                }
             }
         }
         .onChange(of: appState.requestVoiceMode) { _, newValue in
@@ -586,22 +598,21 @@ struct ChatTabContent: View {
             }
         }
         // Auto-present sheets for screenshot mode scenarios
-        .onAppear {
+        .task {
             if DemoData.isScreenshotMode {
                 // Small delay to ensure view is fully loaded before presenting sheet
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    switch DemoData.currentScenario {
-                    case .history:
-                        #if os(iOS)
-                        showHistorySheet = true
-                        #endif
-                    case .settingsProvider, .settingsVoice:
-                        #if os(iOS)
-                        showSettingsSheet = true
-                        #endif
-                    default:
-                        break
-                    }
+                try? await Task.sleep(for: .milliseconds(500))
+                switch DemoData.currentScenario {
+                case .history:
+                    #if os(iOS)
+                    showHistorySheet = true
+                    #endif
+                case .settingsProvider, .settingsVoice:
+                    #if os(iOS)
+                    showSettingsSheet = true
+                    #endif
+                default:
+                    break
                 }
             }
         }
@@ -746,8 +757,11 @@ struct ChatTabContent: View {
         .buttonStyle(.plain)
         .frame(width: 36, height: 36)
         .contentShape(Circle())
+        #if os(iOS)
+        // Glass effect on toolbar items crashes on macOS (NSToolbar hosting context)
         .glassEffect(reduceMotion ? .regular : .regular.interactive(), in: .circle)
         .glassEffectID("overflow", in: chatNamespace)
+        #endif
         .accessibilityLabel("More options")
         .accessibilityHint("Double-tap for new chat, voice mode, history, tools, memories, settings, and share")
     }

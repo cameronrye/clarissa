@@ -18,6 +18,8 @@ struct SearchableHistoryView: View {
 
     @State private var sessions: [Session] = []
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var selectedDateFilter: DateFilter = .all
     @State private var selectedTopics: Set<String> = []
     @State private var availableTopics: [String] = []
@@ -25,17 +27,27 @@ struct SearchableHistoryView: View {
     @State private var isLoading = true
     @State private var editingSessionId: UUID?
     @State private var editingTitle: String = ""
+    @State private var showFavoritesOnly = false
+    @State private var addingTagSessionId: UUID?
+    @State private var newTagText = ""
 
     private var filteredSessions: [Session] {
         var result = sessions
 
-        // Full-text search
-        if !searchText.isEmpty {
-            let query = searchText.lowercased()
+        // Favorites filter
+        if showFavoritesOnly {
+            result = result.filter { $0.isFavorite == true }
+        }
+
+        // Full-text search across title, messages, summary, topics, and manual tags
+        if !debouncedSearchText.isEmpty {
+            let query = debouncedSearchText.lowercased()
             result = result.filter { session in
                 session.title.lowercased().contains(query) ||
+                session.summary?.lowercased().contains(query) == true ||
                 session.messages.contains(where: { $0.content.lowercased().contains(query) }) ||
-                (session.topics?.contains(where: { $0.lowercased().contains(query) }) ?? false)
+                (session.topics?.contains(where: { $0.lowercased().contains(query) }) ?? false) ||
+                (session.manualTags?.contains(where: { $0.lowercased().contains(query) }) ?? false)
             }
         }
 
@@ -56,12 +68,20 @@ struct SearchableHistoryView: View {
             }
         }
 
-        // Topic filter
+        // Topic/tag filter
         if !selectedTopics.isEmpty {
             result = result.filter { session in
-                guard let sessionTopics = session.topics else { return false }
-                return !selectedTopics.isDisjoint(with: Set(sessionTopics))
+                let allTags = Set(session.allTags)
+                return !selectedTopics.isDisjoint(with: allTags)
             }
+        }
+
+        // Sort: favorites first, then by updatedAt
+        result.sort { lhs, rhs in
+            let lhsFav = lhs.isFavorite == true
+            let rhsFav = rhs.isFavorite == true
+            if lhsFav != rhsFav { return lhsFav }
+            return lhs.updatedAt > rhs.updatedAt
         }
 
         return result
@@ -81,7 +101,7 @@ struct SearchableHistoryView: View {
                     ProgressView()
                     Spacer()
                 } else if filteredSessions.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
+                    ContentUnavailableView.search(text: debouncedSearchText)
                 } else {
                     sessionList
                 }
@@ -98,6 +118,14 @@ struct SearchableHistoryView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "Search conversations")
+            .onChange(of: searchText) { _, newValue in
+                searchDebounceTask?.cancel()
+                searchDebounceTask = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    debouncedSearchText = newValue
+                }
+            }
             .task {
                 await loadData()
             }
@@ -111,16 +139,30 @@ struct SearchableHistoryView: View {
 
     private var filterBar: some View {
         VStack(spacing: 8) {
-            // Date filter
-            Picker("Date", selection: $selectedDateFilter) {
-                ForEach(DateFilter.allCases) { filter in
-                    Text(filter.rawValue).tag(filter)
+            HStack {
+                // Date filter
+                Picker("Date", selection: $selectedDateFilter) {
+                    ForEach(DateFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
                 }
+                .pickerStyle(.segmented)
+
+                // Favorites toggle
+                Button {
+                    showFavoritesOnly.toggle()
+                } label: {
+                    Image(systemName: showFavoritesOnly ? "star.fill" : "star")
+                        .foregroundStyle(showFavoritesOnly ? .yellow : .secondary)
+                        .font(.body)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showFavoritesOnly ? "Show all conversations" : "Show favorites only")
+                .accessibilityHint("Double-tap to toggle favorites filter")
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal)
 
-            // Topic chips
+            // Topic/tag chips
             if !availableTopics.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -166,13 +208,14 @@ struct SearchableHistoryView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     if editingSessionId == session.id {
-                        TextField("Title", text: $editingTitle, onCommit: {
+                        TextField("Title", text: $editingTitle)
+                        .onSubmit {
                             Task {
                                 await viewModel.renameSession(id: session.id, newTitle: editingTitle)
                                 editingSessionId = nil
                                 await loadData()
                             }
-                        })
+                        }
                         .textFieldStyle(.roundedBorder)
                         .font(.headline)
                     } else {
@@ -183,6 +226,13 @@ struct SearchableHistoryView: View {
 
                     Spacer()
 
+                    if session.isFavorite == true {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption)
+                            .accessibilityLabel("Favorited")
+                    }
+
                     if session.id == currentSessionId {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(ClarissaTheme.purple)
@@ -190,8 +240,13 @@ struct SearchableHistoryView: View {
                     }
                 }
 
-                // Preview of last user message
-                if let lastUser = session.messages.last(where: { $0.role == .user }) {
+                // Show summary if available, otherwise last user message
+                if let summary = session.summary {
+                    Text(summary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if let lastUser = session.messages.last(where: { $0.role == .user }) {
                     Text(lastUser.content)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -210,9 +265,10 @@ struct SearchableHistoryView: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
 
-                    // Topic tags
-                    if let topics = session.topics, !topics.isEmpty {
-                        Text(topics.prefix(2).joined(separator: ", "))
+                    // Tags (auto topics + manual)
+                    let tags = session.allTags
+                    if !tags.isEmpty {
+                        Text(tags.prefix(2).joined(separator: ", "))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
@@ -220,9 +276,24 @@ struct SearchableHistoryView: View {
                 }
             }
             .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
+        .accessibilityHint(session.id == currentSessionId ? "Current conversation" : "Double-tap to open this conversation")
         .swipeActions(edge: .leading) {
+            Button {
+                Task {
+                    await SessionManager.shared.toggleFavorite(id: session.id)
+                    await loadData()
+                }
+            } label: {
+                Label(
+                    session.isFavorite == true ? "Unfavorite" : "Favorite",
+                    systemImage: session.isFavorite == true ? "star.slash" : "star"
+                )
+            }
+            .tint(.yellow)
+
             Button {
                 editingTitle = session.title
                 editingSessionId = session.id
@@ -243,6 +314,25 @@ struct SearchableHistoryView: View {
         }
         .contextMenu {
             Button {
+                Task {
+                    await SessionManager.shared.toggleFavorite(id: session.id)
+                    await loadData()
+                }
+            } label: {
+                Label(
+                    session.isFavorite == true ? "Unfavorite" : "Favorite",
+                    systemImage: session.isFavorite == true ? "star.slash.fill" : "star"
+                )
+            }
+
+            Button {
+                addingTagSessionId = session.id
+                newTagText = ""
+            } label: {
+                Label("Add Tag", systemImage: "tag")
+            }
+
+            Button {
                 editingTitle = session.title
                 editingSessionId = session.id
             } label: {
@@ -258,6 +348,24 @@ struct SearchableHistoryView: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+        .alert("Add Tag", isPresented: Binding(
+            get: { addingTagSessionId == session.id },
+            set: { if !$0 { addingTagSessionId = nil } }
+        )) {
+            TextField("Tag name", text: $newTagText)
+            Button("Add") {
+                Task {
+                    if let id = addingTagSessionId {
+                        await SessionManager.shared.addTag(newTagText, to: id)
+                        addingTagSessionId = nil
+                        await loadData()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                addingTagSessionId = nil
+            }
+        }
     }
 
     // MARK: - Data
@@ -265,17 +373,17 @@ struct SearchableHistoryView: View {
     private func loadData() async {
         sessions = await viewModel.getAllSessions()
         currentSessionId = await viewModel.getCurrentSessionId()
-        availableTopics = await SessionManager.shared.getAllTopics()
+        availableTopics = await SessionManager.shared.getAllTags()
         isLoading = false
     }
 
     private func deleteSessions(at offsets: IndexSet) {
         let sessionsToDelete = offsets.map { filteredSessions[$0] }
-        for session in sessionsToDelete {
-            Task {
+        Task {
+            for session in sessionsToDelete {
                 await viewModel.deleteSession(id: session.id)
-                await loadData()
             }
+            await loadData()
         }
     }
 }
@@ -303,6 +411,7 @@ struct TopicChipView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(topic) filter")
+        .accessibilityHint(isSelected ? "Double-tap to remove this filter" : "Double-tap to filter by this topic")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

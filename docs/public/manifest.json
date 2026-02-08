@@ -1,7 +1,7 @@
 {
   "name": "Clarissa",
   "short_name": "Clarissa",
-  "description": "An AI-powered terminal assistant with tool execution capabilities",
+  "description": "AI assistant for terminal and Apple devices with tool execution, automation, and MCP support",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",

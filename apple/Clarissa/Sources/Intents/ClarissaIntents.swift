@@ -62,16 +62,6 @@ struct ClarissaShortcuts: AppShortcutsProvider {
             systemImageName: "waveform"
         )
 
-        AppShortcut(
-            intent: QuickQuestionIntent(),
-            phrases: [
-                "Quick question for \(.applicationName)",
-                "Ask \(.applicationName) quickly"
-            ],
-            shortTitle: "Quick Question",
-            systemImageName: "questionmark.bubble"
-        )
-
         // Template shortcuts
         AppShortcut(
             intent: StartTemplateIntent(templateId: "morning_briefing"),
@@ -93,24 +83,45 @@ struct ClarissaShortcuts: AppShortcutsProvider {
             systemImageName: "person.2"
         )
 
+        // Tool shortcuts
         AppShortcut(
-            intent: StartTemplateIntent(templateId: "research_mode"),
+            intent: GetWeatherShortcut(),
             phrases: [
-                "Research mode with \(.applicationName)",
-                "Start research with \(.applicationName)"
+                "Get weather with \(.applicationName)",
+                "Weather from \(.applicationName)"
             ],
-            shortTitle: "Research Mode",
-            systemImageName: "magnifyingglass"
+            shortTitle: "Get Weather",
+            systemImageName: "cloud.sun"
         )
 
         AppShortcut(
-            intent: StartTemplateIntent(templateId: "quick_math"),
+            intent: CreateReminderShortcut(),
             phrases: [
-                "Quick math with \(.applicationName)",
-                "Calculator with \(.applicationName)"
+                "Create reminder with \(.applicationName)",
+                "Remind me with \(.applicationName)"
             ],
-            shortTitle: "Quick Math",
+            shortTitle: "Create Reminder",
+            systemImageName: "checklist"
+        )
+
+        AppShortcut(
+            intent: CalculateShortcut(),
+            phrases: [
+                "Calculate with \(.applicationName)",
+                "Math with \(.applicationName)"
+            ],
+            shortTitle: "Calculate",
             systemImageName: "function"
+        )
+
+        AppShortcut(
+            intent: RunToolChainShortcut(),
+            phrases: [
+                "Run chain with \(.applicationName)",
+                "Run workflow with \(.applicationName)"
+            ],
+            shortTitle: "Run Tool Chain",
+            systemImageName: "link"
         )
     }
 }
@@ -144,6 +155,7 @@ struct AskClarissaInlineIntent: AppIntent {
         guard case .available = SystemLanguageModel.default.availability else {
             // Fall back to opening the app if AI not available
             let appState = AppState.shared
+            appState.requestNewConversation = true
             appState.pendingShortcutQuestion = question
             appState.pendingQuestionSource = .siriShortcut
             return .result(
@@ -200,6 +212,7 @@ struct AskClarissaInlineIntent: AppIntent {
         #else
         // FoundationModels not available - fall back to app
         let appState = AppState.shared
+        appState.requestNewConversation = true
         appState.pendingShortcutQuestion = question
         appState.pendingQuestionSource = .siriShortcut
         return .result(
@@ -235,8 +248,9 @@ struct AskClarissaIntent: AppIntent {
         // Get the shared AppState to send the message
         let appState = AppState.shared
 
-        // If there's a question, set it as pending for the ChatView to process
+        // Start a new session so the question doesn't inject into an unrelated conversation
         if !question.isEmpty {
+            appState.requestNewConversation = true
             appState.pendingShortcutQuestion = question
             appState.pendingQuestionSource = .siriShortcut
         }
@@ -315,6 +329,7 @@ struct QuickQuestionIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let appState = AppState.shared
         if !question.isEmpty {
+            appState.requestNewConversation = true
             appState.pendingShortcutQuestion = question
             appState.pendingQuestionSource = .siriShortcut
         }

@@ -1,11 +1,12 @@
 import Foundation
 
 // MARK: - Shared Constants (duplicated for extension target isolation)
+// IMPORTANT: These values MUST match exactly:
+//   appGroupIdentifier → ClarissaAppGroup.identifier in Sources/Widgets/WidgetData.swift
+//   sharedResultsKey   → ClarissaConstants.sharedResultsKey in Sources/Constants.swift
+// If you change one, you MUST change the other or inter-process communication will silently fail.
 
-/// App Group identifier — must match main app's ClarissaAppGroup.identifier
 private let appGroupIdentifier = "group.dev.rye.clarissa"
-
-/// UserDefaults key — must match ClarissaConstants.sharedResultsKey
 private let sharedResultsKey = "clarissa_shared_results"
 
 // MARK: - Shared Result Model
@@ -18,13 +19,16 @@ public struct SharedResult: Codable, Identifiable, Sendable {
     public let originalContent: String
     public let analysis: String
     public let createdAt: Date
+    /// Optional tool chain ID to trigger when this result is processed
+    public let chainId: String?
 
-    public init(type: SharedResultType, originalContent: String, analysis: String) {
+    public init(type: SharedResultType, originalContent: String, analysis: String, chainId: String? = nil) {
         self.id = UUID()
         self.type = type
         self.originalContent = originalContent
         self.analysis = analysis
         self.createdAt = Date()
+        self.chainId = chainId
     }
 }
 

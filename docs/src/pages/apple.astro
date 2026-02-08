@@ -9,39 +9,49 @@ const features = [
   {
     icon: 'sparkles',
     title: 'On-Device AI',
-    description: 'Powered by Apple Foundation Models with Private Cloud Compute fallback. Your conversations stay private.'
+    description: 'Powered by Apple Foundation Models with Private Cloud Compute fallback. Your conversations stay private — no data leaves your device.'
+  },
+  {
+    icon: 'chain',
+    title: 'Tool Chains & Automation',
+    description: 'Multi-step workflows with output piping between tools. Automate with time, location, and Focus mode triggers. 8 standalone Shortcuts actions.'
   },
   {
     icon: 'tools',
     title: 'Smart Agent',
-    description: 'ReAct agent with 9 native tools, proactive intent detection, and real-time plan visibility via Live Activities.'
+    description: 'ReAct agent with 10 native tools, proactive intent detection, and real-time plan visibility via Live Activities and Dynamic Island.'
   },
   {
-    icon: 'mic',
-    title: 'Voice & Siri',
-    description: 'SpeechAnalyzer transcription, Siri follow-up conversations, and template shortcuts like "Morning Briefing with Clarissa".'
-  },
-  {
-    icon: 'cloud',
-    title: 'Templates & Export',
-    description: 'Bundled and custom conversation templates. Export as PDF, share responses as images, copy code blocks.'
+    icon: 'bell',
+    title: 'Smart Notifications',
+    description: 'Scheduled check-ins, meeting alerts with attendee context, and memory reminders for time-sensitive follow-ups.'
   },
   {
     icon: 'sync',
     title: 'Memory Intelligence',
-    description: 'Memories with categories, confidence scoring, relationship linking, and iCloud sync with conflict resolution.'
+    description: 'Categorized memories with confidence scoring, relevance ranking, deduplication, and iCloud sync with conflict resolution.'
+  },
+  {
+    icon: 'widget',
+    title: 'Widgets & Watch',
+    description: 'Morning briefing widget, memory spotlight, and StandBy cards. Apple Watch companion with voice queries and quick actions.'
+  },
+  {
+    icon: 'mic',
+    title: 'Voice & Siri',
+    description: 'SpeechAnalyzer transcription, Siri follow-up conversations, and 8+ Shortcuts actions for building custom automations.'
   },
   {
     icon: 'siri',
-    title: 'Multi-Platform',
-    description: 'iPhone, iPad, Mac, and Apple Watch companion. Share Extension for text, URLs, and images from any app.'
+    title: 'Session Intelligence',
+    description: 'Pin messages, tag conversations, star favorites, search across sessions, and edit or regenerate any message.'
   }
 ];
 ---
 
 <Base title="Apple Apps" description="Clarissa for iOS and macOS - Native AI assistant powered by Apple Intelligence">
   <Header />
-  <main class="apple-page">
+  <main class="apple-page" id="main-content">
     <section class="hero">
       <div class="container">
         <div class="hero-content">
@@ -55,14 +65,15 @@ const features = [
           <p class="description">
             A native iOS, macOS, and watchOS AI assistant. Built with SwiftUI and Apple's
             Liquid Glass design, featuring on-device AI with Apple Foundation Models,
-            conversation templates, proactive intelligence, and rich tool integration.
+            multi-step tool chains, smart notifications, home screen widgets, and deep
+            Shortcuts integration.
           </p>
           <div class="cta-buttons">
-            <a href="#testflight" class="btn btn-primary">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15v-4H8l5-6v4h3l-5 6z"/>
+            <a href="https://apps.apple.com/us/app/clarissa-ai/id6756459191" class="btn btn-primary" target="_blank" rel="noopener">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
               </svg>
-              Join TestFlight
+              Download on the App Store
             </a>
             <a href={`${base}docs/apple/getting-started/`} class="btn btn-secondary">
               Documentation
@@ -72,41 +83,154 @@ const features = [
       </div>
     </section>
 
+    <section class="screenshot-showcase">
+      <div class="container">
+        <div class="device-tabs" role="tablist" aria-label="Device screenshots">
+          <button class="device-tab active" data-device="iphone" role="tab" aria-selected="true" aria-controls="track-iphone">iPhone</button>
+          <button class="device-tab" data-device="ipad" role="tab" aria-selected="false" aria-controls="track-ipad">iPad</button>
+          <button class="device-tab" data-device="mac" role="tab" aria-selected="false" aria-controls="track-mac">Mac</button>
+          <button class="device-tab" data-device="watch" role="tab" aria-selected="false" aria-controls="track-watch">Watch</button>
+        </div>
+        <div class="screenshot-carousel" id="screenshot-carousel">
+          <div class="carousel-track" id="track-iphone" data-device="iphone" role="tabpanel">
+            <div class="screenshot-item phone-frame">
+              <img src={`${base}images/iphone/02-conversation-calendar.png`} alt="Calendar conversation on iPhone" loading="lazy" />
+              <span class="screenshot-label">Smart Calendar</span>
+            </div>
+            <div class="screenshot-item phone-frame">
+              <img src={`${base}images/iphone/03-conversation-weather.png`} alt="Weather conversation on iPhone" loading="lazy" />
+              <span class="screenshot-label">Weather Forecast</span>
+            </div>
+            <div class="screenshot-item phone-frame">
+              <img src={`${base}images/iphone/06-tool-execution.png`} alt="Tool execution on iPhone" loading="lazy" />
+              <span class="screenshot-label">Tool Execution</span>
+            </div>
+            <div class="screenshot-item phone-frame">
+              <img src={`${base}images/iphone/05-voice-mode.png`} alt="Voice mode on iPhone" loading="lazy" />
+              <span class="screenshot-label">Voice Input</span>
+            </div>
+            <div class="screenshot-item phone-frame">
+              <img src={`${base}images/iphone/08-history.png`} alt="Conversation history on iPhone" loading="lazy" />
+              <span class="screenshot-label">Session History</span>
+            </div>
+          </div>
+          <div class="carousel-track" id="track-ipad" data-device="ipad" style="display:none" role="tabpanel">
+            <div class="screenshot-item tablet-frame">
+              <img src={`${base}images/ipad/02-conversation-calendar.png`} alt="Calendar conversation on iPad" loading="lazy" />
+              <span class="screenshot-label">Smart Calendar</span>
+            </div>
+            <div class="screenshot-item tablet-frame">
+              <img src={`${base}images/ipad/03-conversation-weather.png`} alt="Weather conversation on iPad" loading="lazy" />
+              <span class="screenshot-label">Weather Forecast</span>
+            </div>
+            <div class="screenshot-item tablet-frame">
+              <img src={`${base}images/ipad/07-context-visualizer.png`} alt="Context visualizer on iPad" loading="lazy" />
+              <span class="screenshot-label">Context Visualizer</span>
+            </div>
+            <div class="screenshot-item tablet-frame">
+              <img src={`${base}images/ipad/09-settings-provider.png`} alt="Settings on iPad" loading="lazy" />
+              <span class="screenshot-label">Settings</span>
+            </div>
+          </div>
+          <div class="carousel-track" id="track-mac" data-device="mac" style="display:none" role="tabpanel">
+            <div class="screenshot-item mac-frame">
+              <img src={`${base}images/mac/02-conversation-calendar.png`} alt="Calendar conversation on Mac" loading="lazy" />
+              <span class="screenshot-label">Smart Calendar</span>
+            </div>
+            <div class="screenshot-item mac-frame">
+              <img src={`${base}images/mac/03-conversation-weather.png`} alt="Weather conversation on Mac" loading="lazy" />
+              <span class="screenshot-label">Weather Forecast</span>
+            </div>
+            <div class="screenshot-item mac-frame">
+              <img src={`${base}images/mac/07-context-visualizer.png`} alt="Context visualizer on Mac" loading="lazy" />
+              <span class="screenshot-label">Context Visualizer</span>
+            </div>
+            <div class="screenshot-item mac-frame">
+              <img src={`${base}images/mac/08-history.png`} alt="History on Mac" loading="lazy" />
+              <span class="screenshot-label">Session History</span>
+            </div>
+          </div>
+          <div class="carousel-track" id="track-watch" data-device="watch" style="display:none" role="tabpanel">
+            <div class="screenshot-item watch-frame">
+              <img src={`${base}images/watch/01-watch-welcome.png`} alt="Welcome on Apple Watch" loading="lazy" />
+              <span class="screenshot-label">Welcome</span>
+            </div>
+            <div class="screenshot-item watch-frame">
+              <img src={`${base}images/watch/02-watch-response.png`} alt="Response on Apple Watch" loading="lazy" />
+              <span class="screenshot-label">Response</span>
+            </div>
+            <div class="screenshot-item watch-frame">
+              <img src={`${base}images/watch/03-watch-quick-actions.png`} alt="Quick actions on Apple Watch" loading="lazy" />
+              <span class="screenshot-label">Quick Actions</span>
+            </div>
+            <div class="screenshot-item watch-frame">
+              <img src={`${base}images/watch/04-watch-voice-input.png`} alt="Voice input on Apple Watch" loading="lazy" />
+              <span class="screenshot-label">Voice Input</span>
+            </div>
+            <div class="screenshot-item watch-frame">
+              <img src={`${base}images/watch/06-watch-history.png`} alt="History on Apple Watch" loading="lazy" />
+              <span class="screenshot-label">History</span>
+            </div>
+          </div>
+        </div>
+        <div class="carousel-dots" id="carousel-dots" aria-hidden="true"></div>
+      </div>
+    </section>
+
     <section class="features">
       <div class="container">
         <h2 class="section-title"><span class="gradient-text">Features</span></h2>
+        <!-- Shared SVG gradient definition -->
+        <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+          <defs>
+            <linearGradient id="apple-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--color-pink)" />
+              <stop offset="50%" stop-color="var(--color-purple)" />
+              <stop offset="100%" stop-color="var(--color-cyan)" />
+            </linearGradient>
+          </defs>
+        </svg>
         <div class="features-grid">
           {features.map(feature => (
             <div class="feature-card gradient-border">
-              <div class="feature-icon">
+              <div class="feature-icon" aria-hidden="true">
                 {feature.icon === 'sparkles' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
-                    <defs><linearGradient id="apple-icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--color-pink)" /><stop offset="50%" stop-color="var(--color-purple)" /><stop offset="100%" stop-color="var(--color-cyan)" /></linearGradient></defs>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
                     <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M5 19l1 3 1-3 3-1-3-1-1-3-1 3-3 1 3 1z"/>
                   </svg>
                 )}
                 {feature.icon === 'mic' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
                   </svg>
                 )}
                 {feature.icon === 'siri' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
                   </svg>
                 )}
-                {feature.icon === 'cloud' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
-                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-                  </svg>
-                )}
                 {feature.icon === 'tools' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
                     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                   </svg>
                 )}
+                {feature.icon === 'chain' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                  </svg>
+                )}
+                {feature.icon === 'bell' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                  </svg>
+                )}
+                {feature.icon === 'widget' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                  </svg>
+                )}
                 {feature.icon === 'sync' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-icon-gradient)" stroke-width="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="url(#apple-grad)" stroke-width="2">
                     <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                   </svg>
                 )}
@@ -119,23 +243,35 @@ const features = [
       </div>
     </section>
 
-    <section id="testflight" class="download-section">
+    <section id="download" class="download-section">
       <div class="container">
-        <h2 class="section-title"><span class="gradient-text">Get Early Access</span></h2>
+        <h2 class="section-title"><span class="gradient-text">Download</span></h2>
         <div class="download-cards">
           <div class="download-card gradient-border">
             <div class="app-icon">
               <img src={`${base}logo.svg`} alt="Clarissa" width="64" height="64" />
             </div>
-            <h3>TestFlight Beta</h3>
-            <p>Join the beta to get early access to Clarissa for iOS and macOS.</p>
+            <h3>Clarissa AI</h3>
+            <p>Available now on the App Store for iPhone, iPad, and Mac.</p>
             <p class="requirements">Requires iOS 26+ or macOS 26+ (Tahoe)</p>
-            <a href="https://testflight.apple.com/join/2Vp2cjEV" class="btn btn-primary" target="_blank" rel="noopener">
+            <a href="https://apps.apple.com/us/app/clarissa-ai/id6756459191" class="btn btn-primary" target="_blank" rel="noopener">
+              Download on the App Store
+            </a>
+          </div>
+          <div class="download-card gradient-border">
+            <div class="app-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--color-purple)" stroke-width="1.5" aria-hidden="true">
+                <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
+              </svg>
+            </div>
+            <h3>TestFlight Beta</h3>
+            <p>Get early access to upcoming features before they ship.</p>
+            <p class="requirements">Preview builds updated frequently</p>
+            <a href="https://testflight.apple.com/join/2Vp2cjEV" class="btn btn-secondary" target="_blank" rel="noopener">
               Join TestFlight
             </a>
           </div>
         </div>
-        <p class="app-store-note">App Store release coming soon.</p>
       </div>
     </section>
   </main>
@@ -144,7 +280,7 @@ const features = [
 
 <style>
   .apple-page .hero {
-    padding: 6rem 0 4rem;
+    padding: clamp(3rem, 8vw, 6rem) 0 clamp(2rem, 5vw, 4rem);
     text-align: center;
   }
 
@@ -170,12 +306,12 @@ const features = [
   }
 
   .apple-page h1 {
-    font-size: 3rem;
+    font-size: clamp(2rem, 5vw, 3rem);
     margin-bottom: 0.75rem;
   }
 
   .tagline {
-    font-size: 1.25rem;
+    font-size: clamp(1rem, 2vw, 1.25rem);
     color: var(--color-text-muted);
     margin-bottom: 1.5rem;
   }
@@ -205,7 +341,7 @@ const features = [
 
   .features-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
   }
 
@@ -221,8 +357,8 @@ const features = [
   }
 
   .feature-icon {
-    width: 24px;
-    height: 24px;
+    width: 36px;
+    height: 36px;
     margin-bottom: 1rem;
   }
 
@@ -286,40 +422,130 @@ const features = [
     color: var(--color-text-muted);
   }
 
-  .app-store-note {
-    margin-top: 2rem;
-    color: var(--color-text-muted);
-    font-size: 0.875rem;
+  /* Screenshot showcase */
+  .screenshot-showcase {
+    padding: 2rem 0 4rem;
   }
 
-  @media (max-width: 768px) {
-    .apple-page .hero {
-      padding: 3rem 0 2rem;
-    }
+  .device-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
 
-    .apple-page h1 {
-      font-size: 2rem;
-    }
+  .device-tab {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0.5rem 1.25rem;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
 
-    .tagline {
-      font-size: 1.125rem;
-      margin-bottom: 1rem;
-    }
+  .device-tab:hover {
+    border-color: var(--color-purple);
+    color: var(--color-text);
+  }
 
-    .description {
-      font-size: 0.9375rem;
-      margin-bottom: 1.5rem;
-    }
+  .device-tab.active {
+    background: var(--gradient);
+    border-color: transparent;
+    color: white;
+  }
 
-    .features {
-      padding: 2.5rem 0;
-    }
+  .carousel-track {
+    display: flex;
+    gap: 1.5rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem 0 1.5rem;
+    scrollbar-width: none;
+    /* Fade edges to hint scrollability */
+    mask-image: linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent);
+  }
 
-    .section-title {
-      font-size: 1.5rem;
-      margin-bottom: 2rem;
-    }
+  .carousel-track::-webkit-scrollbar {
+    display: none;
+  }
 
+  .screenshot-item {
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+    text-align: center;
+  }
+
+  .screenshot-item img {
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    transition: transform 0.3s;
+    display: block;
+  }
+
+  .screenshot-item:hover img {
+    transform: scale(1.02);
+  }
+
+  .phone-frame img {
+    height: 480px;
+    width: auto;
+  }
+
+  .tablet-frame img {
+    height: 420px;
+    width: auto;
+  }
+
+  .mac-frame img {
+    height: 380px;
+    width: auto;
+  }
+
+  .watch-frame img {
+    height: 280px;
+    width: auto;
+  }
+
+  .screenshot-label {
+    display: block;
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Carousel dots */
+  .carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .carousel-dots :global(.dot) {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-border);
+    transition: background 0.2s, transform 0.2s;
+  }
+
+  .carousel-dots :global(.dot.active) {
+    background: var(--color-purple);
+    transform: scale(1.3);
+  }
+
+  @media (max-width: 900px) {
+    .features-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 560px) {
     .features-grid {
       grid-template-columns: 1fr;
       gap: 1rem;
@@ -331,6 +557,11 @@ const features = [
 
     .feature-card h3 {
       font-size: 1rem;
+    }
+
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 2rem;
     }
 
     .download-section {
@@ -362,6 +593,100 @@ const features = [
       max-width: 280px;
       justify-content: center;
     }
+
+    .screenshot-showcase {
+      padding: 1.5rem 0 2.5rem;
+    }
+
+    .device-tabs {
+      gap: 0.375rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .device-tab {
+      padding: 0.375rem 0.875rem;
+      font-size: 0.75rem;
+    }
+
+    .phone-frame img {
+      height: 360px;
+    }
+
+    .tablet-frame img {
+      height: 300px;
+    }
+
+    .mac-frame img {
+      height: 240px;
+    }
+
+    .watch-frame img {
+      height: 200px;
+    }
   }
 </style>
 
+<script>
+  // Device tab switching with fade transition
+  const tabs = document.querySelectorAll('.device-tab');
+  const carousel = document.getElementById('screenshot-carousel');
+
+  function switchDevice(device: string) {
+    // Update tabs
+    tabs.forEach(t => {
+      const el = t as HTMLElement;
+      const isActive = el.dataset.device === device;
+      el.classList.toggle('active', isActive);
+      el.setAttribute('aria-selected', String(isActive));
+    });
+
+    // Fade out current, switch, fade in
+    if (carousel) {
+      carousel.style.opacity = '0';
+      carousel.style.transition = 'opacity 0.2s';
+      setTimeout(() => {
+        document.querySelectorAll<HTMLElement>('.carousel-track').forEach(track => {
+          track.style.display = track.dataset.device === device ? '' : 'none';
+        });
+        updateDots();
+        carousel.style.opacity = '1';
+      }, 200);
+    }
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const device = (tab as HTMLElement).dataset.device;
+      if (device) switchDevice(device);
+    });
+  });
+
+  // Carousel dots
+  function updateDots() {
+    const dotsContainer = document.getElementById('carousel-dots');
+    const activeTrack = document.querySelector('.carousel-track[style=""]') || document.querySelector('.carousel-track:not([style*="display:none"])');
+    if (!dotsContainer || !activeTrack) return;
+
+    const items = activeTrack.querySelectorAll('.screenshot-item');
+    dotsContainer.innerHTML = '';
+    items.forEach((_, i) => {
+      const dot = document.createElement('span');
+      dot.className = 'dot' + (i === 0 ? ' active' : '');
+      dotsContainer.appendChild(dot);
+    });
+
+    // Track scroll position to update active dot
+    const track = activeTrack as HTMLElement;
+    track.addEventListener('scroll', () => {
+      const scrollLeft = track.scrollLeft;
+      const itemWidth = (items[0] as HTMLElement).offsetWidth + 24; // gap
+      const activeIndex = Math.round(scrollLeft / itemWidth);
+      dotsContainer.querySelectorAll('.dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === activeIndex);
+      });
+    });
+  }
+
+  // Init dots on load
+  updateDots();
+</script>

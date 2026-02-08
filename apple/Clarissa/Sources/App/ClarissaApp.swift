@@ -1,5 +1,7 @@
 import ClarissaKit
 import SwiftUI
+import UserNotifications
+import os
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -74,22 +76,33 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
             self.handleMemorySyncTask(processingTask)
         }
+
+        // Register scheduled check-in background task
+        CheckInScheduler.shared.registerBackgroundTask()
     }
 
     private func handleMemorySyncTask(_ task: BGProcessingTask) {
         // Schedule next task
         scheduleMemorySyncTask()
 
+        // Track whether completion has already been reported to avoid double-completion
+        let didComplete = OSAllocatedUnfairLock(initialState: false)
+
         // Create async task to perform sync
         let syncTask = Task {
+            guard !Task.isCancelled else { return }
             await MemoryManager.shared.reload()
-            task.setTaskCompleted(success: true)
+            if !Task.isCancelled, !didComplete.withLock({ let v = $0; $0 = true; return v }) {
+                task.setTaskCompleted(success: true)
+            }
         }
 
-        // Handle expiration
+        // Handle expiration — guard against double-completion
         task.expirationHandler = {
             syncTask.cancel()
-            task.setTaskCompleted(success: false)
+            if !didComplete.withLock({ let v = $0; $0 = true; return v }) {
+                task.setTaskCompleted(success: false)
+            }
         }
     }
 
@@ -123,6 +136,13 @@ struct ClarissaApp: App {
     // @StateObject ensures stable observation lifecycle even if SwiftUI recreates the App struct
     @StateObject private var appState = AppState.shared
 
+    init() {
+        UserDefaults.standard.register(defaults: [
+            "pccConsentGiven": true,
+            "proactiveContextEnabled": true,
+        ])
+    }
+
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     #endif
@@ -150,12 +170,25 @@ struct ClarissaApp: App {
                 MemoryManager.shared.startObservingICloudChanges()
 
                 // Prewarm Foundation Models at launch for faster first response
-                // Community insight: "Call prewarm() when you're confident the user will use LLM features"
-                await Self.prewarmFoundationModels()
+                // Run concurrently so it doesn't block notification/calendar setup
+                Task { await Self.prewarmFoundationModels() }
+
+                // Set up notification delegate and check authorization
+                UNUserNotificationCenter.current().delegate = NotificationManager.shared
+                await NotificationManager.shared.checkAuthorization()
+
+                // Start calendar monitoring for meeting alerts
+                CalendarMonitor.shared.startMonitoring()
+
+                // Scan memories for time-sensitive reminders
+                await MemoryReminderScanner.shared.scanAndNotify()
 
                 #if os(iOS)
                 // Start Watch connectivity handler for Apple Watch integration
                 WatchQueryHandler.shared.start()
+
+                // Schedule next check-in background task
+                await CheckInScheduler.shared.scheduleNextRun()
                 #endif
 
                 #if os(macOS)

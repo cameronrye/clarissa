@@ -8,6 +8,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case tools = "Tools"
     case voice = "Voice"
     case shortcuts = "Shortcuts"
+    case automation = "Automation"
     case about = "About"
 
     var id: String { rawValue }
@@ -18,6 +19,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .tools: return "wrench.and.screwdriver"
         case .voice: return "speaker.wave.2"
         case .shortcuts: return "keyboard"
+        case .automation: return "link"
         case .about: return "info.circle"
         }
     }
@@ -32,8 +34,8 @@ public struct SettingsView: View {
     @AppStorage("voiceOutputEnabled") private var voiceOutputEnabled: Bool = true
     @AppStorage("selectedVoiceIdentifier") private var selectedVoiceIdentifier: String = ""
     @AppStorage("speechRate") private var speechRate: Double = 0.5
-    @AppStorage("pccConsentGiven") private var pccConsentGiven: Bool = false
-    @AppStorage(ProactiveContext.settingsKey) private var proactiveContextEnabled: Bool = false
+    @AppStorage("pccConsentGiven") private var pccConsentGiven: Bool = true
+    @AppStorage(ProactiveContext.settingsKey) private var proactiveContextEnabled: Bool = true
 
     @State private var openRouterApiKey: String = ""
     @State private var showingApiKey = false
@@ -48,6 +50,9 @@ public struct SettingsView: View {
 
     /// Memory sync status for iCloud indicator
     @State private var memorySyncStatus: MemorySyncStatus = .idle
+
+    /// Aggregate analytics metrics for Diagnostics section
+    @State private var analyticsMetrics: AnalyticsCollector.AggregateMetrics?
 
     #if os(macOS)
     @State private var selectedTab: SettingsTab = {
@@ -101,6 +106,7 @@ public struct SettingsView: View {
         memorySyncStatus = await MemoryManager.shared.getSyncStatus()
         staleMemoryCount = await MemoryManager.shared.staleMemoryCount()
         openRouterApiKey = KeychainManager.shared.get(key: KeychainManager.Keys.openRouterApiKey) ?? ""
+        analyticsMetrics = await AnalyticsCollector.shared.getAggregateMetrics()
         loadAvailableVoices()
     }
 
@@ -132,6 +138,12 @@ public struct SettingsView: View {
                     Label(SettingsTab.shortcuts.rawValue, systemImage: SettingsTab.shortcuts.icon)
                 }
                 .tag(SettingsTab.shortcuts)
+
+            AutomationSettingsView()
+                .tabItem {
+                    Label(SettingsTab.automation.rawValue, systemImage: SettingsTab.automation.icon)
+                }
+                .tag(SettingsTab.automation)
 
             aboutTabContent
                 .tabItem {
@@ -419,12 +431,40 @@ public struct SettingsView: View {
             }
 
             Section {
+                if let metrics = analyticsMetrics, metrics.totalSessions > 0 {
+                    LabeledContent("Tool Success Rate", value: "\(Int(metrics.toolSuccessRate * 100))%")
+                        .accessibilityLabel("Tool Success Rate: \(Int(metrics.toolSuccessRate * 100)) percent")
+                    LabeledContent("Avg Loop Iterations", value: String(format: "%.1f", metrics.avgReactIterations))
+                        .accessibilityLabel("Average Loop Iterations: \(String(format: "%.1f", metrics.avgReactIterations))")
+                    LabeledContent("Context Utilization", value: "\(Int(metrics.avgContextUtilization * 100))%")
+                        .accessibilityLabel("Context Utilization: \(Int(metrics.avgContextUtilization * 100)) percent")
+                    LabeledContent("Crash-Free Rate", value: "\(Int(metrics.crashFreeRate * 100))%")
+                        .accessibilityLabel("Crash-Free Rate: \(Int(metrics.crashFreeRate * 100)) percent")
+                    LabeledContent("Total Sessions", value: "\(metrics.totalSessions)")
+                        .accessibilityLabel("Total Sessions: \(metrics.totalSessions)")
+                    Button("Reset Analytics", role: .destructive) {
+                        Task {
+                            await AnalyticsCollector.shared.reset()
+                            analyticsMetrics = await AnalyticsCollector.shared.getAggregateMetrics()
+                        }
+                    }
+                } else {
+                    Text("No analytics data yet")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Label("Diagnostics", systemImage: "chart.bar")
+                    .foregroundStyle(.orange)
+            }
+
+            Section {
                 HStack {
                     Text("Version")
                     Spacer()
                     Text(appVersion)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .combine)
 
                 Link(destination: URL(string: "https://rye.dev")!) {
                     HStack {
@@ -631,6 +671,23 @@ public struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        AutomationSettingsView()
+                            .navigationTitle("Automation")
+                    } label: {
+                        HStack {
+                            Image(systemName: "link")
+                                .foregroundStyle(ClarissaTheme.purple)
+                            Text("Tool Chains & Automation")
+                        }
+                    }
+                } header: {
+                    Text("Automation")
+                } footer: {
+                    Text("Multi-step workflows, scheduled check-ins, calendar alerts, and memory reminders.")
+                }
+
+                Section {
                     Toggle(isOn: $voiceOutputEnabled) {
                         HStack {
                             Image(systemName: "speaker.wave.2")
@@ -701,12 +758,40 @@ public struct SettingsView: View {
                 }
 
                 Section {
+                    if let metrics = analyticsMetrics, metrics.totalSessions > 0 {
+                        LabeledContent("Tool Success Rate", value: "\(Int(metrics.toolSuccessRate * 100))%")
+                            .accessibilityLabel("Tool Success Rate: \(Int(metrics.toolSuccessRate * 100)) percent")
+                        LabeledContent("Avg Loop Iterations", value: String(format: "%.1f", metrics.avgReactIterations))
+                            .accessibilityLabel("Average Loop Iterations: \(String(format: "%.1f", metrics.avgReactIterations))")
+                        LabeledContent("Context Utilization", value: "\(Int(metrics.avgContextUtilization * 100))%")
+                            .accessibilityLabel("Context Utilization: \(Int(metrics.avgContextUtilization * 100)) percent")
+                        LabeledContent("Crash-Free Rate", value: "\(Int(metrics.crashFreeRate * 100))%")
+                            .accessibilityLabel("Crash-Free Rate: \(Int(metrics.crashFreeRate * 100)) percent")
+                        LabeledContent("Total Sessions", value: "\(metrics.totalSessions)")
+                            .accessibilityLabel("Total Sessions: \(metrics.totalSessions)")
+                        Button("Reset Analytics", role: .destructive) {
+                            Task {
+                                await AnalyticsCollector.shared.reset()
+                                analyticsMetrics = await AnalyticsCollector.shared.getAggregateMetrics()
+                            }
+                        }
+                    } else {
+                        Text("No analytics data yet")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Label("Diagnostics", systemImage: "chart.bar")
+                        .foregroundStyle(.orange)
+                }
+
+                Section {
                     HStack {
                         Text("Version")
                         Spacer()
                         Text(appVersion)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .combine)
 
                     Link(destination: URL(string: "https://rye.dev")!) {
                         HStack {

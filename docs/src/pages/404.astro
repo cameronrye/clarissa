@@ -1,0 +1,86 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="Page Not Found" description="The page you're looking for doesn't exist">
+  <Header />
+  <main class="not-found" id="main-content">
+    <div class="container">
+      <div class="not-found-content">
+        <svg class="not-found-icon" viewBox="-12 -12 88 88" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="grad404" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#EC4899" stop-opacity="0.3"/>
+              <stop offset="50%" stop-color="#8B5CF6" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#06B6D4" stop-opacity="0.3"/>
+            </linearGradient>
+          </defs>
+          <polygon
+            points="32,4 60,56 4,56"
+            fill="none"
+            stroke="url(#grad404)"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+          />
+          <text x="32" y="42" text-anchor="middle" fill="var(--color-text-muted)" font-size="14" font-weight="600">?</text>
+        </svg>
+        <h1><span class="gradient-text">404</span></h1>
+        <p class="subtitle">Page not found</p>
+        <p class="description">The page you're looking for doesn't exist or has been moved.</p>
+        <div class="actions">
+          <a href={base} class="btn btn-primary">Go Home</a>
+          <a href={`${base}docs/installation/`} class="btn btn-secondary">Documentation</a>
+        </div>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .not-found {
+    padding: 6rem 0;
+    text-align: center;
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+  }
+
+  .not-found-content {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .not-found-icon {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1.5rem;
+  }
+
+  .not-found h1 {
+    font-size: 4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .description {
+    color: var(--color-text-muted);
+    margin-bottom: 2rem;
+  }
+
+  .actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+</style>

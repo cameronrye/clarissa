@@ -1,5 +1,8 @@
 import Foundation
 import os.log
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private let logger = Logger(subsystem: "dev.rye.Clarissa", category: "MemoryManager")
 
@@ -49,11 +52,15 @@ public actor MemoryManager {
     /// Whether iCloud sync is enabled (can be disabled for testing)
     private let iCloudEnabled: Bool
 
+    /// Timestamp of the last local write, used to skip self-triggered iCloud change notifications
+    private var lastLocalWriteTimestamp: Date?
+
     private init() {
         self.keychain = KeychainManager.shared
         self.iCloudStore = NSUbiquitousKeyValueStore.default
         self.iCloudEnabled = true
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         self.legacyFileURL = documentsPath.appendingPathComponent("clarissa_memories.json")
 
         #if os(macOS)
@@ -71,7 +78,8 @@ public actor MemoryManager {
         self.keychain = keychain
         self.iCloudStore = NSUbiquitousKeyValueStore.default
         self.iCloudEnabled = iCloudEnabled
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         self.legacyFileURL = documentsPath.appendingPathComponent("clarissa_memories.json")
         self.sharedCLIMemoryURL = nil
     }
@@ -110,6 +118,21 @@ public actor MemoryManager {
         case NSUbiquitousKeyValueStoreServerChange,
              NSUbiquitousKeyValueStoreInitialSyncChange:
             if changedKeys.contains(Self.iCloudMemoriesKey) || changedKeys.isEmpty {
+                // Skip if this change was triggered by our own recent write
+                // Use a hash comparison to avoid both false positives (missing real changes)
+                // and false negatives (re-processing our own writes)
+                if let lastWrite = lastLocalWriteTimestamp,
+                   Date().timeIntervalSince(lastWrite) < 2.0 {
+                    // Double-check: compare content hash to detect genuine external changes
+                    // that arrived within the debounce window
+                    let remoteData = NSUbiquitousKeyValueStore.default.string(forKey: Self.iCloudMemoriesKey) ?? ""
+                    let localData = (try? JSONEncoder().encode(memories)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                    if remoteData == localData {
+                        logger.debug("Skipping iCloud change notification from own write (content matches)")
+                        break
+                    }
+                    logger.info("iCloud change within debounce window but content differs — merging")
+                }
                 logger.info("iCloud memories changed externally, merging")
                 // Load remote memories and merge with local
                 let remoteMemories = loadFromICloud()
@@ -145,13 +168,26 @@ public actor MemoryManager {
     private func sanitize(_ content: String) -> String {
         var sanitized = content
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            // Remove potential instruction override attempts
-            .replacingOccurrences(of: "SYSTEM:", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "INSTRUCTIONS:", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "IGNORE", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "OVERRIDE", with: "", options: .caseInsensitive)
-            // Remove markdown headers that could look like new sections
-            .replacingOccurrences(of: "##", with: "")
+
+        // Strip patterns that could be used for prompt injection
+        // Uses regex for case-insensitive matching with spacing/unicode variations
+        let injectionPatterns = [
+            "(?i)\\bsystem\\s*:", "(?i)\\binstructions?\\s*:", "(?i)\\bignore\\b",
+            "(?i)\\boverride\\b", "(?i)\\bforget\\b.*\\binstructions\\b",
+            "(?i)\\byou\\s+are\\s+now\\b", "(?i)\\bnew\\s+instructions?\\s*:",
+            "(?i)\\bprompt\\s*:", "(?i)\\brole\\s*:",
+        ]
+        for pattern in injectionPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                sanitized = regex.stringByReplacingMatches(
+                    in: sanitized, range: NSRange(sanitized.startIndex..., in: sanitized),
+                    withTemplate: ""
+                )
+            }
+        }
+
+        // Remove markdown headers that could look like new sections
+        sanitized = sanitized.replacingOccurrences(of: "##", with: "")
             .replacingOccurrences(of: "#", with: "")
 
         // Limit length to prevent context overflow
@@ -215,11 +251,7 @@ public actor MemoryManager {
     @available(iOS 26.0, macOS 26.0, *)
     private func extractTopicsForMemory(_ content: String) async -> [String]? {
         do {
-            let topics = try await MainActor.run {
-                Task {
-                    try await ContentTagger.shared.extractTopics(from: content)
-                }
-            }.value
+            let topics = try await ContentTagger.shared.extractTopics(from: content)
             logger.debug("Tagged memory with topics: \(topics)")
             return topics.isEmpty ? nil : topics
         } catch {
@@ -280,7 +312,7 @@ public actor MemoryManager {
     private var confidenceUpdateCounter = 0
 
     /// Apply confidence decay/boost to all memories based on which were accessed
-    private func updateConfidenceScores(accessedIds: Set<UUID>) {
+    private func updateConfidenceScores(accessedIds: Set<UUID>) async {
         let now = Date()
         for i in memories.indices {
             if accessedIds.contains(memories[i].id) {
@@ -299,7 +331,7 @@ public actor MemoryManager {
         confidenceUpdateCounter += 1
         if confidenceUpdateCounter >= 5 {
             confidenceUpdateCounter = 0
-            Task { await save() }
+            await save()
         }
     }
 
@@ -366,7 +398,7 @@ public actor MemoryManager {
             .prefix(20)
 
         let accessedIds = Set(ranked.map(\.id))
-        updateConfidenceScores(accessedIds: accessedIds)
+        await updateConfidenceScores(accessedIds: accessedIds)
 
         let memoryList = ranked.map { memory -> String in
             if let topics = memory.topics, !topics.isEmpty {
@@ -453,7 +485,7 @@ public actor MemoryManager {
 
         // Track confidence
         let accessedIds = Set(topMemories.map(\.id))
-        updateConfidenceScores(accessedIds: accessedIds)
+        await updateConfidenceScores(accessedIds: accessedIds)
 
         guard !topMemories.isEmpty else { return nil }
 
@@ -591,9 +623,11 @@ public actor MemoryManager {
             logger.info("Loaded \(cliMemories.count) memories from CLI file")
 
             // Convert CLI memory format to native format
+            // Use a deterministic UUID based on CLI id to keep IDs stable across loads
             return cliMemories.map { cliMem in
-                Memory(
-                    id: UUID(), // Generate new UUID since CLI uses string IDs
+                let stableId = UUID(uuidString: cliMem.id) ?? Self.deterministicUUID(from: cliMem.id)
+                return Memory(
+                    id: stableId,
                     content: cliMem.content,
                     createdAt: ISO8601DateFormatter().date(from: cliMem.createdAt) ?? Date()
                 )
@@ -767,7 +801,18 @@ public actor MemoryManager {
         }
     }
 
+    /// Guard to prevent save() from being called recursively (e.g., iCloud change
+    /// notification triggered by our own write calling handleICloudChange → merge → save)
+    private var isSaving = false
+
     private func save() async {
+        guard !isSaving else {
+            logger.debug("Skipping recursive save() call")
+            return
+        }
+        isSaving = true
+        defer { isSaving = false }
+
         syncStatus = .syncing
 
         do {
@@ -776,8 +821,38 @@ public actor MemoryManager {
 
             // Monitor payload size for iCloud KVS limits (64KB per key)
             let payloadKB = Double(data.count) / 1024.0
-            if payloadKB > 60 {
-                logger.error("Memory payload \(String(format: "%.1f", payloadKB))KB exceeds safe iCloud KVS limit (60KB). Risk of data loss!")
+            if payloadKB > 62 {
+                // Hard stop: trim lowest-confidence memories until we fit under the limit
+                // Safety: never remove more than half the memories to prevent catastrophic data loss
+                let preCount = memories.count
+                let minKeep = max(1, preCount / 2)
+                logger.error("Memory payload \(String(format: "%.1f", payloadKB))KB exceeds iCloud KVS limit (64KB). Trimming lowest-confidence memories (keeping at least \(minKeep)).")
+                // Sort by confidence ascending so we remove least important first
+                memories.sort { ($0.confidence ?? 0.5) < ($1.confidence ?? 0.5) }
+                while memories.count > minKeep {
+                    let removed = memories.removeFirst()
+                    logger.warning("Emergency trim: removed memory '\(removed.content.prefix(50))' (confidence: \(removed.confidence ?? 0.5), id: \(removed.id))")
+                    let trimmedData = try encoder.encode(memories)
+                    if Double(trimmedData.count) / 1024.0 <= 60 { break }
+                }
+                let removedCount = preCount - memories.count
+                if removedCount > 0 {
+                    logger.error("Emergency trim removed \(removedCount) of \(preCount) memories to fit iCloud KVS limit")
+                }
+                // Re-encode after trimming
+                let trimmedData = try encoder.encode(memories)
+                guard let trimmedString = String(data: trimmedData, encoding: .utf8) else {
+                    logger.error("Failed to encode trimmed memories to string")
+                    syncStatus = .error("Failed to encode memories")
+                    return
+                }
+                if iCloudEnabled { saveToICloud(trimmedString) }
+                try keychain.set(trimmedString, forKey: Self.memoriesKeychainKey)
+                #if os(macOS)
+                await saveToSharedCLIFile()
+                #endif
+                syncStatus = .synced
+                return
             } else if payloadKB > 50 {
                 logger.warning("Memory payload \(String(format: "%.1f", payloadKB))KB approaching iCloud KVS limit (64KB per key). Consider pruning old memories.")
             }
@@ -811,6 +886,7 @@ public actor MemoryManager {
 
     /// Save memories to iCloud Key-Value Store
     private func saveToICloud(_ jsonString: String) {
+        lastLocalWriteTimestamp = Date()
         iCloudStore.set(jsonString, forKey: Self.iCloudMemoriesKey)
         iCloudStore.synchronize()
         logger.debug("Saved \(self.memories.count) memories to iCloud")
@@ -847,6 +923,23 @@ public actor MemoryManager {
         }
     }
     #endif
+
+    /// Create a deterministic UUID from a string by hashing it into a UUID-shaped value
+    private static func deterministicUUID(from string: String) -> UUID {
+        var hasher = Hasher()
+        hasher.combine(string)
+        let hash = hasher.finalize()
+        // Use the hash bits to fill a UUID (remaining bytes zeroed)
+        var bytes: uuid_t = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        withUnsafeBytes(of: hash.bigEndian) { src in
+            withUnsafeMutableBytes(of: &bytes) { dst in
+                let count = min(src.count, dst.count)
+                guard let srcBase = src.baseAddress, let dstBase = dst.baseAddress else { return }
+                dstBase.copyMemory(from: srcBase, byteCount: count)
+            }
+        }
+        return UUID(uuid: bytes)
+    }
 }
 
 // MARK: - CLI Memory Format
@@ -918,12 +1011,6 @@ struct Memory: Identifiable, Codable {
 /// Uses identifierForVendor on iOS, a persisted UUID on macOS.
 enum DeviceIdentifier {
     static let current: String = {
-        #if os(iOS) || os(watchOS)
-        if let vendorId = UIDevice.current.identifierForVendor?.uuidString {
-            return vendorId
-        }
-        #endif
-        // Fallback: persist a UUID in UserDefaults
         let key = "clarissa_device_id"
         if let existing = UserDefaults.standard.string(forKey: key) {
             return existing

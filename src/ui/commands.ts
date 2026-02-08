@@ -14,7 +14,7 @@ import { usageTracker } from "../llm/client.ts";
 import { mcpClient } from "../mcp/index.ts";
 import { toolRegistry } from "../tools/index.ts";
 import { contextManager } from "../llm/context.ts";
-import { CURRENT_VERSION, runUpgrade, fetchLatestVersion, isNewerVersion } from "../update.ts";
+import { CURRENT_VERSION, fetchLatestVersion, isNewerVersion } from "../update.ts";
 import { providerRegistry, type ProviderId } from "../llm/providers/index.ts";
 import { preferencesManager } from "../preferences/index.ts";
 import type { SelectOption } from "./components/InteractiveSelect.tsx";

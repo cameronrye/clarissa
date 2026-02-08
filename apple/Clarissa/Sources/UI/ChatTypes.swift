@@ -44,6 +44,7 @@ struct ChatMessage: Identifiable {
     var toolResult: String?  // JSON result from tool execution
     var imageData: Data?  // Optional attached image preview
     var proactiveLabels: [String]?  // Proactive context sources used (e.g., ["weather", "calendar"])
+    var isPinned: Bool = false  // Whether the user has pinned this message
     let timestamp = Date()
 
     /// Export message as markdown
